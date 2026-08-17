@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlparse
 from .config import Config
 from .install import validate_for_upload
 from .ledger import IGNORED_STATUSES, Ledger, STATUS_CANDIDATE, STATUS_IGNORED
-from .lifecycle import reconcile, scan
+from .lifecycle import move_tier, reconcile, scan
 from .normalize import crisp
 from .signals import detect, effects
 
@@ -123,6 +123,58 @@ def save_skill(path: Path, text: str) -> dict:
     return {"ok": True, "problems": []}
 
 
+def apply_skill_action(config: Config, skills_dir: Path, name: str,
+                       action: str) -> dict:
+    """Archive or delete a skill, and park the workflow behind it.
+
+    Both actions also move the originating ledger entry to the ignore list.
+    Without that, the workflow keeps matching new occurrences while never
+    surfacing for review — the silent dead end `reconcile` exists to catch.
+    Parking is visible and reversible; re-proposing something the developer
+    just removed is not.
+    """
+    path = _skill_path(skills_dir, config, name)
+    if path is None:
+        return {"ok": False, "error": "not found"}
+
+    if action not in ("archive", "delete"):
+        return {"ok": False, "error": f"unknown action: {action}"}
+
+    folder = path.parent
+    ledger = Ledger(config)
+    # Find the originating entry *before* touching the filesystem, so a failed
+    # file operation cannot leave the ledger describing a state that never
+    # happened. Compare resolved paths — a stored path may run through a
+    # symlink (/var vs /private/var on macOS) and would never match otherwise.
+    owner = next(
+        (e for e in ledger.all()
+         if e.status == "promoted" and e.skill_path
+         and Path(e.skill_path).resolve().parent == folder),
+        None)
+
+    if action == "archive":
+        infos = [s for s in scan(skills_dir, config) if s.name == name]
+        if not infos:
+            return {"ok": False, "error": "not found"}
+        if infos[0].tier == "archived":
+            return {"ok": False, "error": "already archived"}
+        move_tier(infos[0], "archived", skills_dir, config)
+    else:
+        shutil.rmtree(folder)
+
+    if owner is not None:
+        owner.status = STATUS_IGNORED
+        owner.ignored_at = datetime.now(timezone.utc).replace(
+            microsecond=0).isoformat()
+        owner.ignored_at_occurrences = owner.occurrences
+        owner.skill_path = ""
+        owner.notes = (f"Skill {action}d from the browser UI. Parked rather "
+                       f"than re-proposed; reopen if that was wrong.")
+        ledger.save(owner)
+    return {"ok": True, "action": action,
+            "parked_entry": owner.id if owner else None}
+
+
 def apply_entry_action(config: Config, entry_id: str, action: str) -> dict:
     ledger = Ledger(config)
     entry = ledger.get(entry_id)
@@ -187,6 +239,10 @@ def make_handler(config: Config, skills_dir: Path):
                 if path is None:
                     return self._send({"error": "not found"}, 404)
                 return self._send(save_skill(path, data.get("text", "")))
+            if route.path == "/api/skill/action":
+                return self._send(apply_skill_action(
+                    config, skills_dir, data.get("name", ""),
+                    data.get("action", "")))
             if route.path == "/api/entry":
                 return self._send(apply_entry_action(
                     config, data.get("id", ""), data.get("action", "")))
@@ -264,6 +320,14 @@ code{background:var(--code);padding:1px 5px;border-radius:4px;
 .q{color:var(--accent);font-size:13px;margin-top:6px}
 .banner{border:1px solid var(--warn);border-radius:8px;padding:10px 12px;
   margin-bottom:14px;font-size:13.5px;color:var(--warn)}
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+input[type=search]{flex:1;min-width:180px;font:inherit;font-size:14px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink)}
+select{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);
+  border-radius:7px;background:var(--panel);color:var(--ink)}
+label.chk{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.count{color:var(--muted);font-size:12.5px}
+button.act.danger{border-color:var(--warn);color:var(--warn)}
 </style></head><body>
 <header>
   <h1>Skill Plus Plus</h1>
@@ -340,7 +404,14 @@ async function openSkill(name){
     ${s.stale.length ? `<div class="meta">Unresolved: ${
        s.stale.map(r=>`<code>${esc(r)}</code>`).join(' ')}</div>` : ''}
     ${s.requires_cli.length ? `<div class="meta">Requires: ${
-       s.requires_cli.map(r=>`<code>${esc(r)}</code>`).join(' ')}</div>` : ''}`;
+       s.requires_cli.map(r=>`<code>${esc(r)}</code>`).join(' ')}</div>` : ''}
+    <div class="row" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      ${s.tier!=='archived'
+        ? `<button class="act" id="arch">Archive</button>` : ''}
+      <button class="act danger" id="del">Delete</button>
+      <span class="meta">Archive keeps the file and can be undone.
+        Delete removes it for good.</span>
+    </div>`;
   const ed = document.getElementById('ed'), save = document.getElementById('save');
   ed.value = d.text || '';
   ed.oninput = () => { dirty = true; save.disabled = false;
@@ -355,14 +426,60 @@ async function openSkill(name){
     else { save.disabled=false; msg.className='msg err';
            msg.textContent = (r.problems||[r.error]).join(' · '); }
   };
+
+  const act = async (action) => {
+    const warn = action==='delete'
+      ? `Delete "${name}" permanently? The file is removed and cannot be recovered `
+        + `from here.\n\nIts workflow moves to Ignored, so it will not be proposed again.`
+      : `Archive "${name}"? It leaves the active list but the file is kept, `
+        + `and its workflow moves to Ignored.`;
+    if(!confirm(warn)) return;
+    const r = await (await fetch('/api/skill/action', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, action})})).json();
+    if(r.ok){ sel=null; dirty=false; load(); }
+    else { const m=document.getElementById('msg');
+           m.className='msg err'; m.textContent=r.error||'failed'; }
+  };
+  const arch = document.getElementById('arch');
+  if(arch) arch.onclick = () => act('archive');
+  document.getElementById('del').onclick = () => act('delete');
 }
 
-function renderEntries(w, rows, kind){
-  if(!rows.length){
+let filt = {q:'', source:'', flagged:false};
+
+function matches(e){
+  if(filt.source && e.source !== filt.source) return false;
+  if(filt.flagged && !(e.ready || e.ignore_looks_wrong)) return false;
+  const q = filt.q.trim().toLowerCase();
+  if(!q) return true;
+  return (e.title+' '+e.id+' '+e.steps.join(' ')+' '+(e.notes||''))
+         .toLowerCase().includes(q);
+}
+
+function renderEntries(w, all, kind){
+  if(!all.length){
     w.innerHTML = `<p class="empty">Nothing ${kind==='ignored'?'ignored':'waiting'}.</p>`;
     return;
   }
-  w.innerHTML = '<ul>' + rows.map(e => `
+  const rows = all.filter(matches);
+  const sources = [...new Set(all.map(e=>e.source))].sort();
+  const flagLabel = kind==='ignored' ? 'Recurring anyway' : 'Ready only';
+  w.innerHTML = `
+    <div class="filters">
+      <input type="search" id="q" placeholder="Filter by title, step, or id…"
+             value="${esc(filt.q)}">
+      <select id="src">
+        <option value="">any source</option>
+        ${sources.map(s=>`<option value="${esc(s)}" ${
+          filt.source===s?'selected':''}>${esc(s)}</option>`).join('')}
+      </select>
+      <label class="chk"><input type="checkbox" id="flag" ${
+        filt.flagged?'checked':''}> ${flagLabel}</label>
+      <span class="count">${rows.length} of ${all.length}</span>
+    </div>` + (rows.length ? '' :
+      '<p class="empty">Nothing matches that filter.</p>')
+    + '<ul>' + rows.map(e => `
     <li class="item" aria-current="false">
       <div class="name">${esc(e.title||e.id)}</div>
       <div class="meta">
@@ -387,6 +504,14 @@ function renderEntries(w, rows, kind){
         <span class="meta">Promote with <code>/skillpp-review</code></span>
       </div>
     </li>`).join('') + '</ul>';
+
+  const q = w.querySelector('#q');
+  q.oninput = () => { filt.q = q.value;
+    const at = q.selectionStart; render();
+    const nq = document.querySelector('#q'); nq.focus(); nq.setSelectionRange(at, at); };
+  w.querySelector('#src').onchange = e => { filt.source = e.target.value; render(); };
+  w.querySelector('#flag').onchange = e => { filt.flagged = e.target.checked; render(); };
+
   w.querySelectorAll('button[data-act]').forEach(b => b.onclick = async () => {
     b.disabled = true;
     await fetch('/api/entry', {method:'POST',

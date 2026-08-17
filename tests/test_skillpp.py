@@ -1184,6 +1184,53 @@ class TestWebUI(TempRoot):
         self.assertFalse(apply_entry_action(self.config, entry_id, "rm -rf")["ok"])
         self.assertFalse(apply_entry_action(self.config, "nope", "ignore")["ok"])
 
+    def test_archive_keeps_the_file_and_parks_the_workflow(self):
+        from skillpp.web import apply_skill_action
+        from skillpp.capture import fold_dictation
+        path = self._skill("archivable")
+        entry_id = fold_dictation(self.config, "Tag the release and push it.")["id"]
+        ledger = Ledger(self.config)
+        entry = ledger.get(entry_id)
+        entry.status = "promoted"; entry.skill_path = str(path); ledger.save(entry)
+
+        result = apply_skill_action(self.config, self.root / "skills",
+                                    "archivable", "archive")
+        self.assertTrue(result["ok"])
+        self.assertFalse(path.exists(), "moved out of the active directory")
+        self.assertTrue((self.config.archive_dir / "archivable" / "SKILL.md").exists(),
+                        "archive keeps the file")
+        self.assertEqual(ledger.get(entry_id).status, "ignored",
+                         "the workflow is parked, not left to re-propose")
+
+    def test_delete_removes_the_file_and_parks_the_workflow(self):
+        from skillpp.web import apply_skill_action
+        from skillpp.capture import fold_dictation
+        path = self._skill("disposable")
+        entry_id = fold_dictation(self.config, "Roll back the bad migration.")["id"]
+        ledger = Ledger(self.config)
+        entry = ledger.get(entry_id)
+        entry.status = "promoted"; entry.skill_path = str(path); ledger.save(entry)
+
+        result = apply_skill_action(self.config, self.root / "skills",
+                                    "disposable", "delete")
+        self.assertTrue(result["ok"])
+        self.assertFalse(path.parent.exists(), "the folder is gone")
+        parked = ledger.get(entry_id)
+        self.assertEqual(parked.status, "ignored")
+        self.assertEqual(parked.skill_path, "", "stale path cleared")
+
+    def test_skill_actions_are_guarded(self):
+        from skillpp.web import apply_skill_action
+        skills = self.root / "skills"
+        self._skill("safe")
+        self.assertFalse(apply_skill_action(self.config, skills, "safe", "nuke")["ok"])
+        self.assertFalse(
+            apply_skill_action(self.config, skills, "../../etc", "delete")["ok"])
+        self.assertFalse(
+            apply_skill_action(self.config, skills, "missing", "delete")["ok"])
+        self.assertTrue((skills / "safe" / "SKILL.md").exists(),
+                        "a rejected action touches nothing")
+
     def test_server_binds_loopback_only(self):
         from skillpp.web import serve
         httpd = serve(self.config, self.root / "skills", port=0, open_browser=False)
