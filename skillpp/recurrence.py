@@ -16,6 +16,7 @@ from .ledger import Entry
 
 
 def _tokens(signature: str) -> list[str]:
+    """Split a ' | '-joined workflow signature into non-empty step tokens."""
     return [t for t in signature.split(" | ") if t]
 
 

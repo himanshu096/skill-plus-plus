@@ -62,6 +62,7 @@ def cmd_hook(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 def cmd_review(args: argparse.Namespace) -> int:
+    """List ledger candidates ready for review."""
     config = Config(args.root)
     ledger = Ledger(config)
     entries = ledger.candidates(ready_only=not args.all)
@@ -113,6 +114,7 @@ def cmd_dictate(args: argparse.Namespace) -> int:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
+    """Render a candidate's proposal, evidence and open questions."""
     config = Config(args.root)
     entry = Ledger(config).get(args.id)
     if not entry:
@@ -131,6 +133,7 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
+    """Search the ledger for entries matching the query."""
     config = Config(args.root)
     results = Ledger(config).search(" ".join(args.query))
     if not results:
@@ -143,6 +146,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_stats(args: argparse.Namespace) -> int:
+    """Print ledger size and status counts."""
     config = Config(args.root)
     stats = Ledger(config).stats()
     print(f"ledger      {config.ledger_dir}")
@@ -159,6 +163,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 def cmd_scaffold(args: argparse.Namespace) -> int:
+    """Generate a starting SKILL.md for a candidate."""
     config = Config(args.root)
     entry = Ledger(config).get(args.id)
     if not entry:
@@ -198,6 +203,7 @@ def cmd_promote(args: argparse.Namespace) -> int:
 
 
 def cmd_dismiss(args: argparse.Namespace) -> int:
+    """Mark a candidate dismissed."""
     config = Config(args.root)
     ledger = Ledger(config)
     entry = ledger.get(args.id)
@@ -213,6 +219,7 @@ def cmd_dismiss(args: argparse.Namespace) -> int:
 
 
 def cmd_expire(args: argparse.Namespace) -> int:
+    """Delete unapproved candidates past their TTL."""
     config = Config(args.root)
     removed = Ledger(config).expire()
     print(f"expired {len(removed)} unapproved candidate(s) older than "
@@ -227,6 +234,7 @@ def cmd_expire(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 
 def cmd_lifecycle(args: argparse.Namespace) -> int:
+    """Inventory skills with tier and staleness marks."""
     config = Config(args.root)
     skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
     project_root = Path(args.project_root).expanduser() if args.project_root else Path.cwd()
@@ -250,6 +258,7 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
 
 
 def cmd_tier(args: argparse.Namespace) -> int:
+    """Move a skill between hot/cold/archived tiers."""
     config = Config(args.root)
     skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
     matches = [s for s in scan(skills_dir, config) if s.name == args.name]
@@ -354,6 +363,7 @@ def cmd_bundle(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    """Wire Claude Code hooks into settings.json (dry run by default)."""
     from .install import apply_settings, hook_command, install_command_file, plan_settings
 
     settings_path = Path(args.settings).expanduser() if args.settings else (

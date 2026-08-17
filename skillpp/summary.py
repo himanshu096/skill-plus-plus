@@ -108,6 +108,7 @@ def questions_for(entry: Entry, config: Config) -> list[Question]:
 
 
 def _yaml_list(items: list[str]) -> str:
+    """Render a list as an inline JSON-style array so the frontmatter round-trips through :func:`skillpp.lifecycle.parse_frontmatter`."""
     return "[" + ", ".join(json.dumps(i) for i in items) + "]"
 
 
