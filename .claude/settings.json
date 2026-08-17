@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "timeout": 120,
+            "prompt": "You are writing a per-session work summary for skill-plus-plus. The hook input JSON is: $ARGUMENTS\n\nSTEP 1 — Read the transcript at the `transcript_path` field of that JSON. It is a JSONL file: each line is a record. The lines that matter are user messages (what was asked) and assistant `tool_use` blocks (what actually ran). Ignore thinking blocks, system reminders, and tool results.\n\nSTEP 2 — Identify the discrete TASKS in the session. A task is a goal the developer wanted done, plus the work that achieved it. It is NOT a single turn, and it is NOT the whole session. Two calibration points, both from real measured failures:\n- Do not merge unrelated work into one blob. A session that deployed something AND fixed an unrelated bug contains two tasks.\n- Do not fragment one task into many. Follow-up turns like 'continue', 'go on', 'next', 'fix that', 'try again' are the SAME task as what preceded them, not new ones.\nIf the developer asked only questions, or only discussed things, there are ZERO tasks.\n\nSTEP 3 — If there are zero tasks, write NOTHING, create no file, and reply exactly: no substantive tasks. Stop there.\n\nSTEP 4 — Otherwise write ONE new file at `<cwd>/.claude/skillpp/memory/sessions/<YYYY-MM-DD>-<session_id>.md`, taking `cwd` and `session_id` from the hook input JSON and the date from the transcript's own timestamps. Create the directory if needed. Never edit or append to an existing file — if that exact path already exists, leave it alone and reply: already summarized.\n\nFile format — frontmatter, then one `##` section per task:\n\n---\nsession: <session_id>\ndate: <YYYY-MM-DD>\n---\n\n## <short task title, how the developer would name it>\n\n<one or two sentences: what the goal was, in their framing not yours>\n\nShape:\n1. <the steps that mattered, in order, dead ends omitted>\n\nJudgement: <the part a command log cannot show — why a particular flag, what the trap was, why a retry was needed, what you would warn the next person about. If the session genuinely surfaced no such insight, write: none surfaced. Do not pad this by restating the steps.>\nParameter: <what would differ on another run — a target, a filename, an environment. If nothing varies, write: none.>\n\nRules: describe only what actually happened; invent nothing. Redact any credential, token, or key you encounter rather than copying it. Keep the whole file under 400 words per task.\n\nSTEP 5 — Reply with just the path you wrote, nothing else."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+# Session summaries and pattern memory describe real work in real repos.
+# Local by default — sharing them is a deliberate act, not a git default.
+.claude/skillpp/memory/
+
+__pycache__/
+*.py[cod]
