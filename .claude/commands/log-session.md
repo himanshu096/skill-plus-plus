@@ -1,8 +1,9 @@
 ---
-description: Read this session's transcript and write a per-session task summary
+description: Read a session transcript and write a per-session task summary
+argument-hint: "[transcript path or session id — defaults to the current session]"
 ---
 
-# Skill Plus Plus — log this session
+# Skill Plus Plus — log a session
 
 Read the current session's transcript from disk and write one summary file
 describing the tasks that actually happened.
@@ -16,6 +17,8 @@ failure this command exists to detect.
 
 ## 1. Resolve the transcript
 
+**No argument** — summarise the current session:
+
 ```bash
 SLUG=$(pwd | sed 's|[/._]|-|g')
 TRANSCRIPT="$HOME/.claude/projects/$SLUG/$CLAUDE_CODE_SESSION_ID.jsonl"
@@ -25,7 +28,34 @@ ls -la "$TRANSCRIPT"
 The slug replaces `/`, `.` and `_` with `-` — all three, not just the slashes.
 `CLAUDE_CODE_SESSION_ID` is set in the shell environment.
 
-If that file does not exist, report the path you tried and stop.
+**With an argument** — summarise a different session. Accepts either a full path
+to a `.jsonl`, or a bare session id resolved against the current project:
+
+```bash
+ARG="<the argument>"
+if [ -f "$ARG" ]; then
+  TRANSCRIPT="$ARG"
+else
+  SLUG=$(pwd | sed 's|[/._]|-|g')
+  TRANSCRIPT="$HOME/.claude/projects/$SLUG/$ARG.jsonl"
+fi
+ls -la "$TRANSCRIPT"
+```
+
+This exists so past sessions can be backfilled, and it is the same path the
+eventual automated pass takes — draining a queue means analysing a transcript
+that is not the current session.
+
+Either way: derive the session id from the transcript filename stem, not from
+the environment, so an argument-driven run records the session it actually
+summarised.
+
+If the file does not exist, report the path you tried and stop.
+
+If the transcript is very large, say so with its size before reading, and if it
+will not fit, stop and report that rather than reading a truncated prefix — a
+summary built from part of a session is worse than none, because nothing marks
+it as incomplete.
 
 ## 2. Read it
 
