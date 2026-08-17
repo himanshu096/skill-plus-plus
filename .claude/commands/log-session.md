@@ -80,7 +80,10 @@ date: <YYYY-MM-DD>
 <one or two sentences: what the goal was, in their framing rather than yours>
 
 Shape:
-1. <the steps that mattered, in order, dead ends omitted>
+1. <the steps that mattered, in order. Omit noise — typos, wrong paths, a
+   command re-run because output scrolled. But keep a failed attempt when it
+   ruled something out and led to the approach that worked: that is the
+   reasoning, not clutter.>
 
 Judgement: <the part a command log cannot show — why a particular flag, what the
 trap was, why a retry was needed, what you would warn the next person about>
