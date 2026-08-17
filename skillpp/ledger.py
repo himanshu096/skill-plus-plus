@@ -150,7 +150,8 @@ def describe_step(step: dict) -> str:
     if tool == "Stated":
         return str(payload.get("text", "")).strip()
     if tool == "Bash":
-        cmd = str(payload.get("command", "")).strip().replace("\n", " ⏎ ")
+        from .normalize import crisp
+        cmd = crisp(payload.get("command", ""), limit=160)
         marker = "  ✗ failed" if step.get("failed") else ""
         return f"`{cmd}`{marker}"
     if tool in ("Edit", "Write", "NotebookEdit"):

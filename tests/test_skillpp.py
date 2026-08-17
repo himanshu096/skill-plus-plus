@@ -963,6 +963,161 @@ class TestReconcile(TempRoot):
         self.assertTrue((d / "SKILL.md").exists(), "never deletes a skill file")
 
 
+class TestSpanBudget(TempRoot):
+    """A span that never closes must not grow into an afternoon."""
+
+    def _prompt(self, text, sid="b1"):
+        from skillpp.capture import handle_prompt
+        return handle_prompt(self.config, {"session_id": sid, "cwd": "/p",
+                                           "prompt": text})
+
+    def _run(self, cmd, sid="b1", failed=False):
+        handle_tool(self.config, {
+            "session_id": sid, "cwd": "/p", "tool_name": "Bash",
+            "tool_input": {"command": cmd},
+            "tool_response": {"exit_code": 1 if failed else 0}})
+
+    def test_unclosed_span_is_abandoned_at_the_prompt_budget(self):
+        from skillpp.capture import _load_session
+        statuses = []
+        for n in range(self.config.max_span_prompts + 1):
+            statuses.append(self._prompt(f"question {n}")["status"])
+            self._run(f"grep -r thing{n} .")   # never a closing step
+            self._run(f"cat file{n}.py")
+
+        self.assertIn("abandoned", statuses,
+                      f"budget of {self.config.max_span_prompts} prompts never fired: {statuses}")
+        self.assertEqual(list(Ledger(self.config).all()), [],
+                         "exploration is discarded, not banked as a recipe")
+        session = _load_session(self.config, "b1")
+        self.assertLess(session["span_prompts"], self.config.max_span_prompts,
+                        "budget resets after abandoning")
+
+    def test_unclosed_span_is_abandoned_at_the_step_budget(self):
+        self._prompt("dig into this")
+        for n in range(self.config.max_span_steps + 1):
+            self._run(f"grep -r pattern{n} .")
+        result = self._prompt("next question")
+        self.assertEqual(result["status"], "abandoned")
+        self.assertEqual(list(Ledger(self.config).all()), [])
+
+    def test_a_span_that_closes_in_time_still_folds(self):
+        self._prompt("add retry logic")
+        self._run("vim client.py")
+        self._run("pytest -q")
+        result = self._prompt("now something else")
+        self.assertEqual(result["status"], "created")
+        entry = list(Ledger(self.config).all())[0]
+        self.assertEqual(len(entry.steps), 2, "the recipe, nothing more")
+
+    def test_budget_does_not_truncate_a_long_but_finished_recipe(self):
+        """Length alone is not the problem — never closing is."""
+        self._prompt("do the big migration")
+        for n in range(self.config.max_span_steps + 5):
+            self._run(f"psql -c 'migrate step {n}'")
+        self._run("pytest -q")
+        from skillpp.capture import handle_stop
+        result = handle_stop(self.config, {"session_id": "b1"})
+        self.assertEqual(result["status"], "created",
+                         "a closed span is kept however long it ran")
+
+
+class TestExplorationTrimming(TempRoot):
+    """A span ends at a closing step but has no start marker."""
+
+    def _run(self, cmd, sid="e1", failed=False):
+        handle_tool(self.config, {
+            "session_id": sid, "cwd": "/p", "tool_name": "Bash",
+            "tool_input": {"command": cmd},
+            "tool_response": {"exit_code": 1 if failed else 0}})
+
+    def test_leading_search_is_dropped_but_the_fix_is_kept(self):
+        from skillpp.capture import handle_prompt, handle_stop
+        handle_prompt(self.config, {"session_id": "e1", "cwd": "/p",
+                                    "prompt": "why is login slow?"})
+        for n in range(8):
+            self._run(f"grep -rn handler{n} .")
+        self._run("vim auth.py")
+        self._run("pytest -q")
+        handle_stop(self.config, {"session_id": "e1"})
+
+        entry = list(Ledger(self.config).all())[0]
+        self.assertEqual(len(entry.steps), 2, "the fix, not the search for it")
+        self.assertIn("vim auth.py",
+                      str((entry.steps[0].get("input") or {}).get("command")))
+
+    def test_interleaved_reads_are_kept(self):
+        """`check the logs, then restart` is a real two-step recipe."""
+        from skillpp.capture import trim_leading_exploration
+        steps = [
+            {"tool": "Bash", "input": {"command": "kubectl rollout restart deploy/api"}},
+            {"tool": "Bash", "input": {"command": "kubectl logs deploy/api"}},
+        ]
+        kept, cut = trim_leading_exploration(steps)
+        self.assertEqual(cut, 0)
+        self.assertEqual(len(kept), 2)
+
+    def test_never_trims_a_span_down_to_nothing(self):
+        from skillpp.capture import trim_leading_exploration
+        steps = [{"tool": "Bash", "input": {"command": f"grep -rn x{n} ."}}
+                 for n in range(4)]
+        kept, cut = trim_leading_exploration(steps)
+        self.assertEqual((len(kept), cut), (4, 0), "all-reads is left intact here")
+
+    def test_exploration_only_span_is_not_banked(self):
+        from skillpp.capture import handle_prompt, handle_session_end
+        handle_prompt(self.config, {"session_id": "e2", "cwd": "/p",
+                                    "prompt": "look into the cache"})
+        self._run("cat cache.py", sid="e2")
+        self._run("grep -rn evict .", sid="e2")
+        result = handle_session_end(self.config, {"session_id": "e2"})
+        self.assertEqual(result["status"], "exploration-only")
+        self.assertEqual(list(Ledger(self.config).all()), [])
+
+    def test_finished_work_without_a_known_closing_step_still_banks(self):
+        """A bespoke rollback is real work even if no regex recognises it."""
+        from skillpp.capture import handle_prompt, handle_session_end
+        handle_prompt(self.config, {"session_id": "e3", "cwd": "/p",
+                                    "prompt": "roll back the bad migration"})
+        for cmd in ("psql -c 'begin'", "./rollback.sh", "psql -c 'commit'"):
+            self._run(cmd, sid="e3")
+        result = handle_session_end(self.config, {"session_id": "e3"})
+        self.assertEqual(result["status"], "created")
+
+
+class TestCrisp(unittest.TestCase):
+    def test_drops_plumbing_but_keeps_the_command(self):
+        from skillpp.normalize import crisp
+        self.assertEqual(crisp("python3 -m unittest discover -s tests 2>&1 | tail -4"),
+                         "python3 -m unittest discover -s tests")
+        self.assertEqual(crisp("git show abc --stat; echo done"), "git show abc --stat")
+        self.assertEqual(crisp("python3 - <<'EOF'\nimport sys\nEOF"),
+                         "python3 - [script]")
+
+    def test_keeps_what_normalize_command_would_destroy(self):
+        """crisp() must not hide the fact that tests ran."""
+        from skillpp.normalize import crisp, normalize_command
+        cmd = "python3 -m unittest discover -s tests"
+        self.assertEqual(normalize_command(cmd), "python3")
+        self.assertIn("unittest", crisp(cmd))
+
+    def test_narration_is_recognised(self):
+        from skillpp.normalize import is_narration
+        self.assertTrue(is_narration('echo "=== now the tests ==="'))
+        self.assertFalse(is_narration("pytest -q"))
+        self.assertFalse(is_narration("git commit -m 'echo'"))
+
+    def test_narration_never_reaches_the_buffer(self):
+        cfg = Config(tempfile.mkdtemp()); cfg.ensure_dirs()
+        from skillpp.capture import _load_session
+        for cmd in ('echo "=== step one ==="', "pytest -q"):
+            handle_tool(cfg, {"session_id": "n1", "cwd": "/p", "tool_name": "Bash",
+                              "tool_input": {"command": cmd},
+                              "tool_response": {"exit_code": 0}})
+        steps = _load_session(cfg, "n1")["steps"]
+        self.assertEqual([s["input"]["command"] for s in steps], ["pytest -q"])
+
+
 class TestWebUI(TempRoot):
     """The web layer writes real files, so the guards matter more than the HTML."""
 

@@ -24,6 +24,7 @@ from .config import Config
 from .install import validate_for_upload
 from .ledger import IGNORED_STATUSES, Ledger, STATUS_CANDIDATE, STATUS_IGNORED
 from .lifecycle import reconcile, scan
+from .normalize import crisp
 from .signals import detect, effects
 
 # Skill directory names we will read or write. Anything else is rejected
@@ -46,18 +47,14 @@ def _skill_path(skills_dir: Path, config: Config, name: str) -> Path | None:
     return None
 
 
-def _step_label(step: dict, limit: int = 140) -> str:
-    """One readable line per step.
-
-    Captured commands can be whole heredocs. Collapsing newlines and clipping
-    keeps a candidate skimmable — if the untruncated body matters, that is a
-    sign the span is too big to be a recipe, which is itself worth seeing.
-    """
+def _step_label(step: dict) -> str:
+    """One readable line per step, shell plumbing removed."""
     payload = step.get("input") or {}
-    text = (payload.get("command") or payload.get("text")
-            or payload.get("file_path") or step.get("tool") or "")
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[:limit] + " …"
+    command = payload.get("command")
+    if command:
+        return crisp(command)
+    text = payload.get("text") or payload.get("file_path") or step.get("tool") or ""
+    return " ".join(str(text).split())[:140]
 
 
 def collect_state(config: Config, skills_dir: Path) -> dict:

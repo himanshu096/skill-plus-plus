@@ -47,6 +47,13 @@ class Config:
         # Hard caps so a runaway session cannot bloat the ledger.
         self.max_steps_per_session = _int_env("SKILLPP_MAX_STEPS", 500)
         self.max_field_chars = _int_env("SKILLPP_MAX_FIELD", 2000)
+        # A span's budget. Work that crosses this many user requests, or runs
+        # this long, without ever reaching a closing step is exploration, not a
+        # recipe — it is abandoned rather than banked. Without this a span
+        # accumulates until the session ends, which is what produced 216-step
+        # "recipes" spanning several unrelated questions.
+        self.max_span_prompts = _int_env("SKILLPP_MAX_SPAN_PROMPTS", 3)
+        self.max_span_steps = _int_env("SKILLPP_MAX_SPAN_STEPS", 40)
         # Never ask the developer more than this many questions (README 4).
         self.max_questions = _int_env("SKILLPP_MAX_QUESTIONS", 3)
 

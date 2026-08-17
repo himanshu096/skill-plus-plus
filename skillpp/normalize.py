@@ -87,6 +87,45 @@ def normalize_command(command: str) -> str:
     return program
 
 
+_PIPE_SPLIT_RE = re.compile(r"\s*(?:\|\||&&|[|;])\s*")
+_REDIRECT_RE = re.compile(r"\s*\d?>[>&]?\s*\S+")
+_HEREDOC_RE = re.compile(r"<<-?\s*'?\w+'?[\s\S]*")
+_ECHO_ONLY_RE = re.compile(r"\A\s*echo\b", re.IGNORECASE)
+
+
+def is_narration(command: str) -> bool:
+    """A command that only prints a banner — pure narration, never a step.
+
+    ``echo "=== now the tests ==="`` documents what a human is doing; it is
+    not part of any recipe, and storing it inflates both the ledger and every
+    later reader's effort.
+    """
+    head = _PIPE_SPLIT_RE.split(str(command or "").strip())[0]
+    return bool(_ECHO_ONLY_RE.match(head))
+
+
+def crisp(command: str, limit: int = 100) -> str:
+    """A command reduced to what a reader (or a judge) needs to understand it.
+
+    Drops shell plumbing — chained commands after the first, redirects,
+    heredoc bodies — while keeping the program and its meaningful arguments.
+
+    Deliberately *not* the same as :func:`normalize_command`, which reduces to
+    ``program subcommand`` for fingerprinting. That is too lossy here: it turns
+    ``python3 -m unittest discover`` into ``python3``, hiding the very fact
+    ("tests were run") a reader is looking for.
+    """
+    text = " ".join(str(command or "").split())
+    if not text:
+        return ""
+    # Placeholder must not contain redirect characters — the redirect strip
+    # below would eat them.
+    text = _HEREDOC_RE.sub("[script]", text)
+    text = _PIPE_SPLIT_RE.split(text)[0]
+    text = _REDIRECT_RE.sub("", text).strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + " …"
+
+
 def step_shape(step: dict) -> str:
     """One token describing what a captured step *did*."""
     tool = step.get("tool", "")

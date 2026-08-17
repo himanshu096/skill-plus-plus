@@ -25,7 +25,7 @@ from pathlib import Path
 
 from .config import Config
 from .ledger import Entry, Ledger, make_id, STATUS_CANDIDATE
-from .normalize import parameterize, signature
+from .normalize import crisp, is_narration, parameterize, signature
 from .recurrence import find_match
 from .sanitize import scrub, scrub_obj
 
@@ -75,6 +75,14 @@ _CLOSING_MUTATE_RE = re.compile(
     r"gh\s+(?:pr\s+create|release\s+create)"
     r")\b")
 _COMMIT_RE = re.compile(r"\bgit\s+(?:commit|push)\b", re.IGNORECASE)
+# Commands that only inspect. Anchored: `grep` is a read, `vim $(grep …)` is not.
+_READ_ONLY_RE = re.compile(
+    r"(?i)\A(?:sudo\s+)?(?:grep|rg|ag|ack|cat|bat|head|tail|less|more|ls|ll|tree|"
+    r"find|fd|wc|file|stat|du|df|ps|top|which|whereis|pwd|env|printenv|date|"
+    r"man|type|echo|jq|column|sort|uniq|diff|cmp|"
+    r"git\s+(?:log|show|status|diff|blame|branch|remote|config)|"
+    r"kubectl\s+(?:get|describe|logs)|docker\s+(?:ps|images|logs)|"
+    r"terraform\s+(?:plan|show)|npm\s+(?:ls|view)|pip\s+(?:show|list))\b")
 
 # Residue allowed after a confirmation before it stops being a pure
 # confirmation — politeness, not a new request.
@@ -111,6 +119,7 @@ def _load_session(config: Config, session_id: str) -> dict:
         "steps": [],
         "folded_through": 0,
         "folded_prompts": 0,
+        "span_prompts": 0,
         "confirmed": False,
     }
 
@@ -175,6 +184,35 @@ def is_success_utterance(text: str) -> bool:
 
 def _substantive(steps: list[dict]) -> list[dict]:
     return [s for s in steps if s.get("tool") not in _NOISE_TOOLS]
+
+
+def _is_read_only(step: dict) -> bool:
+    """A command that only looks at things.
+
+    `_NOISE_TOOLS` already drops the Read/Glob/Grep *tools*, but the same
+    work done through Bash (`grep -rn`, `cat`, `git log`) slips past it.
+    """
+    if str(step.get("tool") or "") != "Bash":
+        return False
+    return bool(_READ_ONLY_RE.match(_command(step).strip()))
+
+
+def trim_leading_exploration(steps: list[dict]) -> tuple[list[dict], int]:
+    """Drop the search that *found* the task, keeping the work that did it.
+
+    A span ends at a closing step but has no start marker, so it swallows
+    whatever looking-around preceded it — eight `grep`s before the one-line
+    fix. A recipe's first real action changes something; reads before that
+    are how the developer located the problem, not how they solved it.
+
+    Only a *leading* run is trimmed. Reads interleaved with real work stay,
+    since those are usually genuine steps ("check the logs, then restart").
+    """
+    cut = 0
+    while cut < len(steps) and _is_read_only(steps[cut]):
+        cut += 1
+    remaining = steps[cut:]
+    return (remaining, cut) if len(remaining) >= 2 else (steps, 0)
 
 
 def _command(step: dict) -> str:
@@ -242,6 +280,12 @@ def handle_prompt(config: Config, payload: dict) -> dict:
     if looks_successful(pending):
         # They moved on after a finished task. Count it, then start a new span.
         result = fold_pending(config, session, require_success=True)
+    else:
+        # Still open. Count this request against the span's budget — a span
+        # that never closes must not grow without limit.
+        session["span_prompts"] = int(session.get("span_prompts") or 0) + 1
+        if _over_budget(config, session, pending):
+            result = _abandon_span(config, session, len(pending))
 
     # A message can confirm *and* ask ("perfect, now add a cap"). Fold first so
     # the cursor advances, then record only the request half against the new
@@ -277,6 +321,12 @@ def handle_tool(config: Config, payload: dict) -> None:
     if tool == "Skill":
         from .lifecycle import record_use
         record_use(config, str(raw_input.get("skill", "")))
+
+    # Banner echoes are narration, never a step. Dropping them at the door
+    # keeps the ledger and every later reader honest about what actually ran.
+    if tool == "Bash" and is_narration(raw_input.get("command", "")):
+        return
+
     keep = _KEEP_INPUT.get(tool)
     if keep:
         kept = {k: raw_input.get(k) for k in keep if raw_input.get(k) is not None}
@@ -322,6 +372,10 @@ def handle_session_end(config: Config, payload: dict) -> dict:
     session = _load_session(config, session_id)
     ingest_transcript(session, payload.get("transcript_path"), config)
     try:
+        # Leftover work is still banked — a completed task that never tripped
+        # a *recognised* closing step (a rollback script, a bespoke deploy) is
+        # real. What is filtered instead is the span where nothing happened at
+        # all; see the exploration-only guard in fold_pending.
         force = bool(session.get("confirmed"))
         result = fold_pending(config, session, force=force, require_success=False)
     finally:
@@ -383,6 +437,27 @@ def _advance_cursor(session: dict) -> None:
     session["folded_through"] = len(session.get("steps") or [])
     session["folded_prompts"] = len(session.get("prompts") or [])
     session["confirmed"] = False
+    session["span_prompts"] = 0
+
+
+def _over_budget(config: Config, session: dict, pending: list[dict]) -> bool:
+    """Has an unclosed span outgrown what a single recipe could plausibly be?"""
+    return (int(session.get("span_prompts") or 0) >= config.max_span_prompts
+            or len(pending) >= config.max_span_steps)
+
+
+def _abandon_span(config: Config, session: dict, steps: int) -> dict:
+    """Drop an unclosed, over-budget span instead of banking it.
+
+    Work that crosses several requests without ever reaching a closing step is
+    exploration — the shape that produced 216-step "recipes" covering
+    unrelated questions. Folding it would create a candidate nobody would
+    promote; keeping it open would let it grow further. Neither is useful, so
+    the steps are discarded and a fresh span starts.
+    """
+    _advance_cursor(session)
+    log_error(config, f"span abandoned: {steps} steps, no closing step reached")
+    return {"status": "abandoned", "steps": steps}
 
 
 def _latest_session(config: Config) -> dict | None:
@@ -403,18 +478,32 @@ def fold_pending(config: Config, session: dict, *, force: bool = False,
     body = _substantive(pending)
     if len(body) < 2:
         return {"status": "too-thin", "steps": len(body)}
-    if body[-1].get("failed") and not force:
-        return {"status": "unsuccessful", "steps": len(body)}
-    if require_success and not force and not looks_successful(pending):
-        return {"status": "pending", "steps": len(body)}
+    if not force and all(_is_read_only(s) for s in body):
+        # Nothing was changed, so there is no method here — only looking
+        # around. This is the honest filter for "session ended mid-investigation",
+        # and it is stricter than requiring a closing step, which would also
+        # discard finished work that used a bespoke command.
+        return {"status": "exploration-only", "steps": len(body)}
+    if not force and not looks_successful(pending):
+        # Length is not the problem; never closing is. A span that reached a
+        # closing step is kept however long it ran — a big migration is still
+        # one recipe. Only unfinished sprawl is abandoned.
+        if _over_budget(config, session, pending):
+            return _abandon_span(config, session, len(body))
+        if body[-1].get("failed"):
+            return {"status": "unsuccessful", "steps": len(body)}
+        if require_success:
+            return {"status": "pending", "steps": len(body)}
+    body, explored = trim_leading_exploration(body)
     result = fold_span(config, session, body, _pending_prompts(session),
-                       source=source)
+                       source=source, explored=explored)
     _advance_cursor(session)
     return result
 
 
 def fold_span(config: Config, session: dict, steps: list[dict],
-              intents: list[str], *, source: str = "capture") -> dict:
+              intents: list[str], *, source: str = "capture",
+              explored: int = 0) -> dict:
     """Turn one task span into a new or updated ledger entry."""
     cwd = session.get("cwd") or ""
     # Copy so parameterisation cannot mutate the live session buffer.
@@ -477,6 +566,7 @@ def fold_span(config: Config, session: dict, steps: list[dict],
     )
     ledger.save(entry)
     return {"status": "created", "id": entry.id, "occurrences": 1,
+            "explored": explored,
             "ready": entry.ready(config.recurrence_threshold)}
 
 
