@@ -14,7 +14,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HOOK_EVENTS = ("UserPromptSubmit", "PostToolUse", "SessionEnd")
+HOOK_EVENTS = ("UserPromptSubmit", "PostToolUse", "Stop", "SessionEnd", "SessionStart")
 MARKER = "skillpp hook"
 
 
@@ -191,6 +191,19 @@ def install_command_file(target_dir: Path, source: Path | None = None) -> Path:
     source = source or (Path(__file__).resolve().parent.parent / "commands" /
                         "skillpp-review.md")
     target_dir.mkdir(parents=True, exist_ok=True)
-    dest = target_dir / "skillpp-review.md"
+    dest = target_dir / source.name
     shutil.copy2(source, dest)
     return dest
+
+
+def install_command_files(target_dir: Path,
+                          names: tuple[str, ...] = ("skillpp-review.md",
+                                                    "skillpp-keep.md")) -> list[Path]:
+    """Copy the slash commands that ship with the install."""
+    commands = Path(__file__).resolve().parent.parent / "commands"
+    written = []
+    for name in names:
+        source = commands / name
+        if source.exists():
+            written.append(install_command_file(target_dir, source))
+    return written

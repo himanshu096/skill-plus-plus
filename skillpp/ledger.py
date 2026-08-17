@@ -97,7 +97,7 @@ class Entry:
             return False
         # The recurrence threshold exists to filter noise. An explicit request
         # is not noise, so dictated candidates are ready immediately.
-        if self.source == "dictated":
+        if self.source in ("dictated", "kept"):
             return True
         return self.occurrences >= threshold
 

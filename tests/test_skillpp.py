@@ -11,7 +11,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from skillpp.capture import fold_session, handle_prompt, handle_tool, handle_session_end
+from skillpp.capture import (
+    fold_session, handle_prompt, handle_tool, handle_session_end,
+    handle_stop, handle_session_start, is_success_utterance, keep_current,
+    looks_successful,
+)
 from skillpp.config import Config
 from skillpp.ledger import Entry, Ledger, make_id
 from skillpp.lifecycle import check_staleness, parse_frontmatter, record_use, scan
@@ -300,6 +304,168 @@ class TestCapture(TempRoot):
         entry = list(Ledger(self.config).all())[0]
         self.assertIn("npm", entry.deps_cli)
         self.assertNotIn("deploy.sh", entry.deps_cli)
+
+
+class TestTaskSpans(TempRoot):
+    """Success-gated spans: Stop keeps the buffer, 'it works' counts, keep skips 3×."""
+
+    def _tool(self, sid, tool, **payload):
+        body = {"session_id": sid, "cwd": "/proj", "tool_name": tool,
+                "tool_response": {"exit_code": 0}}
+        body.update(payload)
+        handle_tool(self.config, body)
+
+    def _recipe(self, sid, name="auth"):
+        handle_prompt(self.config, {"session_id": sid, "cwd": "/proj",
+                                    "prompt": f"write tests for {name}"})
+        self._tool(sid, "Write",
+                   tool_input={"file_path": f"/proj/tests/test_{name}.py"})
+        self._tool(sid, "Bash", tool_input={"command": "pytest -x"})
+        self._tool(sid, "mcp__cloud__get_logs",
+                   tool_input={"service": "api", "since": "1h"})
+        self._tool(sid, "Bash", tool_input={"command": f'git commit -m "tests {name}"'})
+
+    def test_success_utterance_is_short_confirmation_only(self):
+        self.assertTrue(is_success_utterance("it works"))
+        self.assertTrue(is_success_utterance("looks good, thanks"))
+        self.assertFalse(is_success_utterance("perfect, now write tests for billing"))
+        self.assertFalse(is_success_utterance("write tests then run them"))
+
+    def test_short_trailing_request_is_not_a_pure_confirmation(self):
+        """A confirmation carrying a request must not swallow the request.
+
+        Judged by leftover content, not length: "now add a cap" is 13
+        characters and is still the intent for the next task.
+        """
+        self.assertFalse(is_success_utterance("perfect, now add a cap"))
+        self.assertFalse(is_success_utterance("that works? I doubt it"))
+        self.assertTrue(is_success_utterance("looks good, thanks"))
+
+    def test_confirmation_plus_request_keeps_the_request_as_intent(self):
+        from skillpp.capture import _load_session, handle_prompt, handle_stop
+        p = lambda text: handle_prompt(
+            self.config, {"session_id": "c1", "cwd": "/p", "prompt": text})
+        t = lambda cmd: handle_tool(self.config, {
+            "session_id": "c1", "cwd": "/p", "tool_name": "Bash",
+            "tool_input": {"command": cmd}, "tool_response": {"exit_code": 0}})
+
+        p("add retry logic"); t("vim client.py"); t("pytest -q")
+        handle_stop(self.config, {"session_id": "c1"})
+        p("perfect, now add a backoff cap")
+
+        self.assertEqual(_load_session(self.config, "c1")["prompts"],
+                         ["add retry logic", "now add a backoff cap"],
+                         "the request half survives; the confirmation half does not")
+
+    def test_orientation_commands_do_not_close_a_span(self):
+        """`git status` / `git diff` are how you look around mid-task."""
+        edit = {"tool": "Edit", "input": {"file_path": "a.py"}, "failed": False}
+        for cmd in ("git status", "git diff", "ps aux", "kubectl get pods"):
+            self.assertFalse(looks_successful([edit, bash(cmd)]),
+                             f"{cmd!r} must not read as task completion")
+        for cmd in ("pytest -q", "git commit -m x", "npm run lint", "./deploy.sh prod"):
+            self.assertTrue(looks_successful([edit, bash(cmd)]),
+                            f"{cmd!r} should close the span")
+
+    def test_orientation_command_does_not_split_a_recipe(self):
+        from skillpp.capture import handle_prompt, handle_stop
+        p = lambda text: handle_prompt(
+            self.config, {"session_id": "r1", "cwd": "/p", "prompt": text})
+        t = lambda cmd: handle_tool(self.config, {
+            "session_id": "r1", "cwd": "/p", "tool_name": "Bash",
+            "tool_input": {"command": cmd}, "tool_response": {"exit_code": 0}})
+
+        p("ship the release"); t("vim CHANGELOG.md"); t("git status")
+        handle_stop(self.config, {"session_id": "r1"})
+        p("now tag and push"); t("git tag v1.2.0"); t("git push --tags")
+        handle_stop(self.config, {"session_id": "r1"})
+
+        entries = list(Ledger(self.config).all())
+        self.assertEqual(len(entries), 1, "one release flow, not two fragments")
+        self.assertEqual(len(entries[0].steps), 4)
+
+    def test_looks_successful_needs_a_closing_step(self):
+        self.assertTrue(looks_successful([
+            {"tool": "Write", "input": {"file_path": "t.py"}, "failed": False},
+            bash("pytest"),
+        ]))
+        self.assertFalse(looks_successful([
+            {"tool": "Edit", "input": {"file_path": "a.py"}, "failed": False},
+            {"tool": "Edit", "input": {"file_path": "b.py"}, "failed": False},
+        ]))
+        self.assertFalse(looks_successful([
+            bash("pytest", failed=True), bash("pytest", failed=True)]))
+
+    def test_stop_keeps_the_buffer(self):
+        self._recipe("s1")
+        result = handle_stop(self.config, {"session_id": "s1"})
+        self.assertEqual(result["status"], "created")
+        self.assertTrue(list(self.config.sessions_dir.glob("*.json")),
+                        "Stop must not delete the session buffer")
+
+    def test_same_recipe_three_times_in_one_session_is_ready(self):
+        """The test → run → MCP logs → commit loop, three turns, one chat."""
+        for name in ("auth", "billing", "payments"):
+            self._recipe("long", name)
+            handle_stop(self.config, {"session_id": "long"})
+        entries = list(Ledger(self.config).all())
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].occurrences, 3)
+        self.assertTrue(entries[0].ready(self.config.recurrence_threshold))
+
+    def test_failed_stop_is_not_counted_until_it_works(self):
+        handle_prompt(self.config, {"session_id": "s", "cwd": "/p",
+                                    "prompt": "write tests"})
+        self._tool("s", "Write", tool_input={"file_path": "/p/t.py"})
+        handle_tool(self.config, {
+            "session_id": "s", "cwd": "/p", "tool_name": "Bash",
+            "tool_input": {"command": "pytest"},
+            "tool_response": {"exit_code": 1, "is_error": True},
+        })
+        stopped = handle_stop(self.config, {"session_id": "s"})
+        self.assertEqual(stopped["status"], "unsuccessful")
+        self.assertEqual(list(Ledger(self.config).all()), [])
+
+        self._tool("s", "Bash", tool_input={"command": "pytest"})
+        confirmed = handle_prompt(self.config, {
+            "session_id": "s", "cwd": "/p", "prompt": "it works"})
+        self.assertEqual(confirmed["status"], "created")
+        self.assertEqual(list(Ledger(self.config).all())[0].occurrences, 1)
+
+    def test_keep_bypasses_the_threshold(self):
+        self._recipe("k")
+        result = keep_current(self.config, "k")
+        self.assertEqual(result["status"], "created")
+        self.assertTrue(result["ready"])
+        entry = list(Ledger(self.config).all())[0]
+        self.assertEqual(entry.source, "kept")
+        self.assertTrue(entry.ready(self.config.recurrence_threshold))
+
+    def test_session_end_reads_it_works_from_the_transcript(self):
+        sid = "tr"
+        self._tool(sid, "Write", tool_input={"file_path": "/proj/a.py"})
+        handle_tool(self.config, {
+            "session_id": sid, "cwd": "/proj", "tool_name": "Edit",
+            "tool_input": {"file_path": "/proj/b.py"},
+            "tool_response": {"exit_code": 0},
+        })
+        transcript = self.root / "session.jsonl"
+        transcript.write_text(
+            json.dumps({"type": "user",
+                        "message": {"role": "user", "content": "it works"}}) + "\n",
+            encoding="utf-8")
+        result = handle_session_end(self.config, {
+            "session_id": sid, "transcript_path": str(transcript)})
+        self.assertEqual(result["status"], "created", result)
+        self.assertEqual(list(self.config.sessions_dir.glob("*.json")), [])
+
+    def test_session_start_stays_quiet_until_something_is_ready(self):
+        self.assertEqual(handle_session_start(self.config)["status"], "quiet")
+        self._recipe("a", "auth")
+        keep_current(self.config, "a")
+        hint = handle_session_start(self.config)
+        self.assertEqual(hint["status"], "hint")
+        self.assertIn("/skillpp-review", hint["message"])
 
 
 class TestDictation(TempRoot):
@@ -628,6 +794,16 @@ class TestInstall(unittest.TestCase):
             _, changes = plan_settings(path)
         self.assertTrue(all("no change" in c for c in changes), changes)
 
+    def test_stop_and_session_start_are_wired(self):
+        from skillpp.install import HOOK_EVENTS, plan_settings
+        self.assertIn("Stop", HOOK_EVENTS)
+        self.assertIn("SessionStart", HOOK_EVENTS)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settings.json"
+            merged, _ = plan_settings(path)
+        self.assertIn("Stop", merged["hooks"])
+        self.assertIn("SessionStart", merged["hooks"])
+
 
 class TestReconcile(TempRoot):
     """Deleting a promoted skill must not silently retire the workflow."""
@@ -785,6 +961,81 @@ class TestReconcile(TempRoot):
         result = reconcile(Ledger(self.config), self.root / "skills", self.config)
         self.assertEqual([s.name for s in result["orphaned"]], ["stray"])
         self.assertTrue((d / "SKILL.md").exists(), "never deletes a skill file")
+
+
+class TestWebUI(TempRoot):
+    """The web layer writes real files, so the guards matter more than the HTML."""
+
+    def _skill(self, name, desc="Do a thing.", body="body\n"):
+        d = self.root / "skills" / name
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / "SKILL.md"
+        p.write_text(f'---\nname: {name}\ndescription: "{desc}"\n---\n\n{body}',
+                     encoding="utf-8")
+        return p
+
+    def test_rejects_path_traversal_and_unknown_names(self):
+        from skillpp.web import _skill_path
+        self._skill("real-skill")
+        skills = self.root / "skills"
+        self.assertIsNotNone(_skill_path(skills, self.config, "real-skill"))
+        for bad in ("../../etc/passwd", "a/../../b", "", ".", "..",
+                    "/etc/passwd", "nope"):
+            self.assertIsNone(_skill_path(skills, self.config, bad),
+                              f"{bad!r} must not resolve")
+
+    def test_save_validates_before_overwriting(self):
+        from skillpp.web import save_skill
+        path = self._skill("guarded")
+        original = path.read_text()
+
+        bad = '---\nname: guarded\ndescription: "' + ("x" * 250) + '"\n---\nbody\n'
+        result = save_skill(path, bad)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("description" in p for p in result["problems"]))
+        self.assertEqual(path.read_text(), original,
+                         "a rejected save must not touch the file")
+
+    def test_save_keeps_a_backup(self):
+        from skillpp.web import save_skill
+        path = self._skill("backed-up")
+        good = '---\nname: backed-up\ndescription: "Still fine."\n---\n\nnew body\n'
+        self.assertTrue(save_skill(path, good)["ok"])
+        self.assertIn("new body", path.read_text())
+        self.assertTrue(list(path.parent.glob("SKILL.md.bak-*")),
+                        "the previous version is recoverable")
+
+    def test_state_payload_covers_every_pane(self):
+        from skillpp.web import collect_state
+        from skillpp.capture import fold_dictation
+        self._skill("listed")
+        fold_dictation(self.config, "Whenever I ship, tag and push it.")
+        state = collect_state(self.config, self.root / "skills")
+        self.assertEqual([s["name"] for s in state["skills"]], ["listed"])
+        self.assertEqual(len(state["candidates"]), 1)
+        self.assertIn("ignored", state)
+        self.assertIn("drift", state)
+
+    def test_entry_actions_round_trip(self):
+        from skillpp.web import apply_entry_action
+        from skillpp.capture import fold_dictation
+        entry_id = fold_dictation(self.config, "Tag the release and push it.")["id"]
+
+        self.assertEqual(apply_entry_action(self.config, entry_id, "ignore"),
+                         {"ok": True, "status": "ignored"})
+        self.assertEqual(Ledger(self.config).get(entry_id).status, "ignored")
+        self.assertEqual(apply_entry_action(self.config, entry_id, "reopen"),
+                         {"ok": True, "status": "candidate"})
+        self.assertFalse(apply_entry_action(self.config, entry_id, "rm -rf")["ok"])
+        self.assertFalse(apply_entry_action(self.config, "nope", "ignore")["ok"])
+
+    def test_server_binds_loopback_only(self):
+        from skillpp.web import serve
+        httpd = serve(self.config, self.root / "skills", port=0, open_browser=False)
+        try:
+            self.assertEqual(httpd.server_address[0], "127.0.0.1")
+        finally:
+            httpd.server_close()
 
 
 class TestHookRobustness(TempRoot):

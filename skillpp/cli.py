@@ -17,7 +17,8 @@ from pathlib import Path
 
 from . import __version__
 from .capture import (fold_dictation, handle_prompt, handle_session_end,
-                      handle_tool, log_error)
+                      handle_session_start, handle_stop, handle_tool,
+                      keep_current, log_error)
 from .config import Config, default_skills_dir
 from .ledger import (IGNORED_STATUSES, Ledger, STATUS_CANDIDATE,
                      STATUS_IGNORED, STATUS_PROMOTED)
@@ -48,9 +49,24 @@ def cmd_hook(args: argparse.Namespace) -> int:
             handle_prompt(config, payload)
         elif event == "PostToolUse":
             handle_tool(config, payload)
-        elif event in ("SessionEnd", "Stop"):
+        elif event == "Stop":
+            result = handle_stop(config, payload)
+            if args.verbose:
+                print(json.dumps(result))
+        elif event == "SessionEnd":
             result = handle_session_end(config, payload)
             if args.verbose:
+                print(json.dumps(result))
+        elif event == "SessionStart":
+            result = handle_session_start(config, payload)
+            if result.get("message"):
+                print(json.dumps({
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": result["message"],
+                    }
+                }))
+            elif args.verbose:
                 print(json.dumps(result))
         elif args.verbose:
             print(json.dumps({"status": "ignored-event", "event": event}))
@@ -86,6 +102,30 @@ def cmd_review(args: argparse.Namespace) -> int:
         print(f"  {entry.id}  ×{entry.occurrences}  {entry.title[:58]}")
         print(f"            {len(entry.steps)} steps ·{flag} · last seen {entry.last_seen[:10]}")
     print(f"\nInspect one:  skillpp show <id>")
+    return 0
+
+
+def cmd_keep(args: argparse.Namespace) -> int:
+    """Save the current task span as a candidate, skipping the 3× wait."""
+    config = Config(args.root)
+    config.ensure_dirs()
+    result = keep_current(config, args.session_id)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0 if result.get("status") in ("created", "merged") else 1
+    status = result.get("status")
+    if status == "no-session":
+        print("No in-flight session to keep. Run this from a Claude Code session.",
+              file=sys.stderr)
+        return 1
+    if status == "too-thin":
+        print("Nothing to keep — need at least two real steps in the current task.",
+              file=sys.stderr)
+        return 1
+    print(f"{status} {result.get('id', '')}".strip()
+          + ("  (ready now)" if result.get("ready") else ""))
+    if result.get("id"):
+        print(f"Inspect:  skillpp show {result['id']}")
     return 0
 
 
@@ -473,8 +513,33 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    """Serve the local browser UI. 127.0.0.1 only — it writes real files."""
+    from .web import serve
+
+    config = Config(args.root)
+    skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
+    try:
+        httpd = serve(config, skills_dir, port=args.port,
+                      open_browser=not args.no_browser)
+    except OSError as exc:
+        print(f"could not bind port {args.port}: {exc}", file=sys.stderr)
+        return 1
+    url = f"http://127.0.0.1:{httpd.server_port}/"
+    print(f"skills  {skills_dir}")
+    print(f"ledger  {config.ledger_dir}")
+    print(f"serving {url}   (ctrl-c to stop)")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopped")
+    finally:
+        httpd.server_close()
+    return 0
+
+
 def cmd_install(args: argparse.Namespace) -> int:
-    from .install import apply_settings, hook_command, install_command_file, plan_settings
+    from .install import apply_settings, hook_command, install_command_files, plan_settings
 
     settings_path = Path(args.settings).expanduser() if args.settings else (
         Path.home() / ".claude" / "settings.json")
@@ -502,8 +567,8 @@ def cmd_install(args: argparse.Namespace) -> int:
     commands_dir = Path(args.commands_dir).expanduser() if args.commands_dir else (
         Path.cwd() / ".claude" / "commands")
     try:
-        dest = install_command_file(commands_dir)
-        print(f"wrote {dest}")
+        for dest in install_command_files(commands_dir):
+            print(f"wrote {dest}")
     except OSError as exc:
         print(f"could not install slash command: {exc}", file=sys.stderr)
     return 0
@@ -534,6 +599,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_dictate)
+
+    p = sub.add_parser("keep", help="save the current task as a candidate now")
+    p.add_argument("--session-id", help="Claude Code session id (default: latest buffer)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_keep)
 
     p = sub.add_parser("show", help="effect summary, evidence and open questions")
     p.add_argument("id")
@@ -621,6 +691,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="include the skillpp slash commands")
     p.add_argument("--zip", action="store_true", help="also produce a .zip")
     p.set_defaults(func=cmd_bundle)
+
+    p = sub.add_parser("web", help="browse and edit skills in a local browser UI")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--skills-dir")
+    p.add_argument("--no-browser", action="store_true",
+                   help="do not open a browser window")
+    p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("install", help="wire Claude Code hooks (dry run by default)")
     p.add_argument("--apply", action="store_true", help="actually write settings.json")

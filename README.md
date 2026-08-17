@@ -236,7 +236,7 @@ Neither half crosses to Desktop on its own. Hooks never fire there — Desktop r
 
 ### Capture: hooks, not a daemon
 
-Claude Code fires hooks — shell commands receiving JSON on stdin — at `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `PreCompact`, and `Stop`, configured through `settings.json`. `PostToolUse` supplies the tool name, its input, and its result: a structured trace stream, considerably cleaner than parsing shell history. `SessionEnd` is the natural batching point for ledger writes and the pull-review nudge. No OS daemon, no separate install, and a far smaller infosec surface than a background listener.
+Claude Code fires hooks — shell commands receiving JSON on stdin — at `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `PreCompact`, and `Stop`, configured through `settings.json`. `PostToolUse` supplies the tool name, its input, and its result: a structured trace stream, considerably cleaner than parsing shell history. `Stop` is the task boundary: a successful turn (tests, logs, commit, deploy) folds as its own recipe and the buffer stays, so one session can yield several candidates. `SessionEnd` folds leftover complete work and deletes the buffer. A short "it works" / "lgtm" on `UserPromptSubmit` (or in the session transcript) counts as confirmation even when the closing step is ambiguous. No OS daemon, no separate install, and a far smaller infosec surface than a background listener.
 
 **The decisive advantage is `UserPromptSubmit`.** It captures what the developer *asked for* next to what actually *ran*. Intent is the half of the picture a raw command log can never recover, and having it in the same session materially improves synthesis — it is what reduces §4's clarification pass from an interview to a confirmation.
 
@@ -244,10 +244,14 @@ Claude Code fires hooks — shell commands receiving JSON on stdin — at `PreTo
 
 | Skill Plus Plus concept | Claude Code primitive |
 | --- | --- |
-| Trace capture | `PostToolUse` / `PreToolUse` hooks |
+| Trace capture | `PostToolUse` hook |
 | Intent capture | `UserPromptSubmit` hook |
-| Ledger write + review nudge | `SessionEnd` hook |
+| Success / "it works" | `UserPromptSubmit` + transcript at `SessionEnd` |
+| Task-span fold (buffer kept) | `Stop` hook |
+| Leftover fold + buffer delete | `SessionEnd` hook |
+| Review nudge | `SessionStart` additionalContext when recipes are ready |
 | Pull-based review UI | `.claude/commands/skillpp-review.md` → `/skillpp-review` |
+| Save this task now | `.claude/commands/skillpp-keep.md` → `/skillpp-keep` |
 | Skill output | `.claude/skills/<name>/SKILL.md` + `scripts/` |
 | Dependency check at pull | Diff declared deps against `.mcp.json` and connected `mcp__<server>__<tool>` names |
 | Progressive disclosure | Native — `name` + `description` indexed, body loaded on demand |
@@ -354,6 +358,7 @@ worth reading. Neither half is useful alone.
 | --- | --- |
 | `skillpp hook --event <E>` | Hook entry point; reads JSON on stdin, always exits 0 |
 | `skillpp dictate --text "…"` | Create a candidate from a description instead of a trace |
+| `skillpp keep [--session-id]` | Save the current task now (skips the 3× wait) |
 | `skillpp review [--all]` | Candidates at or above the recurrence threshold |
 | `skillpp show <id>` | Effect summary, evidence, open questions |
 | `skillpp search <words>` | Search the ledger of your own past work |
@@ -401,10 +406,12 @@ Deliberately deferred — see §13 for phasing.
 
 ### Verification status
 
-Installed and confirmed firing in a live Claude Code terminal session. All
-three hooks verified against real payloads: `PostToolUse` parses `Bash` and
-`Edit` calls cleanly, `UserPromptSubmit` captures prompts verbatim, and
-`SessionEnd` folds a buffer into a ledger entry.
+Installed and confirmed firing in a live Claude Code terminal session. The
+original three hooks verified against real payloads: `PostToolUse` parses
+`Bash` and `Edit` calls cleanly, `UserPromptSubmit` captures prompts verbatim,
+and `SessionEnd` folds leftover work into a ledger entry. `Stop` (successful
+task spans, buffer kept), `"it works"` confirmation, transcript ingest, and
+`/skillpp-keep` are covered by the unit suite.
 
 Coverage is narrower than §8 originally claimed, on both axes: chat-surface
 sessions are never captured, and Desktop does not read `~/.claude/skills/` —

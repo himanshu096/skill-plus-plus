@@ -16,25 +16,31 @@ For the design rationale, see the [README](../README.md).
 ```
   you type a prompt
         │
-        ├──► UserPromptSubmit hook ──► records what you asked for
+        ├──► UserPromptSubmit ──► records intent;
+        │                         "it works" / "lgtm" folds the last task
+  Claude runs tools (Bash, Edit, MCP…)
         │
-  Claude runs tools (Bash, Edit, MCP calls…)
+        ├──► PostToolUse ───────► records what actually ran,
+        │                         scrubbed before it touches disk
+  Claude finishes the turn
         │
-        ├──► PostToolUse hook ──────► records what actually ran,
-        │                              scrubbed before it touches disk
+        ├──► Stop ──────────────► if the turn looks successful
+        │                         (tests, logs, commit, deploy…), fold
+        │                         that span; keep the buffer
   session ends
         │
-        └──► SessionEnd hook ───────► folds the session into one
-                                       ledger candidate, deletes the buffer
+        └──► SessionEnd ────────► fold leftover complete work,
+                                  read "it works" from the transcript
+                                  if hooks missed it, delete the buffer
 ```
 
-Nothing interrupts you. No popup, no proposal mid-task. The candidate sits in
-the ledger until you go looking for it.
+Nothing interrupts you mid-task. A quiet hint at the next `SessionStart` if
+something is ready for `/skillpp-review`. One session can yield several
+recipes — a turn is a task, not the whole chat.
 
-The pairing of the first two hooks is the point: `UserPromptSubmit` captures
-**intent**, `PostToolUse` captures **execution**. A shell-history tool only ever
-gets the second half, which is why its output needs so much more explaining
-afterwards.
+The pairing is the point: `UserPromptSubmit` captures **intent**, `PostToolUse`
+captures **execution**, `Stop` + a success phrase capture **that it worked**.
+A shell-history tool only ever gets the middle.
 
 ---
 
@@ -52,10 +58,11 @@ python3 bin/skillpp install --apply
 
 That does three things:
 
-1. Adds the three hooks to `~/.claude/settings.json`, **backing up the existing
+1. Adds the hooks (`UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd`,
+   `SessionStart`) to `~/.claude/settings.json`, **backing up the existing
    file first** and appending to any hooks already configured rather than
    replacing them.
-2. Copies `/skillpp-review` into `.claude/commands/`.
+2. Copies `/skillpp-review` and `/skillpp-keep` into `.claude/commands/`.
 3. Leaves the ledger at `~/.claude/skillpp/`, outside any repo.
 
 Copy `/skillpp-new` across too if you want the dictation command:
@@ -65,7 +72,8 @@ cp commands/skillpp-new.md .claude/commands/
 ```
 
 **Restart Claude Code afterwards.** Hooks are read at session start, so an
-already-running session will not pick them up.
+already-running session will not pick them up. If you installed an earlier
+build, re-run `install --apply` so `Stop` and `SessionStart` get appended.
 
 ---
 
@@ -73,7 +81,7 @@ already-running session will not pick them up.
 
 | Path | What |
 | --- | --- |
-| `~/.claude/settings.json` | The three hook registrations |
+| `~/.claude/settings.json` | Hook registrations (prompt, tools, Stop, SessionEnd, SessionStart) |
 | `~/.claude/skillpp/ledger/` | Candidate workflows, one markdown file each |
 | `~/.claude/skillpp/sessions/` | In-flight session buffers, deleted at session end |
 | `~/.claude/skillpp/cold/`, `archive/` | Demoted skills — moved, never deleted |
@@ -95,6 +103,9 @@ skill would *do* (commands, writes, destructive steps, network calls), the
 sessions it came from, and at most three questions about the parts the trace
 cannot explain. On approval it writes the `SKILL.md`.
 
+**`/skillpp-keep`** — save the task you just finished, without waiting for it
+to happen three times. Same as saying "this one is a skill."
+
 **`/skillpp-new <description>`** — go the other way: describe a process you want
 a skill for, and it checks the description for what is missing (a format you
 referenced but never gave, an absent trigger, unconstrained sources, no failure
@@ -104,6 +115,7 @@ Underneath, if you prefer the CLI:
 
 ```bash
 python3 bin/skillpp review          # what is ready
+python3 bin/skillpp keep            # save the current task now
 python3 bin/skillpp show <id>       # the full proposal
 python3 bin/skillpp search deploy   # your own past work, searchable
 python3 bin/skillpp stats           # ledger size and counts
@@ -144,14 +156,17 @@ ls ~/.claude/skillpp/sessions/                # probe.json should exist
 
 **Verification status.**
 
-All three hooks are confirmed working against live payloads in a terminal
-session:
+Capture hooks, including `Stop` as a task boundary (buffer kept) and
+`UserPromptSubmit` success phrases, are covered by the unit suite. Live
+terminal confirmation of the original three:
 
 | Hook | Status |
 | --- | --- |
 | `PostToolUse` | **Confirmed.** `Bash` and `Edit` calls recorded with commands and file paths parsed correctly, zero parse failures. |
-| `UserPromptSubmit` | **Confirmed.** Prompts captured verbatim under the `prompt` field. |
-| `SessionEnd` | Confirmed by direct invocation; folds a buffer into a ledger entry. |
+| `UserPromptSubmit` | **Confirmed.** Prompts captured verbatim under the `prompt` field. `"it works"` folds the open span. |
+| `Stop` | Folds a successful span and **keeps** the session buffer. |
+| `SessionEnd` | Confirmed by direct invocation; folds leftover complete work, then deletes the buffer. |
+| `SessionStart` | Injects a one-line hint when recipes are ready; silent otherwise. |
 
 ```bash
 python3 -c "import json,glob;d=json.load(open(glob.glob('$HOME/.claude/skillpp/sessions/*.json')[0]));print('prompts:',len(d['prompts']),'steps:',len(d['steps']))"
@@ -193,14 +208,17 @@ If you work in the terminal:
 
 ### Terminal (Claude Code CLI)
 
-**End-to-end automated.** Hooks fire automatically at session end.
+**End-to-end automated.** Successful turns fold as they finish; the buffer
+stays until the session ends.
 
 ```
-1. Work normally in a session
+1. Work normally — one task per turn
    ↓
-2. SessionEnd hook summarizes into the ledger
+2. Stop folds a successful span (tests, logs, commit, deploy…)
+   "it works" / /skillpp-keep also counts
    ↓
 3. After 3 occurrences, /skillpp-review surfaces a proposal
+   (or immediately, if you kept / dictated it)
    ↓
 4. Approve and the skill lands in ~/.claude/skills/
    ↓
@@ -208,6 +226,7 @@ If you work in the terminal:
 ```
 
 Or use `/skillpp-new` to describe a skill directly (bypasses the 3-occurrence threshold).
+`/skillpp-keep` saves the current task the same way.
 
 ### Claude Desktop
 
@@ -363,7 +382,7 @@ paths and commands a skill references still resolve.
 
 ## 7. Turning it off
 
-Delete the three `skillpp` entries from `hooks` in `~/.claude/settings.json`, or
+Delete the `skillpp` entries from `hooks` in `~/.claude/settings.json`, or
 restore the backup the installer left beside it. Capture stops immediately at
 the next session; skills already written keep working, since they are ordinary
 `SKILL.md` files with no dependency on this tool.
