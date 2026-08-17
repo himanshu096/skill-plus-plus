@@ -75,6 +75,25 @@ nothing real. See §12 for what is built and what is not.
 * **Passive listener:** A lightweight background daemon or terminal hook observes execution traces — commands, MCP calls, file edit sequences.
 * **Active dictation:** Workflows can be dictated in plain English (*"when we update X, run Y, check Z, then notify the on-call"*), for quick-thinking developers and non-technical contributors alike.
 
+Observation is not per-session but per **task span**: bounded by developer
+prompts, closed by a step that finishes something, abandoned when a span crosses
+three prompts or forty steps without ever closing. Leading exploration is
+trimmed — a recipe's first real action changes something, and the reads before
+it are how the problem was found. A span that is read-only throughout carries no
+method and is discarded.
+
+Two rules earn their place here. **Length is not the failure; never closing
+is** — a finished fifty-step migration is one recipe and is kept. And *"did
+anything happen"* beats *"did it close"*: the stricter test threw away a
+completed rollback whose closing step no regex recognised.
+
+Commands are cleaned for reading — banners, pipes, redirects and heredoc bodies
+dropped — by `crisp()`, which is deliberately **not** `normalize_command()`.
+The latter fingerprints (`python3 -m unittest discover` → `python3`) and is
+lossy in exactly the way that makes a trace unreadable. Full reasoning, and what
+a local model measured at each of these judgements, in
+[docs/detection.md](docs/detection.md).
+
 ### Step 2 — Summarize on Write (not on read)
 
 Raw traces are **never persisted**. At capture time each observation is compressed into a compact markdown ledger entry and scrubbed in the same pass:
@@ -316,6 +335,15 @@ The competitive pressure worth taking seriously is the fourth column: memory and
 * **Do developers actually answer the clarifying questions?** §4 assumes three pre-filled questions get answered rather than skipped. If the skip rate is high, most skills land permanently provisional with open `## Known gaps`, and the judgment layer never materializes.
 * **Will infosec approve a background listener?** Sanitize-on-write and local-first storage are the mitigations. Hook-based capture (§8) sidesteps this almost entirely by removing the daemon, which is an argument for shipping the Claude Code integration first. This remains the primary enterprise adoption risk for the OS-daemon path.
 * **Provisional → trusted promotion:** Landing skills as hints that earn trust through successful use makes shallow review safe. The promotion threshold is unvalidated.
+* **Should a model do the judging?** Not in the hook — that is settled, and not
+  on grounds of quality: hooks must be fast, free and incapable of breaking a
+  session, and a model call is none of the three. The open part is whether a
+  deferred local model should pre-filter before review. Measured evidence in
+  [docs/detection.md](docs/detection.md): a small local model extracts visible
+  facts reliably in under three seconds, and cannot decide which six of forty
+  steps are the method. Input shape mattered more than model size — the same
+  model went from useless to three-for-three on cleaned input with one question
+  per call.
 * **Is the capture layer already a platform feature?** Claude Code's auto-mode setup builds an environment profile by reading shell history and session transcripts, then proposes it for approval before writing to `settings.json` — the same input signal, the same propose-then-approve shape, the same file. It derives *permissions* rather than *procedures*, so it is not a competing product. But the plumbing this project built from scratch — session observation, trace mining, human-gated config writes — demonstrably ships in the platform already, which makes "also derive skills" a far shorter step for Anthropic than for anyone else. If capture is not the moat, the defensible parts are the ledger as searchable work memory (§3, Step 3) and the gap detection that turns a trace into three good questions (§4). Both should be measured on that basis, not on capture fidelity.
 
 ---
@@ -329,20 +357,40 @@ to import a third-party package is a hook that breaks somebody's session.
 skillpp/
   config.py      paths and thresholds, all env-overridable
   sanitize.py    secret/PII scrubbing, applied on write
-  normalize.py   parameterisation + workflow signatures
+  normalize.py   parameterisation, signatures, crisp() command cleaning
   ledger.py      candidate entries: markdown body, JSON payload
   recurrence.py  lexical similarity and merge
   signals.py     gap detection, question generation, effect summaries
-  capture.py     hook handlers (fail-safe: always exit 0)
+  capture.py     hook handlers (fail-safe: always exit 0), span budget
   summary.py     review surface, SKILL.md scaffold, dependency check
-  lifecycle.py   hot/cold/archived tiering, staleness, usage tracking
+  lifecycle.py   hot/cold/archived tiering, staleness, reconciliation
+  web.py         local browser UI — stdlib http.server, one HTML page
   install.py     settings.json wiring (dry run by default)
   cli.py         command dispatch
 commands/skillpp-review.md   /skillpp-review — review captured candidates
 commands/skillpp-new.md      /skillpp-new    — build a skill from a description
+commands/skillpp-keep.md     /skillpp-keep   — save the current task now
 examples/demo.sh             end-to-end walkthrough on a scratch ledger
-tests/test_skillpp.py        63 tests
+tests/test_skillpp.py        117 tests
 ```
+
+### The browser UI
+
+`skillpp web` serves a local page for browsing and editing the library without
+touching the CLI. Three tabs — Skills, Candidates, Ignored.
+
+Skills can be read, edited in place, archived, or deleted. Editing validates
+against the upload limits before writing and keeps a timestamped backup.
+Archiving and deleting both **park the originating workflow in the ignore list**,
+because leaving the ledger entry `promoted` against a missing file recreates
+exactly the dead end §6 describes. Candidates and Ignored support free-text
+filtering, a source selector, and a flag toggle — *Ready only* on the queue,
+*Recurring anyway* on the ignore list.
+
+Deliberately dependency-free: `http.server` and one self-contained HTML page, no
+bundler and no build step. It **binds to 127.0.0.1 only** and writes real files,
+so it is a local tool and never something to expose. Path traversal is rejected
+by name, not sanitised.
 
 ### Division of labour
 
@@ -370,6 +418,7 @@ worth reading. Neither half is useful alone.
 | `skillpp lifecycle` / `tier <name> <tier>` | Inventory and demotion |
 | `skillpp check --name <n>` | Dependency check at pull time (exit 2 if missing) |
 | `skillpp bundle --out <dir> [--format upload\|plugin]` | Package skills: `upload` = one zip per skill for Customize → Skills; `plugin` = `.claude-plugin/` + `skills/` |
+| `skillpp web [--port N] [--no-browser]` | Browse and edit the library in a browser; loopback only |
 | `skillpp install [--apply]` | Wire Claude Code hooks; dry run without `--apply` |
 
 ### Built
@@ -382,6 +431,11 @@ bypass, effect-first proposals, scaffolding with declared deps and
 `## Known gaps` that close when answered, pull-time dependency checking,
 hot/cold/archived demotion, staleness by reference resolution, and usage
 tracking driven by observed `Skill` calls.
+
+Also: task-span folding with a budget and exploration trimming (§3, and
+[docs/detection.md](docs/detection.md)), the ignore list with
+recurrence-since-ignored, drift reconciliation that reports and never decides,
+upload validation against the frontmatter limits, and the local browser UI.
 
 ### Not built
 
@@ -412,6 +466,13 @@ original three hooks verified against real payloads: `PostToolUse` parses
 and `SessionEnd` folds leftover work into a ledger entry. `Stop` (successful
 task spans, buffer kept), `"it works"` confirmation, transcript ingest, and
 `/skillpp-keep` are covered by the unit suite.
+
+Span shaping is verified by five end-to-end scenarios (refinement across
+prompts, retry-then-pass, two tasks back to back, exploration-then-fix, and a
+session ending mid-investigation) — the last two failed before the §3 work and
+are listed in [docs/detection.md](docs/detection.md). The browser UI's
+validation, traversal rejection and workflow-parking are unit-tested; its
+rendering is not.
 
 Coverage is narrower than §8 originally claimed, on both axes: chat-surface
 sessions are never captured, and Desktop does not read `~/.claude/skills/` —

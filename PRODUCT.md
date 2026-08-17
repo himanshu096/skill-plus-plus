@@ -102,6 +102,11 @@ procedure parks it there too, rather than nagging you to recreate it.
 hand, it says so. Not by re-proposing it — by noting, once, that the evidence has
 changed. An ignore means "not now", and sometimes "now" arrives.
 
+**There is a page for all of it.** A local browser view lists what you have, what
+is waiting, and what you parked — readable, filterable, editable, with archive
+and delete behind a confirmation. It runs on your own machine and is reachable
+from nowhere else. Some people would rather see a library than list it.
+
 ---
 
 ## What makes it different

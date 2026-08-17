@@ -119,6 +119,7 @@ python3 bin/skillpp keep            # save the current task now
 python3 bin/skillpp show <id>       # the full proposal
 python3 bin/skillpp search deploy   # your own past work, searchable
 python3 bin/skillpp stats           # ledger size and counts
+python3 bin/skillpp web             # browse and edit in a browser (§5b)
 ```
 
 A new skill lands in `.claude/skills/` and Claude Code picks it up
@@ -173,6 +174,16 @@ python3 -c "import json,glob;d=json.load(open(glob.glob('$HOME/.claude/skillpp/s
 ```
 
 Both numbers should climb as you work.
+
+A session is not one candidate. Work is folded into **task spans** — bounded by
+your prompts, closed by a step that finishes something (a commit, a test run, a
+deploy), abandoned if a span crosses three prompts or forty steps without ever
+closing. Leading exploration is trimmed, and a span consisting only of reads is
+discarded rather than banked. So `steps` climbing does not mean candidates are
+accumulating, and it should not: most sessions produce none.
+
+What decides all of this, why it is regex and not a model, and what a local
+model was measured doing instead, is in [docs/detection.md](detection.md).
 
 ## 5a. Capture Coverage: Terminal Only
 
@@ -358,6 +369,55 @@ designed: a session needs at least **2 substantive steps** to be recorded at
 all, and a workflow needs **3 occurrences** before it is proposed. Check
 progress with `skillpp review --all`, which includes below-threshold
 candidates.
+
+---
+
+## 5b. The browser UI
+
+```bash
+python3 bin/skillpp web
+```
+
+Serves `http://127.0.0.1:8765` and opens a browser window (`--port N` to move
+it, `--no-browser` to stay put). Three tabs:
+
+**Skills** — everything in `~/.claude/skills/`, with body, tier, occurrences and
+provenance. Edit in place and save; the content is validated against the upload
+limits (name ≤64 chars, description ≤200, frontmatter present) *before* the file
+is overwritten, and the previous version is kept as a timestamped `.bak-` beside
+it. Invalid content is rejected with the reason rather than written.
+
+**Candidates** — the review queue. Filter by free text, by source (captured,
+dictated, kept), and by **Ready only** — those at or above the recurrence
+threshold.
+
+**Ignored** — parked workflows, with how many times each has recurred *since*
+being ignored. That count is the point: three recurrences after you said no is
+information about the ignore, not about the workflow. The same filter box here
+offers **Recurring anyway**, which is the only view that matters on this tab.
+
+### Archive and delete
+
+Both are behind a confirmation and both **park the originating workflow in the
+ignore list**. This matters more than it looks: capture keys candidates by
+workflow signature, so deleting only the file leaves the ledger claiming a skill
+exists at a path that is now empty, and the next recurrence proposes it again.
+Parking makes the removal mean "not this one" rather than "ask me again on
+Thursday."
+
+Archive moves the file to `~/.claude/skillpp/archive/`. Delete removes it. The
+ledger is only touched after the file operation succeeds — a failed delete never
+leaves the ledger describing a state that never happened.
+
+### Scope
+
+It binds to `127.0.0.1` and nothing else, and it writes real files in your home
+directory. It is a local tool with no authentication, so do not put it behind a
+tunnel or a reverse proxy. Skill names are matched against a strict pattern and
+path traversal is rejected outright rather than sanitised.
+
+No framework, no `node_modules`, no build step — `http.server` and a single
+self-contained HTML page, consistent with the rest of the tool.
 
 ---
 
