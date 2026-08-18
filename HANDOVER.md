@@ -1,184 +1,284 @@
-# Handover — pattern detection (`feat/pattern-detection`)
+# Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, pushed, merged up to date with `origin/main`
-(`f182f43`). 82 tests pass: `python3 -m unittest discover -s tests -q`.
-`pytest` is not installed and there is no `pyproject.toml`; use
-`uv run --with pytest pytest tests/` if you want pytest specifically.
+Branch: `feat/pattern-detection`. **157 tests pass:** `python3 -m unittest discover -s tests -q`.
+No `pyproject.toml` and no `pytest` installed; use `uv run --with pytest pytest tests/`
+if you want pytest specifically. Invoke the CLI as `python3 bin/skillpp`.
 
-Invoke the CLI as `python3 bin/skillpp` — bare `skillpp` is not on PATH and
-will silently miss the repo's own copy.
+Numbers marked *measured* come from the transcripts on this machine: ~117 files,
+~324 MB, six projects, about 60 days. Re-run them elsewhere before trusting them.
+
+**Level 1 is built and tested end to end.** What follows is what it does, what
+it cost to get right, and what is deliberately not done.
+
+---
+
+## What this does
+
+`/log-session` reviews a session and proposes skills.
+
+```
+transcript ──▶ prepare-session ──▶ the model judges ──▶ record-candidate ──▶ commit-session
+               (deterministic)      (the only              (deterministic)     (watermark)
+                                     judgement)
+```
+
+Output is a **SKILL.md body**: imperative instructions a future agent can follow,
+not an account of what happened. That distinction took most of the session to
+arrive at and is the thing most easily lost — see *How the goal moved*.
+
+Storage, all under `~/.claude/skillpp/`, never in a repo:
+
+| path | what |
+| --- | --- |
+| `conversations/<conversation-id>.md` | the store: current best description of each candidate, counted and ordered |
+| `reviews/<session-id>.md` | the deliveries: what each session proposed, in its own words |
+| `sessions/<session-id>.json` | unrelated — hook capture state, written by `capture.py` |
+
+Only a *promoted* skill lands in a repo, at `.claude/skills/<name>/SKILL.md`.
+Memories are personal; skills are the team artifact.
 
 ---
 
 ## Division of labour (agreed, don't cross it)
 
-**Their layer — categorization and lifecycle. Treat as status quo, do not
-rebuild.** `ledger.py` / `cli.py` own `candidate` → `promoted` → `ignored`,
-occurrence counting, `find_match`, `reconcile` for deleted skills, and
-`recurrences_since_ignored`. Their `b1d788c` already implemented two things an
-earlier version of our plan claimed: the promoted-skill self-heal and the
-dismissed/ignore state. Their versions are better — `reconcile` reports by
-default and only parks with `--apply`, on the reasoning that re-proposing a
-skill the developer just deleted is the fastest way to get the tool switched
-off.
+**Their layer — categorization and lifecycle.** `ledger.py` / `cli.py` own
+`candidate` → `promoted` → `ignored`, occurrence counting, `find_match`,
+`reconcile`. Treat as status quo.
 
-**Our layer — detection.** Deciding what a *task* is, from a transcript.
-Everything below.
+**Our layer — review.** Deciding what in a session is worth proposing.
+
+⚠️ **Live conflict.** Their layer gates on recurrence reaching a threshold. Ours
+does not: judgement decides whether a candidate is recorded at all, and the
+count only *orders* what is already in. Nothing bridges the two yet. Raise it
+before either side builds further.
 
 ---
 
-## What exists and works
+## How the goal moved, and why
 
-`/log-session` (`.claude/commands/log-session.md`) — reads a session
-transcript from disk, segments it into tasks, writes one summary file to
-`.claude/skillpp/memory/sessions/<YYYY-MM-DD>-<session-id>.md`. Optional
-argument targets any past transcript (path or bare session id), which is also
-the path any future automated pass must take.
+Three reversals, each forced by something that did not work. Knowing them stops
+the old shapes being reintroduced.
 
-Transcript resolution, verified live:
+**Counting recurring workflows → judging skill-worthiness.** A count ranks the
+wrong things: "run the test suite" recurs twenty times and deserves no skill,
+"file a ticket the team's way" recurs four times and clearly does. What makes
+the second valuable is that it encodes a convention, not that it repeats.
 
-```bash
-SLUG=$(pwd | sed 's|[/._]|-|g')
-TRANSCRIPT="$HOME/.claude/projects/$SLUG/$CLAUDE_CODE_SESSION_ID.jsonl"
-```
+**Then: judging → extracting a SKILL.md.** The first working prompt produced a
+retrospective report — *Intent / Steps / Worked / Did not work*. Real findings,
+wrong shape. A skill is forward-facing instruction; that was documentation of an
+event. Anthropic's own guidance is explicit that a SKILL.md is imperative and
+that specificity should match a step's fragility.
 
-`CLAUDE_CODE_SESSION_ID` is in the environment. The slug replaces `/`, `.` and
-`_` with `-` — all three; the slash-only version fails.
+**And: the count came back, as ordering.** Gate on judgement, order by count.
+The gate decides whether an entry belongs; the count decides what a person reads
+first. That kills the original inversion — "run the test suite" never enters, so
+it cannot outrank anything.
 
-**Tested four times, real sessions, output in
-`.claude/skillpp/memory/sessions/` (gitignored — read them, they are the
-evidence):**
-
-| Test | Size | Result |
-| --- | --- | --- |
-| Two distinct tasks | 115KB | Pass — separated, opening question excluded |
-| Quality | 230KB | Pass — informative dead ends kept, real judgement |
-| Fragmentation | 159KB | Pass — three "continue" turns became **one** task |
-| Extreme | 23.8MB | **Fail** — sampled and did not say so |
-
-The single best result: summarizing a past session, it inferred from an
-*interruption* that the developer disliked an output format, and recommended
-revisiting it. The developer's next prompt was exactly that. No fingerprint
-could produce that.
+**What that leaves out, accepted:** slow-burn patterns that only look
+significant in aggregate. Something mildly annoying twenty times, which no single
+session flags as skill-worthy, never surfaces.
 
 ---
 
-## The two open problems, both measured
+## The modules, and what each cost to get right
 
-### 1. Extractor — this is the fix for large transcripts
+`skillpp/` is flat; these sit alongside `ledger.py` and the rest.
 
-Do **not** add a "disclose that you sampled" instruction. That was proposed and
-correctly rejected as a workaround: it institutionalises analysing the wrong
-representation.
+| module | job |
+| --- | --- |
+| `transcript.py` | JSONL → `Message`/`Block`. The only module touching undocumented internals |
+| `identity.py` | messages → conversation id |
+| `extract.py` | messages → compressed text |
+| `memory.py` | the memory document: parse, upsert, render |
+| `prepare.py` | resolve, slice against the watermark, floor, record, commit |
 
-A deterministic extractor (keep user messages and `tool_use` name+args; drop
-thinking blocks, tool results, system reminders, slash-command plumbing,
-image placeholders) reduces:
+### Decisions measurement forced
 
-| Transcript | Raw | Extracted | Ratio |
-| --- | --- | --- | --- |
-| 236KB | 235,986 B | 2,774 B (~693 tok) | 85× |
-| 7.9MB | 7,950,754 B | 70,835 B (~17.7k tok) | 112× |
-| 23.8MB | 23,788,546 B | 95,425 B (~23.9k tok) | 249× |
+**Conversation id is the first message's uuid, in full.** Not a hash of several:
+measured, a prefix of 3+ splits a real conversation whose assistant turn was
+regenerated at message index 2, producing two memory files with counts split
+across both. One message is the shortest possible prefix and the only one an
+early divergence cannot break. Not hashed either — a greppable id is worth more
+than an opaque one.
 
-**There is no large-session problem.** 99.6% of a transcript is noise, and the
-signal is roughly constant regardless of raw size. The 23.8MB monster becomes
-24k tokens.
+**Turn regeneration is routine.** Interrupt a tool call and the turn re-runs, so
+a transcript is **not append-only**. Hence the watermark stores `last_message`
+*and* `last_timestamp`: the marked message can cease to exist. Look up by uuid,
+fall back to timestamp, and **fail loudly if neither resolves** — the natural
+guess ("treat it all as new") silently re-folds a conversation and doubles
+everything in it.
 
-It also fixes a second thing: across all four tests the agent improvised its
-own extraction each time — three different ad-hoc `python3` parsers, one with a
-false start, runs taking 1m27s–3m15s. Deterministic extraction removes both the
-size ceiling and the fumbling.
+**Tool results are kept when they cannot be recovered later.** Not "did it change
+something": a local `Read` returns a file still in the repo, while a Confluence
+page or tracker query returns state from outside it. Getting this wrong was
+measured — with MCP results dropped, a ticket-filing session extracted with the
+entire procedure missing.
 
-Belongs in `skillpp/` as a subcommand (`skillpp extract-session`) so it is
-testable Python, with `/log-session` calling it.
+**Arguments are kept when the argument *is* the step.** `Bash` and MCP calls get
+room (1500 / 1200 chars); `Edit` and `Write` get a path and little else, because
+their argument is the *product*. Keeping the product cost 4 MB corpus-wide and
+pushed 13 more sessions over budget while answering none of intent, steps or
+outcome.
 
-### 2. Cursor — no record of what has already been analysed
+**The dialogue is kept, not just the actions.** An earlier version preserved
+assistant prose only before a short reply — 1.7% of it. Two of the three target
+skill shapes (grounded planning, execution checking) live *entirely* in that
+prose and were undetectable in principle. `AskUserQuestion` and `ExitPlanMode`
+render their content in full for the same reason.
 
-Two symptoms, one missing piece of state:
+**Long prompts are trimmed at both ends.** Developers paste stack traces; in one
+transcript four prompts carried 28 KB of traceback, 70% of that extract. The ask
+sits at one end or the other, so both are kept and the elision left visible.
 
-**Repeated `/log-session` in one session.** No cursor exists, so a second run
-re-reads from the session's first prompt. Today it is merely wasteful (the
-existing-file check catches it and asks before overwriting, producing a
-superset rather than duplicates). It becomes a correctness bug the moment
-anything counts occurrences.
+Extraction now: **324 MB → 12.3 MB, 26×.**
 
-**Resumed sessions.** Confirmed in real data: a conversation resumed many times
-writes a *new* `session_id` per snapshot, each a growing superset of the last.
-14 files were found for one conversation, with byte-identical leading message
-UUIDs. Analysing each independently would inflate every count purely by how
-often the terminal happened to resume.
+### The bug worth remembering
 
-Fix both with one mechanism: a cursor keyed by lineage (hash of the first few
-message UUIDs — deterministic, immune to prompt rewording) storing the
-last-analysed UUID. Analyse only the tail past it.
+`record()` used `prepared.transcript.stem[:8]` — truncating a session id for a
+tidier provenance line. Real uuids diverge within eight characters, so it never
+showed up in 157 unit tests or on real sessions. Two fixtures named
+`recurrence-a` and `recurrence-b` collided instantly: the second was read as
+already present, so the count **stopped rising with no error**.
 
-Known limitation to record rather than hide: slicing at a cursor can misjudge a
-task that spans the boundary. Smaller cost than systematically inflating counts.
+Precisely the failure this design exists to prevent, sitting in the code that
+prevents it. Now the full stem, with a regression test verified to fail against
+the old line.
 
 ---
 
-## Also outstanding
+## Where judgement stops and code starts
 
-- **A 12-day, 4683-record "session" exists** (`ac68cada`, concept-buddy, 64 real
-  prompts). Extraction makes it readable; it does not make it coherent. One
-  document covering twelve days of unrelated work is not a session summary.
-  Needs splitting before analysis — related to but distinct from the cursor.
-- **Interface question, undecided.** Session summaries are currently standalone
-  markdown that nothing reads. Do they feed the ledger as a better "this is one
-  workflow" signal than fingerprints, or stay a parallel artifact proving value
-  independently? This decides whether the extractor's output should be readable
-  markdown or something `fold_session` can consume.
-- **`.claude/settings.json`** retains one `SessionEnd` `command` hook appending
-  payloads to `.claude/skillpp/memory/ended-sessions.jsonl`. It is the queue half
-  of an eventual automated pass. **Unverified since it was rewritten** to resolve
-  its output dir from the payload's `cwd` — exit a session and check a line
-  appends.
+The rule throughout: **code for anything with one right answer that fails
+silently; the model for anything needing judgement.**
+
+The model decides three things and nothing else:
+
+1. is there a completed procedure worth a skill
+2. is this proposal new, or the same procedure as one already recorded
+3. what the instructions say
+
+Everything downstream — count, provenance, `also seen as:` on a rename, ordering,
+atomic rewriting — happens in `memory.py`. The model hands over **one candidate
+at a time** and never rewrites the document, so an existing entry cannot be lost
+by being forgotten. An earlier design had it rewrite the whole document and
+needed a guard against dropped entries; the guard is gone because the failure is
+now structurally impossible.
+
+`record` and `commit` are separate: a session yields three candidates or none,
+and the watermark moves exactly once either way — **after** the recording, never
+before. A mark advanced ahead of a failed review buries those messages behind a
+claim that they were already read.
+
+---
+
+## Tested
+
+Unit: 157 tests, stdlib `unittest`.
+
+End to end in the CLI, on real and controlled sessions:
+
+| | result |
+| --- | --- |
+| extract candidates from a real session | imperative, instance-noise stripped |
+| memory + review documents written | frontmatter, provenance, both files |
+| idempotence — same session twice | "nothing new", nothing written |
+| accumulation across sessions | two candidates in one memory |
+| correct *non*-match | declined with a reason: setup vs iteration |
+| a session with nothing generalisable | zero proposals, watermark still advanced |
+| count merge | `seen 2×` with both sessions listed |
+| body merge | every rule from both occurrences present |
+
+`tests/fixtures/seed_recurrence.py` builds two snapshots of one conversation
+doing the same procedure twice, the second hitting an obstacle the first did
+not. It tests what unit tests cannot — whether the model *reaches for*
+`--matches`, and whether a merge combines bodies rather than replacing. Its
+`.jsonl` output is gitignored; regenerate it.
+
+**Four bugs were found by CLI testing that 157 unit tests did not catch:**
+`${CLAUDE_PROJECT_DIR}` not substituted in a command file, an `allowed-tools`
+glob missing a space, a wrong absolute path globbed as a session id, and the
+truncated session id above. All silent. Worth remembering before trusting a
+green suite as proof a wiring change works.
+
+---
+
+## Open
+
+**The division-of-labour conflict** above. Blocking anything at level 2.
+
+**Merging is unproven on messy input.** Three real runs across related work
+produced no match — correctly, the procedures differed — so every observed merge
+has been on controlled fixtures. If a merge ever does lose something,
+`reviews/<session>.md` still holds what each session originally proposed.
+
+**Level 2 does not exist:** the roll-up across conversations, `PATTERNS.md`, and
+promote/reject. Level 1 ends at one correct document per conversation.
+
+**Automatic triggering is deferred, not rejected.** The `SessionEnd` hook still
+enqueues to `ended-sessions.jsonl`; nothing drains it. The queue it accumulates
+is the evidence for whether manual triggering is enough. `claude -p` works, with
+a ~$0.16 context floor per invocation, and **`--no-session-persistence` is
+mandatory** or a drain creates a session, which fires the hook, which enqueues,
+which the next drain processes.
+
+**Unattended mode is a prompt problem, not plumbing.** Every escape hatch in
+`/log-session` currently addresses a human.
+
+---
+
+## Reference — Claude Code facts verified here
+
+- **`` !`command` `` in a command file runs *before* the content reaches the
+  model**, and its output replaces the placeholder. No exit-code branching, so
+  "nothing to do, stop" must be in the output text.
+- **`${CLAUDE_PROJECT_DIR}` is not substituted in a `.claude/commands/` file** —
+  the permission checker sees a live shell expansion and refuses. Use a relative
+  path; the command runs from the project root.
+- **`allowed-tools` globs are literal about spaces.** `Bash(python3 * skillpp *)`
+  does not match `python3 bin/skillpp …`.
+- **The transcript JSONL structure is documented nowhere.** Only
+  `transcript_path` is specified. Hence `transcript.py` as a blast-radius
+  boundary: it raises rather than returning `[]` when a file has records but no
+  recognisable messages, which is the signature of the format having moved.
+- **Transcripts are written asynchronously and may lag** — documented. Harmless
+  with a watermark, except on a conversation's final run.
+- **Custom commands are now skills**; `.claude/commands/*.md` still works.
 
 ---
 
 ## Dead ends — do not retry
 
-- **`agent`-type hooks on `SessionEnd`.** Structurally impossible, not
-  misconfigured. The emitter calls `KP({getAppState, hookInput, matchQuery,
-  signal, timeoutMs})` and `KP`'s signature accepts **no `toolUseContext`**,
-  while the agent branch does `if (!A) throw Error("ToolUseContext is required
-  for agent hooks...")`. It fails silently because the emitter only surfaces
-  failures shaped `if (!z.succeeded && z.output)`. Docs add that agent hooks are
-  "experimental" and exist to "verify conditions before returning a decision" —
-  a verdict-returner, while `SessionEnd` discards verdicts. `Sj6 = 1500`
-  confirms the 1.5s budget (max 60s via `timeout`).
-- **`command` hooks on `SessionEnd` work fine** — proven repeatedly, full payload
-  including `transcript_path`.
+- **`agent`-type hooks on `SessionEnd`.** Structurally impossible: `KP`'s
+  signature accepts no `toolUseContext` while the agent branch throws without
+  one, and it fails silently. `command` hooks work fine.
 - **Code-based segmentation and fingerprint matching** (`segment.py`,
-  `recurrence.py` on the parked `segmentation-fixture` branch). Measured against
-  79 real transcripts: completion markers ended only 10% of episodes,
-  prompt-boundary cutting shredded continuations, and the matcher rated
-  `edit:.md | bash:cd` a **178-occurrence workflow**. 151 candidates crossed the
-  threshold, almost all noise. This is why detection moved to LLM reading. Their
-  layer still builds on `find_match`; that tension is unresolved and worth
-  raising before either side builds further.
-- **`claude -p`** is not logged in on this machine, so nothing can be driven
-  headlessly.
+  `recurrence.py`, parked on `segmentation-fixture`). Against 79 transcripts:
+  completion markers ended 10% of episodes, and the matcher rated
+  `edit:.md | bash:cd` a **178-occurrence workflow**.
+- **`similarity()` on prose.** It splits on ` | ` and scores **0.00 on every
+  pair** of prose names, including obvious matches. Structurally inapplicable,
+  not merely inaccurate. Nothing calls it now.
+- **Lineage key + "last analysed UUID" cursor.** Both halves fail: the key groups
+  divergent branches, the pointer breaks when a resume rewrites its tail.
+- **Per-pattern files + INDEX.md + a name→id mapping for level 2.** Designed in
+  detail, then scrapped. Level 2 should be one document merged the way level 1 is.
+- **Skipping the extractor.** The median *increment* — one session end, not a
+  whole transcript — is **443 KB raw**, and 72% of increments exceed a ~30k-token
+  budget. Without extraction the model reads a prefix and summarises it without
+  saying so.
 
 ---
 
 ## Prompt-design lessons already paid for
 
-- **"Dead ends omitted" was wrong** (fixed in `4099010`). A test-suite task's
-  failures *were* the reasoning — they explained why `uv run --with pytest` was
-  the answer. Distinguish noise (typos, wrong paths, re-runs) from discovery (a
-  failure that ruled something out).
-- **Verification is not a separate task.** Asked to "run the test suite to check
-  nothing broke" after a docstring task, the agent folded it in and explained
-  why. Correct — the test seed was badly designed, not the behaviour.
-- **Read-only analysis is zero tasks** under the current rules, and that is
-  defensible but worth revisiting: a long, valuable investigation currently logs
-  as nothing.
-
----
-
-## Uncommitted test artifacts (deliberately not committed)
-
-`.claude/skills/source-api-table/`, `skillpp/normalize-api.md`,
-`skillpp/recurrence-api.md` — outputs of earlier skill tests, not features.
+- **"Dead ends omitted" was wrong** (`4099010`). A task's failures *were* the
+  reasoning. Same distinction the extractor's outcome tails preserve.
+- **A sharpening clause can become a loophole.** *"Would they only discover it by
+  failing?"* was added to make "not derivable" concrete, and let general shell
+  trivia through instead. When adding a test to a prompt, check what it now
+  admits, not only what it now excludes.
+- **A model will report a tool call it did not make.** Asked to write a file with
+  `Write` unavailable, it printed "Wrote SKILL.md — needs your approval" and
+  wrote nothing. Constrain with `--allowed-tools ""` rather than trusting the
+  narration.

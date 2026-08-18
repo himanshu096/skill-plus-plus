@@ -20,10 +20,53 @@ from skillpp.recurrence import find_match, similarity
 from skillpp.sanitize import scrub
 from skillpp.signals import detect, effects
 from skillpp.summary import check_dependencies, scaffold_skill
+from skillpp.extract import extract
+from skillpp.identity import NoConversationError, conversation_id
+from skillpp.memory import Candidate, parse, upsert
+from skillpp.memory import render as render_memory
+from skillpp.prepare import (MIN_NEW_MESSAGES, TranscriptNotFound,
+                                     commit, prepare, project_slug, record,
+                                     render, resolve)
+from skillpp.transcript import Message, TranscriptFormatError, read
 
 
 def bash(command: str, failed: bool = False) -> dict:
     return {"tool": "Bash", "input": {"command": command}, "failed": failed}
+
+
+# --------------------------------------------------------------------------
+# transcript fixtures — build records in the shape Claude Code writes them
+# --------------------------------------------------------------------------
+
+def rec(uuid: str, role: str = "user", content=None, sidechain: bool = False,
+        ts: str = "2026-08-17T09:00:00.000Z", rtype: str | None = None) -> dict:
+    """One conversation record."""
+    return {
+        "type": rtype or role,
+        "uuid": uuid,
+        "isSidechain": sidechain,
+        "timestamp": ts,
+        "message": {"role": role, "content": content if content is not None else "hi"},
+    }
+
+
+def tool_use(name: str, **inp) -> dict:
+    return {"type": "tool_use", "id": f"tu_{name}", "name": name, "input": inp}
+
+
+def tool_result(text: str, is_error: bool = False, tid: str = "tu_Bash") -> dict:
+    block = {"type": "tool_result", "tool_use_id": tid, "content": text}
+    if is_error:
+        block["is_error"] = True
+    return block
+
+
+def write_transcript(root: Path, *records: dict, name: str = "t.jsonl",
+                     trailing: str = "") -> Path:
+    path = root / name
+    path.write_text(
+        "".join(json.dumps(r) + "\n" for r in records) + trailing, encoding="utf-8")
+    return path
 
 
 class TempRoot(unittest.TestCase):
@@ -801,6 +844,660 @@ class TestHookRobustness(TempRoot):
             finally:
                 sys.stdin = stdin
             self.assertEqual(code, 0, f"hook must exit 0 for payload {payload!r}")
+
+
+class TestTranscript(TempRoot):
+    """The airlock: raw undocumented JSONL in, a small stable shape out."""
+
+    def test_keeps_conversation_records_in_file_order(self):
+        path = write_transcript(
+            self.root,
+            rec("u1", "user", "first"),
+            rec("a1", "assistant", [{"type": "text", "text": "reply"}]),
+            rec("u2", "user", "second"),
+        )
+        self.assertEqual([m.uuid for m in read(path)], ["u1", "a1", "u2"])
+
+    def test_drops_bookkeeping_records(self):
+        path = write_transcript(
+            self.root,
+            rec("u1"),
+            {"type": "attachment", "uuid": "x1"},
+            {"type": "system", "subtype": "turn_duration", "durationMs": 12},
+            {"type": "file-history-snapshot", "uuid": "x2"},
+            {"type": "ai-title", "title": "something"},
+        )
+        self.assertEqual([m.uuid for m in read(path)], ["u1"])
+
+    def test_drops_sidechain_traffic(self):
+        # Subagent chatter is not the developer's conversation.
+        path = write_transcript(
+            self.root,
+            rec("u1"),
+            rec("s1", "assistant", "subagent", sidechain=True),
+            rec("a1", "assistant", "real"),
+        )
+        self.assertEqual([m.uuid for m in read(path)], ["u1", "a1"])
+
+    def test_drops_records_without_a_uuid(self):
+        # The uuid is the identity everything downstream keys on.
+        path = write_transcript(self.root, rec("u1"), {"type": "user", "message": {}})
+        self.assertEqual([m.uuid for m in read(path)], ["u1"])
+
+    def test_tolerates_a_torn_final_line(self):
+        # The file is written asynchronously and may be mid-flush when read.
+        path = write_transcript(
+            self.root, rec("u1"), trailing='{"type": "user", "uu')
+        self.assertEqual([m.uuid for m in read(path)], ["u1"])
+
+    def test_empty_file_is_not_an_error(self):
+        path = write_transcript(self.root)
+        self.assertEqual(read(path), [])
+
+    def test_records_but_no_messages_raises(self):
+        # Verified against every transcript on disk: a file with records always
+        # has messages. So this combination means the format moved, and
+        # returning [] would silently summarise nothing.
+        path = write_transcript(
+            self.root,
+            {"type": "attachment", "uuid": "x1"},
+            {"type": "ai-title", "title": "t"},
+        )
+        with self.assertRaises(TranscriptFormatError):
+            read(path)
+
+    def test_normalises_string_and_block_content_alike(self):
+        path = write_transcript(
+            self.root,
+            rec("u1", "user", "a bare string"),
+            rec("a1", "assistant", [{"type": "text", "text": "a block"}]),
+        )
+        self.assertEqual([m.text for m in read(path)], ["a bare string", "a block"])
+
+    def test_normalises_every_block_kind(self):
+        path = write_transcript(self.root, rec("a1", "assistant", [
+            {"type": "thinking", "thinking": "pondering"},
+            {"type": "text", "text": "saying"},
+            tool_use("Bash", command="ls -la"),
+            {"type": "image", "source": {}},
+        ]))
+        blocks = read(path)[0].blocks
+        self.assertEqual([b.kind for b in blocks],
+                         ["thinking", "text", "tool_use", "other"])
+        self.assertEqual(blocks[0].text, "pondering")
+        self.assertEqual(blocks[2].name, "Bash")
+        self.assertEqual(blocks[2].tool_input, {"command": "ls -la"})
+
+    def test_tool_result_carries_its_error_flag(self):
+        # Whether a command failed is the signal the summary's judgement is
+        # built from; a missing is_error means success, not unknown.
+        path = write_transcript(self.root, rec("u1", "user", [
+            tool_result("pytest not found", is_error=True),
+            tool_result("71 passed"),
+        ]))
+        blocks = read(path)[0].blocks
+        self.assertEqual([b.is_error for b in blocks], [True, False])
+        self.assertEqual(blocks[0].text, "pytest not found")
+
+    def test_flattens_a_block_shaped_tool_result(self):
+        path = write_transcript(self.root, rec("u1", "user", [{
+            "type": "tool_result", "tool_use_id": "tu_Read",
+            "content": [{"type": "text", "text": "line one"},
+                        {"type": "text", "text": "line two"}],
+        }]))
+        self.assertEqual(read(path)[0].blocks[0].text, "line one\nline two")
+
+    def test_text_property_ignores_tool_blocks(self):
+        path = write_transcript(self.root, rec("a1", "assistant", [
+            {"type": "text", "text": "explaining"},
+            tool_use("Read", file_path="/tmp/x"),
+        ]))
+        self.assertEqual(read(path)[0].text, "explaining")
+
+    def test_reads_a_real_transcript_if_one_is_present(self):
+        """Guards the fixtures against drifting from the real format."""
+        root = Path.home() / ".claude" / "projects"
+        real = sorted(root.glob("*/*.jsonl")) if root.exists() else []
+        real = [p for p in real if p.stat().st_size > 1000]
+        if not real:
+            self.skipTest("no local transcripts to check against")
+        messages = read(real[0])
+        self.assertTrue(messages, "a non-empty transcript yielded no messages")
+        self.assertTrue(all(m.uuid and m.timestamp for m in messages))
+        self.assertTrue(any(b.kind == "tool_use" for m in messages for b in m.blocks))
+
+
+class TestIdentity(TempRoot):
+    """Every case here mirrors a snapshot relationship seen in real data."""
+
+    def ident(self, *records: dict, name: str = "t.jsonl") -> str:
+        return conversation_id(read(write_transcript(self.root, *records, name=name)))
+
+    def test_same_conversation_across_a_resume(self):
+        # A resume copies the whole history forward into a new file.
+        first = self.ident(rec("u1"), rec("a1", "assistant"), name="a1.jsonl")
+        resumed = self.ident(rec("u1"), rec("a1", "assistant"),
+                             rec("u2"), rec("a2", "assistant"), name="a2.jsonl")
+        self.assertEqual(first, resumed)
+
+    def test_survives_a_rewritten_tail(self):
+        # 25 of 44 real snapshot pairs had their last messages rewritten.
+        before = self.ident(rec("u1"), rec("old1"), rec("old2"), name="b.jsonl")
+        after = self.ident(rec("u1"), rec("new1"), rec("new2"), rec("new3"),
+                           name="a.jsonl")
+        self.assertEqual(before, after)
+
+    def test_survives_an_early_rewind(self):
+        # A real conversation diverged at message index 2. Any prefix longer
+        # than one message would file these as two separate conversations.
+        branch_a = self.ident(rec("u1"), rec("a1"), rec("x1"), name="ba.jsonl")
+        branch_b = self.ident(rec("u1"), rec("a1"), rec("y1"), rec("y2"),
+                              name="bb.jsonl")
+        self.assertEqual(branch_a, branch_b)
+
+    def test_diverges_immediately_still_matches(self):
+        # The earliest divergence possible: only the first message is shared.
+        self.assertEqual(self.ident(rec("u1"), rec("p"), name="p.jsonl"),
+                         self.ident(rec("u1"), rec("q"), name="q.jsonl"))
+
+    def test_unrelated_conversations_differ(self):
+        self.assertNotEqual(self.ident(rec("u1"), name="one.jsonl"),
+                            self.ident(rec("z9"), name="two.jsonl"))
+
+    def test_is_deterministic(self):
+        records = (rec("u1"), rec("a1", "assistant"))
+        self.assertEqual(self.ident(*records, name="x.jsonl"),
+                         self.ident(*records, name="y.jsonl"))
+
+    def test_ignores_sidechains_when_they_come_first(self):
+        # A subagent record before the first real message must not become the
+        # identity, or the id changes depending on subagent activity.
+        with_side = self.ident(rec("s0", "assistant", sidechain=True), rec("u1"),
+                               name="s.jsonl")
+        without = self.ident(rec("u1"), name="n.jsonl")
+        self.assertEqual(with_side, without)
+
+    def test_is_filename_safe_and_short(self):
+        ident = self.ident(rec("7f3a9c2e-1234-5678-9abc-def012345678"))
+        self.assertEqual(ident, "7f3a9c2e12345678")
+        self.assertNotIn("-", ident)
+        self.assertEqual(len(ident), 16)
+
+    def test_empty_transcript_raises(self):
+        with self.assertRaises(NoConversationError):
+            conversation_id([])
+
+    def test_groups_real_transcripts_without_splitting(self):
+        """The property the whole module exists for, checked on real data."""
+        root = Path.home() / ".claude" / "projects"
+        files = [p for p in sorted(root.glob("*/*.jsonl"))
+                 if p.stat().st_size > 1000] if root.exists() else []
+        if len(files) < 5:
+            self.skipTest("not enough local transcripts to check grouping")
+        groups: dict[str, int] = {}
+        for path in files:
+            messages = read(path)
+            if messages:
+                ident = conversation_id(messages)
+                groups[ident] = groups.get(ident, 0) + 1
+        self.assertLess(len(groups), len(files),
+                        "no transcripts grouped — resumes are not being detected")
+
+
+class TestExtract(TempRoot):
+    """Each case pins a decision that was made by measurement."""
+
+    def out(self, *records: dict) -> str:
+        return extract(read(write_transcript(self.root, *records)))
+
+    def test_keeps_prompts_and_tool_calls_with_arguments(self):
+        text = self.out(
+            rec("u1", "user", "run the test suite"),
+            rec("a1", "assistant", [tool_use("Bash", command="pytest tests/")]),
+        )
+        self.assertIn("> run the test suite", text)
+        self.assertIn("$ Bash pytest tests/", text)
+
+    def test_keeps_the_outcome_of_a_command(self):
+        # The judgement in a summary is built from outcomes, not commands.
+        text = self.out(
+            rec("u1", "user", "run them"),
+            rec("a1", "assistant", [tool_use("Bash", command="pytest")]),
+            rec("u2", "user", [tool_result("71 passed in 0.17s")]),
+        )
+        self.assertIn("71 passed", text)
+
+    def test_drops_the_outcome_of_a_read(self):
+        # The last lines of a file read say nothing about what happened.
+        text = self.out(
+            rec("a1", "assistant", [tool_use("Read", file_path="/tmp/x.py")]),
+            rec("u1", "user", [tool_result("341\n342\n343", tid="tu_Read")]),
+        )
+        self.assertIn("$ Read /tmp/x.py", text)
+        self.assertNotIn("343", text)
+
+    def test_keeps_a_failure_whatever_the_tool(self):
+        text = self.out(
+            rec("a1", "assistant", [tool_use("Read", file_path="/tmp/gone")]),
+            rec("u1", "user", [tool_result("File does not exist",
+                                           is_error=True, tid="tu_Read")]),
+        )
+        self.assertIn("File does not exist", text)
+
+    def test_marks_failures_differently_from_successes(self):
+        text = self.out(
+            rec("a1", "assistant", [tool_use("Bash", command="which pipx")]),
+            rec("u1", "user", [tool_result("pipx not found", is_error=True)]),
+        )
+        self.assertIn("! pipx not found", text)
+
+    def test_drops_thinking(self):
+        text = self.out(rec("a1", "assistant", [
+            {"type": "thinking", "thinking": "a long internal monologue"},
+            {"type": "text", "text": "the answer"},
+        ]))
+        self.assertNotIn("monologue", text)
+
+    def test_drops_an_expanded_command_definition(self):
+        # /log-session alone contributed ~5KB to an 8KB extract.
+        body = ("# Skill Plus Plus — log a session\n\n"
+                + "Read the transcript from disk rather than from context.\n" * 8
+                + "\n## 1. Resolve\n\ndetail\n\n## 2. Read it\n\ndetail\n")
+        text = self.out(rec("u1", "user", body), rec("u2", "user", "actually do it"))
+        self.assertNotIn("Resolve", text)
+        self.assertIn("actually do it", text)
+
+    def test_strips_slash_command_plumbing(self):
+        text = self.out(rec("u1", "user",
+                            "<command-name>/exit</command-name>real question"))
+        self.assertNotIn("command-name", text)
+        self.assertIn("real question", text)
+
+    def test_keeps_the_question_behind_a_short_reply(self):
+        # "3" is meaningless without the options it answered.
+        text = self.out(
+            rec("a1", "assistant", [{"type": "text", "text":
+                "Options:\n1. pip install\n2. uv run --with\n3. pipx run"}]),
+            rec("u1", "user", "3"),
+        )
+        self.assertIn("pipx run", text)
+        self.assertIn("> 3", text)
+
+    def test_keeps_what_the_agent_said(self):
+        # Some practices live entirely in the dialogue: proposing a plan and
+        # inviting challenge, or asking for scope before touching code. None
+        # of that appears in a tool call.
+        text = self.out(rec("a1", "assistant", [{"type": "text", "text":
+            "Before I change anything — is this scoped to the token check, "
+            "or the whole auth flow?"}]))
+        self.assertIn("scoped to the token check", text)
+
+    def test_caps_a_very_long_assistant_turn(self):
+        text = self.out(rec("a1", "assistant",
+                            [{"type": "text", "text": "y" * 3000}]))
+        self.assertIn("…", text)
+        self.assertLess(len(text), 1000)
+
+    def test_keeps_the_questions_and_options_asked(self):
+        text = self.out(rec("a1", "assistant", [tool_use(
+            "AskUserQuestion",
+            questions=[{"question": "Should I touch the tests?",
+                        "options": [{"label": "Yes, update them"},
+                                    {"label": "Leave them alone"}]}])]))
+        self.assertIn("Should I touch the tests?", text)
+        self.assertIn("Leave them alone", text)
+
+    def test_keeps_a_proposed_plan(self):
+        text = self.out(rec("a1", "assistant", [tool_use(
+            "ExitPlanMode", plan="# Plan\n1. Read the config\n2. Ask before writing")]))
+        self.assertIn("Ask before writing", text)
+
+    def test_drops_sidechain_and_empty_turns(self):
+        text = self.out(
+            rec("u1", "user", "go"),
+            rec("s1", "assistant", "subagent chatter", sidechain=True),
+        )
+        self.assertNotIn("subagent", text)
+
+    def test_truncates_a_huge_argument_at_both_ends(self):
+        # A truncated heredoc loses what it was writing, so keep the close too.
+        text = self.out(rec("a1", "assistant",
+                            [tool_use("Bash", command="A" * 3000 + "ZZZEND")]))
+        self.assertIn("…", text)
+        self.assertIn("ZZZEND", text)
+        self.assertLess(len(text), 2000)
+
+    def test_keeps_the_command_but_not_the_file_it_wrote(self):
+        # The argument of a Bash call is the step. The argument of a Write is
+        # the product — the step is "wrote the file".
+        text = self.out(rec("a1", "assistant", [
+            tool_use("Bash", command="gh pr create --base main --title 'x'"),
+            tool_use("Write", file_path="docs/report.md", content="Q" * 4000),
+        ]))
+        self.assertIn("gh pr create --base main", text)
+        self.assertIn("docs/report.md", text)
+        self.assertLess(text.count("Q"), 300)
+
+    def test_shortens_a_pasted_log_but_keeps_both_ends(self):
+        # Developers paste stack traces into prompts. The ask is at the ends;
+        # the paste in the middle is the same noise stripped everywhere else.
+        prompt = "any hints here?\n" + ("TRACEBACK LINE\n" * 400) + "\nwhat do I do?"
+        text = self.out(rec("u1", "user", prompt))
+        self.assertIn("any hints here?", text)
+        self.assertIn("what do I do?", text)
+        self.assertIn("characters pasted", text)
+        self.assertLess(len(text), len(prompt) / 4)
+
+    def test_leaves_an_ordinary_prompt_untouched(self):
+        prompt = "refactor the ledger module so entries load lazily"
+        self.assertIn(prompt, self.out(rec("u1", "user", prompt)))
+
+    def test_compresses_a_real_transcript_substantially(self):
+        """The property the module exists for, on real data."""
+        root = Path.home() / ".claude" / "projects"
+        files = [p for p in sorted(root.glob("*/*.jsonl"))
+                 if p.stat().st_size > 200_000] if root.exists() else []
+        if not files:
+            self.skipTest("no large local transcript to compress")
+        raw = files[0].stat().st_size
+        text = extract(read(files[0]))
+        self.assertTrue(text, "extraction produced nothing")
+        self.assertLess(len(text) * 10, raw, "expected at least 10x compression")
+
+
+class TestPrepare(TempRoot):
+    """The bookkeeping whose failures are all silent."""
+
+    def session(self, *records: dict, name: str = "s.jsonl") -> Path:
+        return write_transcript(self.root, *records, name=name)
+
+    def many(self, n: int, prefix: str = "m", start: int = 0) -> list:
+        return [rec(f"{prefix}{i}", ts=f"2026-08-17T09:{i:02d}:00.000Z")
+                for i in range(start, start + n)]
+
+    def prep(self, path: Path):
+        return prepare(str(path), config=self.config)
+
+    # -- resolving -------------------------------------------------------
+
+    def test_resolves_an_explicit_path(self):
+        path = self.session(rec("u1"))
+        self.assertEqual(self.prep(path).transcript, path)
+
+    def test_missing_transcript_raises(self):
+        with self.assertRaises(TranscriptNotFound):
+            prepare("no-such-session-anywhere")
+
+    def test_slug_replaces_dots_and_underscores_too(self):
+        # Replacing only the slashes yields a path that does not exist.
+        self.assertEqual(project_slug("/a/b_c/d.e"), "-a-b-c-d-e")
+
+    # -- first run -------------------------------------------------------
+
+    def test_first_run_offers_everything(self):
+        prepared = self.prep(self.session(*self.many(30)))
+        self.assertTrue(prepared.is_first_run)
+        self.assertEqual(len(prepared.new_messages), 30)
+        self.assertIn("not been reviewed before", render(prepared))
+
+    def test_conversation_id_names_the_memory_file(self):
+        prepared = self.prep(self.session(*self.many(30)))
+        self.assertEqual(prepared.memory_path.name, f"{prepared.conversation}.md")
+        self.assertEqual(prepared.memory_path.parent, self.config.conversations_dir)
+
+    # -- the floor -------------------------------------------------------
+
+    def test_below_the_floor_says_stop(self):
+        prepared = self.prep(self.session(*self.many(MIN_NEW_MESSAGES - 1)))
+        self.assertFalse(prepared.has_enough)
+        text = render(prepared)
+        self.assertIn("Stop here and write nothing", text)
+        self.assertIn("next batch", text)
+
+    def test_at_the_floor_proceeds(self):
+        self.assertTrue(self.prep(self.session(*self.many(MIN_NEW_MESSAGES))).has_enough)
+
+    # -- the watermark ---------------------------------------------------
+
+    def review(self, prepared, *candidates):
+        """Record candidates, then declare the session reviewed."""
+        for name, body in candidates:
+            record(prepared, name=name, body=body)
+        return commit(prepared)
+
+    def test_second_run_offers_only_what_is_new(self):
+        first = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        self.review(first, ("filing-a-ticket", "Check the spec page first."))
+        second = prepare(str(self.session(*self.many(45), name="b.jsonl")),
+                         config=self.config)
+        self.assertEqual(len(second.new_messages), 15)
+        self.assertFalse(second.is_first_run)
+        self.assertIn("filing-a-ticket", second.memory)
+
+    def test_rerunning_the_same_transcript_offers_nothing(self):
+        path = self.session(*self.many(30))
+        self.review(self.prep(path), ("x", "body"))
+        again = self.prep(path)
+        self.assertEqual(again.new_messages, [])
+        self.assertIn("Stop here", render(again))
+
+    def test_falls_back_to_timestamp_when_the_marked_message_is_gone(self):
+        # Interrupt a tool call and the turn is regenerated, so the message
+        # the watermark names stops existing. Timestamps survive that.
+        self.review(self.prep(self.session(*self.many(30), name="a.jsonl")))
+        rewritten = self.session(*self.many(29), *[
+            rec("regen", ts="2026-08-17T09:35:00.000Z"),
+            rec("new1", ts="2026-08-17T09:36:00.000Z"),
+        ], name="b.jsonl")
+        second = prepare(str(rewritten), config=self.config)
+        self.assertEqual([m.uuid for m in second.new_messages], ["regen", "new1"])
+
+    def test_a_regenerated_turn_straddling_the_mark_is_split(self):
+        """A known limitation, pinned so it is not discovered by surprise.
+
+        The fallback compares timestamps, so a turn regenerated partly before
+        and partly after the marked moment comes back only in part. Nothing
+        already reviewed is repeated — the guarantee that matters — but a
+        sliver of the rewritten turn is missed.
+        """
+        self.review(self.prep(self.session(*self.many(30), name="a.jsonl")))
+        rewritten = self.session(*self.many(28), *[
+            rec("before", ts="2026-08-17T09:28:30.000Z"),  # predates the mark
+            rec("after", ts="2026-08-17T09:29:30.000Z"),
+        ], name="b.jsonl")
+        second = prepare(str(rewritten), config=self.config)
+        self.assertEqual([m.uuid for m in second.new_messages], ["after"])
+
+    def test_unresolvable_watermark_raises_rather_than_guessing(self):
+        # Guessing "it is all new" silently doubles every count in the file.
+        self.review(self.prep(self.session(*self.many(30), name="a.jsonl")))
+        stripped = write_transcript(
+            self.root,
+            *[{"type": "user", "uuid": ("m0" if i == 0 else f"z{i}"),
+               "message": {"role": "user", "content": "hi"}} for i in range(30)],
+            name="c.jsonl")
+        with self.assertRaises(ValueError):
+            prepare(str(stripped), config=self.config)
+
+    # -- recording and committing ----------------------------------------
+
+    def test_commit_writes_the_watermark(self):
+        prepared = self.prep(self.session(*self.many(30)))
+        text = self.review(prepared, ("filing-a-ticket", "Check the spec.")).read_text()
+        self.assertIn("### filing-a-ticket", text)
+        self.assertIn(f"conversation: {prepared.conversation}", text)
+        self.assertIn(f"last_message: {prepared.new_messages[-1].uuid}", text)
+        self.assertIn("last_timestamp: 2026-08-17T09:29", text)
+
+    def test_two_sessions_sharing_a_prefix_count_separately(self):
+        # A truncated session id silently merged these: the second was read as
+        # already present, so the count stopped rising with no error.
+        first = self.prep(self.session(*self.many(30), name="recurrence-a.jsonl"))
+        record(first, name="filing", body="one")
+        commit(first)
+        second = prepare(str(self.session(*self.many(60), name="recurrence-b.jsonl")),
+                         config=self.config)
+        record(second, name="filing", body="one and two", matches="filing")
+        entries = parse(second.memory)
+        self.assertEqual(entries[0].count, 2)
+        self.assertEqual(entries[0].sessions,
+                         ["recurrence-a", "recurrence-b"])
+
+    def test_recording_alone_does_not_move_the_watermark(self):
+        # A session may yield three candidates or none; the mark moves once,
+        # and only after the recording succeeded.
+        path = self.session(*self.many(30))
+        record(self.prep(path), name="x", body="body")
+        self.assertEqual(len(self.prep(path).new_messages), 30)
+
+    def test_commit_leaves_no_temporary_file(self):
+        self.review(self.prep(self.session(*self.many(30))), ("x", "body"))
+        self.assertEqual(list(self.config.conversations_dir.glob("*.tmp")), [])
+
+    def test_a_later_session_cannot_drop_an_earlier_candidate(self):
+        """The reason the model no longer rewrites the whole document.
+
+        It hands over one candidate at a time, so it has no way to touch the
+        others — an entry cannot be lost by being forgotten.
+        """
+        first = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        self.review(first, ("filing-a-ticket", "one"), ("merging", "two"))
+        second = prepare(str(self.session(*self.many(60), name="b.jsonl")),
+                         config=self.config)
+        text = self.review(second, ("something-else", "three")).read_text()
+        for name in ("filing-a-ticket", "merging", "something-else"):
+            self.assertIn(f"### {name}", text)
+
+    # -- the review record -----------------------------------------------
+
+    def review_file(self, prepared):
+        return self.config.reviews_dir / f"{prepared.transcript.stem}.md"
+
+    def test_each_review_keeps_what_it_proposed(self):
+        # The memory holds only the current best description of a procedure.
+        # This holds what each session actually said, so a revised prompt can
+        # re-merge from judged proposals rather than re-reading transcripts.
+        prepared = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        record(prepared, name="filing-a-ticket", body="Check the spec page.")
+        text = self.review_file(prepared).read_text()
+        self.assertIn(f"session: {prepared.transcript.stem}", text)
+        self.assertIn(f"conversation: {prepared.conversation}", text)
+        self.assertIn("## filing-a-ticket", text)
+        self.assertIn("Check the spec page.", text)
+
+    def test_a_review_records_every_proposal_it_made(self):
+        prepared = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        for name in ("first-one", "second-one"):
+            record(prepared, name=name, body=f"{name} body")
+        text = self.review_file(prepared).read_text()
+        self.assertIn("## first-one", text)
+        self.assertIn("## second-one", text)
+        self.assertEqual(text.count("\n---\n"), 1, "one frontmatter block only")
+
+    def test_a_review_says_what_a_proposal_merged_into(self):
+        first = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        self.review(first, ("merging-a-branch-safely", "one"))
+        second = prepare(str(self.session(*self.many(60), name="b.jsonl")),
+                         config=self.config)
+        record(second, name="merging-and-cleaning-up", body="one and two",
+               matches="merging-a-branch-safely")
+        self.assertIn("merged into: merging-a-branch-safely",
+                      self.review_file(second).read_text())
+
+    def test_memory_keeps_the_merge_the_review_keeps_the_original(self):
+        first = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        self.review(first, ("filing", "the first account"))
+        second = prepare(str(self.session(*self.many(60), name="b.jsonl")),
+                         config=self.config)
+        record(second, name="filing", body="both accounts combined",
+               matches="filing")
+        self.assertIn("both accounts combined", second.memory)
+        self.assertNotIn("the first account", second.memory)
+        self.assertIn("the first account", self.review_file(first).read_text())
+
+    def test_render_carries_the_memory_and_the_new_work(self):
+        first = self.prep(self.session(*self.many(30), name="a.jsonl"))
+        self.review(first, ("what-we-learned", "Check the spec page first."))
+        text = render(prepare(str(self.session(*self.many(60), name="b.jsonl")),
+                              config=self.config))
+        self.assertIn("what-we-learned", text)
+        self.assertIn("New since the last review", text)
+
+
+class TestMemory(unittest.TestCase):
+    """The bookkeeping the model used to be asked to do by hand."""
+
+    def doc(self, *pairs) -> list:
+        out = []
+        for name, sessions in pairs:
+            out = upsert(out, name=name, body=f"{name} body",
+                         session=sessions[0])
+            for extra in sessions[1:]:
+                out = upsert(out, name=name, body=f"{name} body",
+                             session=extra, matches=name)
+        return out
+
+    def test_count_is_the_provenance_length(self):
+        # Derived, never stored, so the two cannot drift apart.
+        entries = self.doc(("filing", ["a1", "b2", "c3"]))
+        self.assertEqual(entries[0].count, 3)
+        self.assertEqual(entries[0].sessions, ["a1", "b2", "c3"])
+
+    def test_the_same_session_twice_counts_once(self):
+        entries = self.doc(("filing", ["a1", "a1"]))
+        self.assertEqual(entries[0].count, 1)
+
+    def test_ordered_by_count_highest_first(self):
+        entries = self.doc(("rare", ["a1"]), ("common", ["a1", "b2", "c3"]))
+        self.assertEqual([c.name for c in entries], ["common", "rare"])
+
+    def test_a_match_under_a_new_name_keeps_the_old_one_as_an_alias(self):
+        entries = upsert(self.doc(("merging-a-branch-safely", ["a1"])),
+                         name="merging-a-branch", body="better body",
+                         session="b2", matches="merging-a-branch-safely")
+        self.assertEqual(entries[0].name, "merging-a-branch")
+        self.assertEqual(entries[0].aliases, ["merging-a-branch-safely"])
+        self.assertEqual(entries[0].count, 2)
+
+    def test_a_later_body_replaces_the_earlier_one(self):
+        # The later description was written knowing more.
+        entries = upsert(self.doc(("filing", ["a1"])), name="filing",
+                         body="sharper body", session="b2", matches="filing")
+        self.assertEqual(entries[0].body, "sharper body")
+
+    def test_matching_an_alias_finds_the_entry(self):
+        entries = self.doc(("original", ["a1"]))
+        entries = upsert(entries, name="renamed", body="b", session="b2",
+                         matches="original")
+        entries = upsert(entries, name="renamed", body="c", session="c3",
+                         matches="original")
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].count, 3)
+
+    def test_matching_something_absent_raises(self):
+        with self.assertRaises(KeyError):
+            upsert([], name="x", body="b", session="a1", matches="nothing-here")
+
+    def test_survives_a_round_trip(self):
+        entries = self.doc(("filing", ["a1", "b2"]), ("merging", ["a1"]))
+        reparsed = parse(render_memory(entries))
+        self.assertEqual([c.name for c in reparsed], ["filing", "merging"])
+        self.assertEqual(reparsed[0].sessions, ["a1", "b2"])
+        self.assertEqual(reparsed[0].count, 2)
+
+    def test_aliases_survive_a_round_trip(self):
+        entries = upsert(self.doc(("old-name", ["a1"])), name="new-name",
+                         body="b", session="b2", matches="old-name")
+        self.assertEqual(parse(render_memory(entries))[0].aliases, ["old-name"])
+
+    def test_an_empty_document_parses_to_nothing(self):
+        self.assertEqual(parse(""), [])
+        self.assertEqual(parse(render_memory([])), [])
+
+    def test_a_hand_edited_entry_without_a_seen_line_still_loads(self):
+        entries = parse("## Skill candidates\n\n### typed-by-hand\n\nsome body\n")
+        self.assertEqual(entries[0].name, "typed-by-hand")
+        self.assertEqual(entries[0].count, 0)
 
 
 if __name__ == "__main__":

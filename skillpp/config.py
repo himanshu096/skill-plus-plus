@@ -56,7 +56,29 @@ class Config:
 
     @property
     def sessions_dir(self) -> Path:
+        """Per-session capture state, written by the hooks as JSON.
+
+        Not to be confused with :attr:`conversations_dir`, which holds the
+        reviewed memory documents. This one is a working buffer keyed by
+        session id; that one is the durable record keyed by conversation.
+        """
         return self.root / "sessions"
+
+    @property
+    def conversations_dir(self) -> Path:
+        """One memory document per conversation, surviving every resume."""
+        return self.root / "conversations"
+
+    @property
+    def reviews_dir(self) -> Path:
+        """What each individual review proposed, as it proposed it.
+
+        The conversation memory is the store; these are the deliveries into it.
+        Kept because the prompt that produces them keeps changing: with these,
+        a revised prompt can be re-merged from what was already judged, and a
+        surprising entry can be traced to the session that introduced it.
+        """
+        return self.root / "reviews"
 
     @property
     def cold_dir(self) -> Path:

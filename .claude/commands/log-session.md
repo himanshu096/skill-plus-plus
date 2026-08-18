@@ -1,141 +1,110 @@
 ---
-description: Read a session transcript and write a per-session task summary
-argument-hint: "[transcript path or session id — defaults to the current session]"
+description: Review this session for anything worth turning into a skill
+argument-hint: "[transcript path or session id — defaults to this session]"
+allowed-tools: Bash(python3 bin/skillpp *)
 ---
 
-# Skill Plus Plus — log a session
+# Review this session
 
-Read the current session's transcript from disk and write one summary file
-describing the tasks that actually happened.
+## The session
 
-Read the transcript **from the file**, not from your own context. You are running
-inside the session so you could summarise from memory, but that path does not
-survive automation — the same logic has to work later when a hook triggers it
-with no conversation in context. If the file cannot be found, stop and say so
-rather than falling back to context: a silent fallback would hide exactly the
-failure this command exists to detect.
+!`python3 bin/skillpp prepare-session $ARGUMENTS`
 
-## 1. Resolve the transcript
+The block above was produced before you were asked anything, so it is the
+session as it stands rather than your recollection of it. If it tells you to
+stop, stop — say so in one line and write nothing.
 
-**No argument** — summarise the current session:
+Notation: `>` a developer prompt · `$` a tool call · `=` it worked · `!` it
+failed · `.` what the agent said.
+
+## What to look for
+
+A **completed procedure worth turning into a skill**. Completed means it
+reached its intended end: a final step that succeeded, or the developer
+accepting the result and moving on. Discard anything abandoned partway, still
+in progress when the session ends, or that failed outright — a half-finished
+route is not a recipe.
+
+That is about the procedure as a whole, not its steps. A step that failed
+*inside* a procedure that finished is usually the reason the route took the
+shape it did, and belongs in the skill as the rule that prevents it recurring.
+
+Most sessions contain nothing. That is the common and correct answer.
+
+## What to write
+
+For each procedure, the body of a SKILL.md. **Do not create any skill file** —
+these are proposals for review, and promoting one is a separate deliberate act.
+
+Write **imperative instructions for a future agent to follow**, not a record of
+what happened this time. Match specificity to how fragile the step is — an
+exact command where a flag or an ordering matters, general guidance where
+judgement is fine.
+
+No frontmatter, and no `# Title`: the name is passed separately below, and
+repeating it in the body only creates two places for it to disagree. Start
+straight at the instructions.
+
+Strip anything belonging to this one run: ids, filenames, exact figures. Keep a
+number only when the number *is* the rule — a required flag, a URL suffix, a
+threshold. A failure earns a line only as a rule that prevents it recurring,
+never as an account of it happening.
+
+Redact any credential, token or key rather than repeating it.
+
+Name it in the gerund, lowercase and hyphenated — `reconciling-deck-against-article`,
+`bootstrapping-an-ephemeral-test-runner`.
+
+## Then record each one
+
+The memory shown above already holds every candidate from earlier reviews. Your
+only decision per proposal is whether it describes **a procedure already in
+there** — judged on what the procedure *does*, not what it is called, because
+the same work gets named differently every time.
+
+**A match.** The body you send **replaces** the one already stored, so write the
+two combined rather than only today's. The existing body is printed above —
+take what it knows, add what this session added, drop what turned out wrong.
+Sending only today's account silently discards everything the earlier session
+had learned.
 
 ```bash
-SLUG=$(pwd | sed 's|[/._]|-|g')
-TRANSCRIPT="$HOME/.claude/projects/$SLUG/$CLAUDE_CODE_SESSION_ID.jsonl"
-ls -la "$TRANSCRIPT"
+python3 bin/skillpp record-candidate $ARGUMENTS \
+  --name <clearer-of-the-two-names> --matches "<the existing name>" <<'SKILL'
+<the two bodies merged>
+SKILL
 ```
 
-The slug replaces `/`, `.` and `_` with `-` — all three, not just the slashes.
-`CLAUDE_CODE_SESSION_ID` is set in the shell environment.
-
-**With an argument** — summarise a different session. Accepts either a full path
-to a `.jsonl`, or a bare session id resolved against the current project:
+**Something new:**
 
 ```bash
-ARG="<the argument>"
-if [ -f "$ARG" ]; then
-  TRANSCRIPT="$ARG"
-else
-  SLUG=$(pwd | sed 's|[/._]|-|g')
-  TRANSCRIPT="$HOME/.claude/projects/$SLUG/$ARG.jsonl"
-fi
-ls -la "$TRANSCRIPT"
+python3 bin/skillpp record-candidate $ARGUMENTS \
+  --name <name> <<'SKILL'
+<the body>
+SKILL
 ```
 
-This exists so past sessions can be backfilled, and it is the same path the
-eventual automated pass takes — draining a queue means analysing a transcript
-that is not the current session.
+One call per proposal. Everything that follows — the count, the provenance, the
+`also seen as:` line when a name changes, the ordering by count, rewriting the
+file — happens in the command. You never edit the document or restate anything
+already in it, so no existing candidate can be lost by being overlooked.
 
-Either way: derive the session id from the transcript filename stem, not from
-the environment, so an argument-driven run records the session it actually
-summarised.
+Ordering is by count, highest first. The count does not decide whether an entry
+belongs; your judgement already did that. It decides what a person reads first.
 
-If the file does not exist, report the path you tried and stop.
+## Finally, mark the session reviewed
 
-If the transcript is very large, say so with its size before reading, and if it
-will not fit, stop and report that rather than reading a truncated prefix — a
-summary built from part of a session is worse than none, because nothing marks
-it as incomplete.
-
-## 2. Read it
-
-JSONL, one record per line. What matters:
-
-- **user messages** — what was asked
-- assistant **`tool_use`** blocks — what actually ran, with arguments
-
-Ignore thinking blocks, tool results, system reminders, and slash-command
-plumbing (`<local-command-caveat>`, `<command-name>`, image placeholders).
-Those are noise and there is a lot of them.
-
-## 3. Find the tasks
-
-A task is a goal the developer wanted done, plus the work that achieved it. Not
-a single turn, and not the whole session. Two calibrations, both from measured
-failures — a fingerprint-based approach merged everything, a
-prompt-boundary-based approach shredded everything:
-
-- **Do not merge unrelated work.** A session that deployed something *and* fixed
-  an unrelated bug contains two tasks, not one.
-- **Do not fragment one task.** Follow-ups like *"continue"*, *"next"*,
-  *"go through the next three"*, *"fix that"*, *"try again"* belong to the task
-  already in progress. A new user message is not a new task.
-- **Questions and discussion are zero tasks.** A session spent reading code and
-  talking about design produced no workflow, however long it was.
-
-## 4. Nothing substantive?
-
-Write no file. Say so plainly and stop. An empty summary is worse than none —
-it implies there was something to capture.
-
-## 5. Write the summary
-
-One file: `.claude/skillpp/memory/sessions/<YYYY-MM-DD>-<session_id>.md`, with
-the date taken from the transcript's first record timestamp.
-
-If that file already exists, report it and **ask before overwriting.** Summaries
-are meant to be written once; the escape hatch exists only for iterating on
-quality during testing.
-
-Format — frontmatter, then one `##` section per task:
-
-```markdown
----
-session: <session_id>
-date: <YYYY-MM-DD>
----
-
-## <short task title, as the developer would name it>
-
-<one or two sentences: what the goal was, in their framing rather than yours>
-
-Shape:
-1. <the steps that mattered, in order. Omit noise — typos, wrong paths, a
-   command re-run because output scrolled. But keep a failed attempt when it
-   ruled something out and led to the approach that worked: that is the
-   reasoning, not clutter.>
-
-Judgement: <the part a command log cannot show — why a particular flag, what the
-trap was, why a retry was needed, what you would warn the next person about>
-Parameter: <what would differ on another run — a target, a filename, an
-environment>
+```bash
+python3 bin/skillpp commit-session $ARGUMENTS
 ```
 
-On the two fields that carry the value:
+Once, after the recording, whether there were three proposals or none. This
+advances the watermark, so these messages are not read again. Run it last: a
+mark moved ahead of a failed review buries those messages behind a claim that
+they have already been seen.
 
-- **`Judgement`** is the whole reason this beats mechanical step-matching, and
-  the easiest thing to fake by rewording the steps. If the session genuinely
-  surfaced no insight, write `none surfaced` — that is an honest answer and more
-  useful than padding.
-- **`Parameter`** is what makes a workflow reusable rather than a one-off. If
-  nothing varies, write `none`.
+## Report
 
-Describe only what happened; invent nothing. **Redact any credential, token or
-key** you encounter rather than copying it into the summary. Keep each task under
-roughly 400 words.
-
-## 6. Report
-
-State the path written and the task titles, one line each. If you judged
-something borderline — a stretch of work that might be one task or two — say
-which call you made and why, so it can be corrected.
+One line: the path written, and the name of each proposed skill. If you judged
+something borderline — a procedure that might not have finished, or might not
+be general enough — say which call you made and why.

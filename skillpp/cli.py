@@ -60,6 +60,75 @@ def cmd_hook(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------
+# session review
+# --------------------------------------------------------------------------
+
+def cmd_prepare_session(args: argparse.Namespace) -> int:
+    """Print a session's new work, ready to drop into a prompt.
+
+    Exits 0 even when there is nothing to review. The caller substitutes this
+    output into a skill via `` !`command` ``, where a status code is invisible
+    — so "stop, there is nothing here" has to be a sentence the model reads.
+    """
+    from .prepare import TranscriptNotFound, prepare, render
+
+    config = Config(args.root)
+    try:
+        print(render(prepare(args.target, config=config)))
+    except (TranscriptNotFound, ValueError) as exc:
+        print(f"Could not prepare this session: {exc}\n\n"
+              f"Stop here and write nothing.")
+    return 0
+
+
+def cmd_record_candidate(args: argparse.Namespace) -> int:
+    """Fold one proposed skill into the conversation's memory.
+
+    The model decides only whether this is new or matches something already
+    recorded. Counting, provenance, ordering and rewriting happen in code,
+    where they cannot be forgotten.
+    """
+    from .prepare import TranscriptNotFound, prepare, record
+
+    config = Config(args.root)
+    body = sys.stdin.read().strip()
+    if not body:
+        print("nothing on stdin; a candidate needs a body", file=sys.stderr)
+        return 1
+    try:
+        prepared = prepare(args.target, config=config)
+        written = record(prepared, name=args.name, body=body,
+                         matches=args.matches)
+    except (TranscriptNotFound, ValueError, KeyError) as exc:
+        print(str(exc).strip("'"), file=sys.stderr)
+        return 1
+    verb = f"merged into '{args.matches}'" if args.matches else "recorded"
+    print(f"{verb}: {args.name} -> {written}")
+    return 0
+
+
+def cmd_commit_session(args: argparse.Namespace) -> int:
+    """Declare the session reviewed, advancing the watermark.
+
+    Separate from recording candidates: a session may yield three or none, and
+    the watermark should move exactly once either way.
+    """
+    from .prepare import TranscriptNotFound, commit, prepare
+
+    config = Config(args.root)
+    try:
+        prepared = prepare(args.target, config=config)
+    except (TranscriptNotFound, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not prepared.new_messages:
+        print("nothing new in this session; watermark unchanged")
+        return 0
+    print(f"reviewed up to {prepared.watermark[0][:8]} -> {commit(prepared)}")
+    return 0
+
+
+# --------------------------------------------------------------------------
 # ledger inspection
 # --------------------------------------------------------------------------
 
@@ -532,6 +601,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--event", help="override hook_event_name")
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_hook)
+
+    p = sub.add_parser("prepare-session",
+                       help="print a session's new work for review")
+    p.add_argument("target", nargs="?",
+                   help="transcript path or session id (default: this session)")
+    p.set_defaults(func=cmd_prepare_session)
+
+    p = sub.add_parser("record-candidate",
+                       help="fold one proposed skill into the memory (body on stdin)")
+    p.add_argument("target", nargs="?",
+                   help="transcript path or session id (default: this session)")
+    p.add_argument("--name", required=True, help="the skill's name")
+    p.add_argument("--matches",
+                   help="an existing candidate this is the same procedure as")
+    p.set_defaults(func=cmd_record_candidate)
+
+    p = sub.add_parser("commit-session",
+                       help="declare the session reviewed (advances the watermark)")
+    p.add_argument("target", nargs="?",
+                   help="transcript path or session id (default: this session)")
+    p.set_defaults(func=cmd_commit_session)
 
     p = sub.add_parser("review", help="list candidates ready for review")
     p.add_argument("--all", action="store_true", help="include below-threshold candidates")
