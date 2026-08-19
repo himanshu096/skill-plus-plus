@@ -9,16 +9,19 @@ slightly different id reads a conversation from its beginning again.
 So it lives here, and the skill that calls this is left with the one job that
 genuinely needs judgement: deciding what in the session is worth keeping.
 
-Two files, and only two. ``PATTERNS.md`` is the store: every candidate ever
-proposed, counted and ordered, shared by every conversation. Each review also
-leaves ``reviews/<session-id>.md``, holding what that session proposed *and*
-how far it read.
+The store is a directory of entry files plus two append-only logs, described
+in ``memory.py``. Each review also leaves ``reviews/<session-id>.md``, holding
+what that session proposed *and* how far it read.
 
 There is deliberately no per-conversation document. An earlier design had one,
 which meant a candidate's count could only rise when a single conversation
 repeated a whole procedure -- and 82% of conversations here are a single
 session, so counts sat at 1 and the ordering they were meant to drive did
 nothing. Pooling every session into one store is what makes recurrence visible.
+
+A single *document* was the next attempt and was worse: re-serialising every
+entry on every write meant one bad read wrote a truncated body back over a
+good one, and the damage was not confined to the entry being touched.
 
 The conversation id survives that simplification, but only as a bookmark. A
 resumed session's transcript contains the entire earlier history again --
@@ -204,8 +207,11 @@ def prepare(target: str | None = None, config: Config | None = None,
         raise TranscriptNotFound(f"{path} holds no conversation messages")
 
     conversation = conversation_id(messages)
-    store = config.patterns_file
-    patterns = store.read_text(encoding="utf-8") if store.exists() else ""
+    # Rendered on demand from the entry files. There is no store document on
+    # disk to fall out of step with them.
+    from .memory import load, render as render_store
+    entries = load(config)
+    patterns = render_store(entries) if entries else ""
 
     new = _slice(messages, watermark_for(config, conversation))
     mark = (new[-1].uuid, new[-1].timestamp) if new else None
@@ -232,7 +238,12 @@ def render(prepared: Prepared) -> str:
     head = [
         f"conversation   {prepared.conversation}",
         f"transcript     {prepared.transcript.name}",
-        f"store          {prepared.config.patterns_file}",
+        # The root, not the entry directory. A model handed a path uses it:
+        # printing `<root>/patterns` here got it passed back as `--root`, and
+        # the whole store was rebuilt one level deeper with nothing reporting
+        # a problem. This path is safe to echo back because it is the one the
+        # flag actually takes.
+        f"store          {prepared.config.root}",
         f"new messages   {len(prepared.new_messages)} of {prepared.total_messages}",
     ]
 
@@ -315,15 +326,30 @@ def record(prepared: Prepared, *, name: str, body: str,
     a session may yield three candidates or none, and the bookmark should move
     exactly once either way.
     """
-    from .memory import parse, render as render_memory, upsert
+    from .memory import (add_entry, add_occurrence, entry_path, find, load,
+                         render as render_store)
 
-    updated = upsert(parse(prepared.patterns), name=name, body=body,
-                     session=prepared.session, matches=matches)
-    written = _write_atomic(prepared.config.patterns_file,
-                            render_memory(updated).strip() + "\n")
-    prepared.patterns = written.read_text(encoding="utf-8")
+    config = prepared.config
+    if matches:
+        # A match increments the evidence and nothing else. The stored body is
+        # what the first occurrence taught; a later account of the same
+        # procedure lives on in its own review file rather than overwriting it.
+        target = find(load(config), matches)
+        if target is None:
+            raise KeyError(
+                f"no candidate named {matches!r} to match against; "
+                f"have: {', '.join(c.name for c in load(config)) or '(none)'}")
+        add_occurrence(config, name=target.name, session=prepared.session)
+        written = target.path or entry_path(config, target.name)
+        # Not "merged": the stored body is untouched. Saying otherwise sent a
+        # model off to combine two bodies whose result was then dropped.
+        verdict = f"another sighting of: {target.name}"
+    else:
+        written = add_entry(config, name=name, body=body)
+        add_occurrence(config, name=name, session=prepared.session)
+        verdict = "new"
 
-    verdict = f"merged into: {matches}" if matches else "new"
+    prepared.patterns = render_store(load(config))
     existing = _proposals_in(prepared.review_path)
     proposals = f"{existing}\n\n## {name}\n{verdict}\n\n{body.strip()}".strip()
     # Carries forward whatever mark is already there rather than writing one:

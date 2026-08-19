@@ -1,61 +1,70 @@
-"""The candidate store: parsing, updating, rendering.
+"""The candidate store: entry files plus two append-only logs.
 
 Everything here is bookkeeping, and it exists so that a model never has to do
-it. An earlier design had the model rewrite the whole document on each review —
-carrying every existing candidate forward by hand, incrementing counts, keeping
-the order. That works until it doesn't, and when it doesn't the failure is a
-candidate quietly missing from a file that may hold months of them.
-
-So the model is left with the one question it is actually needed for: *does
+it. The model is left with the one question it is actually needed for: *does
 this proposal describe a procedure already in here, or a new one?* It answers
-with a name and a body. Counting, provenance, ordering, status and rewriting
-happen here, where they cannot be forgotten.
+with a name and a body. Counting, provenance, ordering and status happen here.
 
-Two axes, deliberately separate. **Status** decides which section an entry
-lives in and only ever changes because a person decided something. **Evidence**
-— how often it has been seen — orders entries within a section and never
-promotes anything on its own. Conflating them is what made an earlier design
-rank "run the test suite" above "file a ticket the team's way".
+**Nothing is ever rewritten.** A body is written once, to its own file. A match
+appends one line to a log. That is not a convention to be careful about; it is
+the shape of the store, so the failure it replaces cannot recur.
+
+What it replaces, and why: the store used to be one markdown document whose
+parser ended an entry at the next ``##`` heading. Skill bodies use ``##`` for
+their own rules, so every body was silently cut at its first rule — and since a
+write re-serialised the whole document, recording against one entry destroyed
+the bodies of entries nobody had touched. Measured, not theorised.
+
+Two axes, deliberately separate. **Status** comes from the last recorded
+decision and only ever changes because a person decided something. **Evidence**
+— how often it has been seen — orders entries and never promotes anything on
+its own. Conflating them is what made an earlier design rank "run the test
+suite" above "file a ticket the team's way".
+
+Everything countable is **derived** rather than stored, so no two records of the
+same fact can drift: the count is the number of logged sightings, the dates are
+their range, the status is the last decision.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
+
+from .config import Config
+from .lifecycle import parse_frontmatter
+
+# Anchored to the start of the file and stopping at the first close, so a
+# `---` horizontal rule inside a body is content rather than a delimiter.
+# Matching anywhere -- or taking the last split -- is the mistake that cut
+# every body at its first `##` in the store this replaces.
+_FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 CANDIDATE = "candidate"
 PROMOTED = "promoted"
 
-SECTIONS = {
-    CANDIDATE: "## Skill candidates",
-    PROMOTED: "## Made into skills",
-}
-
-HEADING = re.compile(r"^###\s+(.+?)\s*$", re.M)
-SECTION_HEAD = re.compile(r"^##\s+(.+?)\s*$", re.M)
-SEEN = re.compile(r"^\*\*seen\s+(\d+)×\*\*\s*(?:·\s*(.*))?$", re.M)
-ALIAS = re.compile(r"^also seen as:\s*(.*)$", re.M)
-DATES = re.compile(r"^first\s+(\S+)\s*·\s*last\s+(\S+)\s*$", re.M)
-SKILL = re.compile(r"^skill:\s*(.*)$", re.M)
-PROMOTED_ON = re.compile(r"^promoted\s+(\S+)\s*$", re.M)
-
-_META = (SEEN, ALIAS, DATES, SKILL, PROMOTED_ON)
+# Below this a recorded procedure is an observation, not a proposal. One
+# sighting is a thing that happened; two is a coincidence. Putting either in
+# front of a person spends the only attention the store gets on work that has
+# not yet shown it recurs -- and a queue full of those stops being read at all.
+THRESHOLD = 3
 
 
 @dataclass
 class Candidate:
-    """One proposed skill, the evidence for it, and what was decided."""
+    """One procedure, assembled from its entry file and the logs."""
 
     name: str
     body: str = ""
     sessions: list[str] = field(default_factory=list)
-    aliases: list[str] = field(default_factory=list)
+    dates: list[str] = field(default_factory=list)
     status: str = CANDIDATE
-    first_seen: str = ""
-    last_seen: str = ""
-    promoted_on: str = ""
     skill_path: str = ""
+    promoted_on: str = ""
+    path: Path | None = None
 
     @property
     def count(self) -> int:
@@ -66,171 +75,174 @@ class Candidate:
         """
         return len(self.sessions)
 
-    def render(self) -> str:
-        lines = [f"### {self.name}",
-                 f"**seen {self.count}×** · " + ", ".join(self.sessions)]
-        if self.first_seen or self.last_seen:
-            lines.append(f"first {self.first_seen or '?'} · last {self.last_seen or '?'}")
-        if self.aliases:
-            lines.append("also seen as: " + ", ".join(f'"{a}"' for a in self.aliases))
-        if self.status == PROMOTED:
-            if self.promoted_on:
-                lines.append(f"promoted {self.promoted_on}")
-            if self.skill_path:
-                lines.append(f"skill: {self.skill_path}")
-        return "\n".join(lines) + "\n\n" + self.body.strip() + "\n"
+    @property
+    def first_seen(self) -> str:
+        return min(self.dates) if self.dates else ""
+
+    @property
+    def last_seen(self) -> str:
+        return max(self.dates) if self.dates else ""
 
 
-def _status_of(heading: str) -> str:
-    return PROMOTED if "made into skills" in heading.lower() else CANDIDATE
+def _slug(name: str) -> str:
+    """A filename that cannot escape the store directory."""
+    keep = [c if (c.isalnum() or c in "-_") else "-" for c in name.strip()]
+    return "".join(keep).strip("-") or "unnamed"
 
 
-def parse(document: str) -> list[Candidate]:
-    """Read the candidates out of the store.
+def entry_path(config: Config, name: str) -> Path:
+    return config.patterns_dir / f"{_slug(name)}.md"
 
-    Tolerant by design: a hand-edited document should still load. A heading
-    with no `seen` line is a candidate seen zero times, not a parse error.
+
+def add_entry(config: Config, *, name: str, body: str) -> Path:
+    """Write a new entry. Refuses to touch one that already exists.
+
+    Refusing is the point: an entry file is the one copy of what a procedure
+    is, and overwriting it is how the old store lost bodies.
     """
-    out: list[Candidate] = []
-    sections = list(SECTION_HEAD.finditer(document))
-    entries = list(HEADING.finditer(document))
+    config.patterns_dir.mkdir(parents=True, exist_ok=True)
+    path = entry_path(config, name)
+    if path.exists():
+        raise FileExistsError(
+            f"{path} already exists; a match appends an occurrence instead of "
+            f"rewriting the body")
+    path.write_text(f"---\nname: {name}\n---\n\n{body.strip()}\n", encoding="utf-8")
+    return path
 
-    for index, match in enumerate(entries):
-        # An entry ends at the next entry *or* the next section heading,
-        # whichever comes first. Without the section, the last entry of a
-        # group swallows the heading that follows it.
-        bounds = [e.start() for e in entries[index + 1:]]
-        bounds += [s.start() for s in sections if s.start() > match.start()]
-        end = min(bounds) if bounds else len(document)
-        block = document[match.end():end]
-        # Whichever `##` heading most recently preceded this entry.
-        owner = [s for s in sections if s.start() < match.start()]
-        status = _status_of(owner[-1].group(1)) if owner else CANDIDATE
 
-        sessions: list[str] = []
-        seen = SEEN.search(block)
-        if seen and seen.group(2):
-            sessions = [s.strip() for s in seen.group(2).split(",") if s.strip()]
+def _append(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-        aliases: list[str] = []
-        alias = ALIAS.search(block)
-        if alias:
-            aliases = [a.strip().strip('"') for a in alias.group(1).split(",") if a.strip()]
 
-        dates = DATES.search(block)
-        first, last = (dates.group(1), dates.group(2)) if dates else ("", "")
-        first = "" if first == "?" else first
-        last = "" if last == "?" else last
+def add_occurrence(config: Config, *, name: str, session: str,
+                   today: str | None = None) -> None:
+    """Record one sighting. The only thing a match writes."""
+    _append(config.occurrences_file,
+            {"name": name, "session": session,
+             "date": today or date.today().isoformat()})
 
-        promoted = PROMOTED_ON.search(block)
-        skill = SKILL.search(block)
 
-        body = block
-        for pattern in _META:
-            found = pattern.search(body)
-            if found:
-                body = body[:found.start()] + body[found.end():]
+def record_decision(config: Config, *, name: str, action: str,
+                    skill_path: str = "", today: str | None = None) -> None:
+    """Record what a person decided. The only thing that changes status."""
+    _append(config.decisions_file,
+            {"name": name, "action": action, "skill_path": skill_path,
+             "date": today or date.today().isoformat()})
 
-        out.append(Candidate(
-            name=match.group(1).strip(),
-            body=body.strip(),
-            sessions=sessions,
-            aliases=aliases,
-            status=status,
-            first_seen=first,
-            last_seen=last,
-            promoted_on=promoted.group(1) if promoted else "",
-            skill_path=skill.group(1).strip() if skill else "",
-        ))
+
+def _read_log(path: Path) -> list[dict]:
+    """Tolerant by design: a truncated final line loses that line, not the log."""
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("name"):
+            out.append(record)
     return out
 
 
+def load(config: Config) -> list[Candidate]:
+    """Assemble every candidate from its file and the logs, in reading order."""
+    entries: dict[str, Candidate] = {}
+    if config.patterns_dir.exists():
+        for path in sorted(config.patterns_dir.glob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            front = parse_frontmatter(text)
+            found = _FRONTMATTER.match(text)
+            body = text[found.end():].strip() if found else text.strip()
+            name = str(front.get("name") or path.stem)
+            entries[name] = Candidate(name=name, body=body, path=path)
+
+    for record in _read_log(config.occurrences_file):
+        entry = entries.get(record["name"])
+        if entry is None:
+            continue
+        session = str(record.get("session") or "")
+        if session and session not in entry.sessions:
+            entry.sessions.append(session)
+            entry.dates.append(str(record.get("date") or ""))
+
+    for record in _read_log(config.decisions_file):
+        entry = entries.get(record["name"])
+        if entry is None:
+            continue
+        # Last decision wins, so promotion history survives in the log while
+        # the current state stays unambiguous.
+        entry.status = str(record.get("action") or CANDIDATE)
+        entry.skill_path = str(record.get("skill_path") or "")
+        entry.promoted_on = str(record.get("date") or "")
+
+    return order(list(entries.values()))
+
+
 def find(candidates: list[Candidate], name: str) -> Candidate | None:
-    """A candidate by name or by a name it was previously known as."""
-    wanted = name.strip().lower()
-    return next((c for c in candidates
-                 if c.name.lower() == wanted
-                 or wanted in (a.lower() for a in c.aliases)), None)
+    """By name, then by slug, so a renamed-on-disk entry is still reachable."""
+    for candidate in candidates:
+        if candidate.name == name:
+            return candidate
+    wanted = _slug(name)
+    for candidate in candidates:
+        if _slug(candidate.name) == wanted:
+            return candidate
+    return None
 
 
-def upsert(candidates: list[Candidate], *, name: str, body: str, session: str,
-           matches: str | None = None, today: str | None = None) -> list[Candidate]:
-    """Fold one proposal in, and return the list in reading order.
+def reviewable(candidates: list[Candidate],
+               threshold: int = THRESHOLD) -> list[Candidate]:
+    """The ones worth asking a person about.
 
-    ``matches`` names an existing entry the model judged to be the same
-    procedure. Everything that follows from that — the count, the provenance,
-    the dates, recording the old name when it changes — is decided here rather
-    than written out by the model.
-
-    A proposal matching something already promoted keeps its status. The
-    procedure recurring is evidence the skill earns its place, not a reason to
-    put it back in the queue.
+    This filters the queue; it does not change what an entry *is*. Everything
+    below the threshold stays stored, stays counted, and still shows up in
+    ``skillpp candidates`` -- it is simply not a question yet. Keeping the two
+    apart is the same separation as status and evidence: what a thing is, and
+    how much of it there is, are not the same fact.
     """
-    out = list(candidates)
-    stamp = today or date.today().isoformat()
-    existing = None
-    if matches:
-        existing = find(out, matches)
-        if existing is None:
-            raise KeyError(
-                f"no candidate named {matches!r} to match against; "
-                f"have: {', '.join(c.name for c in out) or '(none)'}")
-
-    if existing is None:
-        out.append(Candidate(name=name, body=body, sessions=[session],
-                             first_seen=stamp, last_seen=stamp))
-    else:
-        # A later description of the same procedure is usually the better one:
-        # it was written knowing more. The earlier name is kept as an alias so
-        # the next match has more surface to recognise.
-        if name and name != existing.name:
-            if existing.name not in existing.aliases:
-                existing.aliases.append(existing.name)
-            existing.name = name
-        if session not in existing.sessions:
-            existing.sessions.append(session)
-        if body.strip():
-            existing.body = body.strip()
-        existing.first_seen = existing.first_seen or stamp
-        existing.last_seen = stamp
-
-    return order(out)
-
-
-def promote(candidates: list[Candidate], name: str, *, skill_path: str,
-            today: str | None = None) -> list[Candidate]:
-    """Mark one candidate as having become a skill.
-
-    Deterministic and one-way: the decision is a person's, everything that
-    records it is not. Promoting does not touch the evidence — the count and
-    provenance stay, because they are why it was promoted.
-    """
-    out = list(candidates)
-    entry = find(out, name)
-    if entry is None:
-        raise KeyError(
-            f"no candidate named {name!r}; "
-            f"have: {', '.join(c.name for c in out) or '(none)'}")
-    if entry.status == PROMOTED:
-        raise ValueError(f"{entry.name!r} is already a skill: {entry.skill_path}")
-    entry.status = PROMOTED
-    entry.promoted_on = today or date.today().isoformat()
-    entry.skill_path = skill_path
-    return order(out)
+    return [c for c in candidates
+            if c.status == CANDIDATE and c.count >= threshold]
 
 
 def order(candidates: list[Candidate]) -> list[Candidate]:
-    """Reading order: most evidence first, within a stable section order."""
-    return sorted(candidates, key=lambda c: (c.status != CANDIDATE, -c.count))
+    """Candidates before promoted, most-seen first inside each group.
+
+    The count does not decide whether an entry belongs; a person's decision
+    did that. It decides what gets read first.
+    """
+    return sorted(candidates, key=lambda c: (c.status != CANDIDATE, -c.count, c.name))
+
+
+def render_entry(candidate: Candidate) -> str:
+    """One entry as the model is shown it: provenance, then the body verbatim."""
+    head = [f"### {candidate.name}",
+            f"**seen {candidate.count}×** · " + ", ".join(candidate.sessions)]
+    if candidate.dates:
+        head.append(f"first {candidate.first_seen} · last {candidate.last_seen}")
+    if candidate.status != CANDIDATE:
+        head.append(f"{candidate.status} {candidate.promoted_on}".strip())
+    if candidate.skill_path:
+        head.append(f"skill: {candidate.skill_path}")
+    return "\n".join(head) + "\n\n" + candidate.body.strip() + "\n"
 
 
 def render(candidates: list[Candidate]) -> str:
-    parts = []
-    for status in (CANDIDATE, PROMOTED):
-        group = [c for c in order(candidates) if c.status == status]
-        if status == PROMOTED and not group:
-            continue  # an empty section here is noise, not information
-        parts.append(SECTIONS[status] + "\n\n" +
-                     ("\n".join(c.render() for c in group) if group
-                      else "_None yet._\n"))
-    return "\n".join(parts)
+    """Every candidate, grouped, for a prompt or for reading.
+
+    Derived on demand. There is no rendered document on disk to fall out of
+    step with the entry files, and nothing reads this back.
+    """
+    groups = ((CANDIDATE, "## Skill candidates"), (PROMOTED, "## Made into skills"))
+    parts: list[str] = []
+    for status, heading in groups:
+        picked = [c for c in candidates if (c.status == CANDIDATE) == (status == CANDIDATE)]
+        parts.append(heading + "\n")
+        parts.append("\n".join(render_entry(c) for c in picked) if picked
+                     else "_None yet._\n")
+    return "\n".join(parts).strip() + "\n"

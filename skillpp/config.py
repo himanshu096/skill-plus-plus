@@ -65,21 +65,44 @@ class Config:
         return self.root / "sessions"
 
     @property
-    def patterns_file(self) -> Path:
-        """The store: every candidate ever proposed, from every session.
+    def patterns_dir(self) -> Path:
+        """One file per candidate, each written once and never rewritten.
 
-        One file rather than one per conversation. Counts only mean anything
-        when every session pools into the same place -- most conversations are
-        a single session, so a per-conversation store leaves everything at one
-        occurrence and the ordering it drives does nothing.
+        A single document could not hold what it existed to hold. Its parser
+        ended an entry at the next ``##`` heading, and skill bodies use ``##``
+        for their own rules, so every body was cut at its first rule -- and
+        because a write re-serialised the whole document, recording against
+        one entry destroyed the bodies of entries nobody had touched.
+
+        One file per entry removes the failure rather than patching it: there
+        are no boundaries to find, and nothing re-serialises a body.
         """
-        return self.root / "PATTERNS.md"
+        return self.root / "patterns"
+
+    @property
+    def occurrences_file(self) -> Path:
+        """Append-only log of sightings; the only thing a match writes.
+
+        The count was already derived from provenance rather than stored, so
+        "seen once more" is one appended line. Nothing is read to write it,
+        which is what makes a bad read unable to corrupt anything.
+        """
+        return self.root / "occurrences.jsonl"
+
+    @property
+    def decisions_file(self) -> Path:
+        """Append-only log of what a person decided, and when.
+
+        Status is the last decision for a name rather than a field that gets
+        overwritten, so promotion history survives instead of being replaced.
+        """
+        return self.root / "decisions.jsonl"
 
     @property
     def reviews_dir(self) -> Path:
         """What each individual review proposed, as it proposed it.
 
-        :attr:`patterns_file` is the store; these are the deliveries into it,
+        :attr:`patterns_dir` is the store; these are the deliveries into it,
         and they double as the bookmark -- each records how far its session
         read, which is what stops a resumed conversation being re-read.
 

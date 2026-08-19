@@ -57,22 +57,27 @@ Name it in the gerund, lowercase and hyphenated — `reconciling-deck-against-ar
 
 ## Then record each one
 
+Run the commands below **exactly as written**, with no flags beyond the ones
+shown. Paths printed in the block above are there to be read, not passed back:
+handing one to `--root` builds a second store inside the first, and every
+count starts again from zero with nothing reporting a problem.
+
 The store shown above holds every candidate from every session ever reviewed —
 not just this conversation's. Your only decision per proposal is whether it
 describes **a procedure already in there**, judged on what the procedure *does*
 rather than what it is called, because the same work gets named differently
 every time.
 
-**A match.** The body you send **replaces** the one already stored, so write the
-two combined rather than only today's. The existing body is printed above —
-take what it knows, add what this session added, drop what turned out wrong.
-Sending only today's account silently discards everything the earlier session
-had learned.
+**A match.** Send **this session's account only**. The stored body is not
+touched — a match records that the procedure happened again, and nothing else.
+Do not try to combine the two: the stored body is what the first occurrence
+taught, and anything you send is kept in this session's review file rather than
+folded into it.
 
 ```bash
 python3 bin/skillpp record-candidate $ARGUMENTS \
   --name <clearer-of-the-two-names> --matches "<the existing name>" <<'SKILL'
-<the two bodies merged>
+<this session's body>
 SKILL
 ```
 
@@ -93,12 +98,16 @@ SKILL
 ```
 
 One call per proposal. Everything that follows — the count, the provenance, the
-`also seen as:` line when a name changes, the ordering by count, rewriting the
-file — happens in the command. You never edit the document or restate anything
-already in it, so no existing candidate can be lost by being overlooked.
+dates, the ordering — happens in the command, against files you never edit. A
+new proposal gets its own file; a match appends one line to a log. Nothing is
+rewritten, so no existing candidate can be damaged by a proposal you make now.
 
-Ordering is by count, highest first. The count does not decide whether an entry
-belongs; your judgement already did that. It decides what a person reads first.
+The count does not decide whether an entry belongs; your judgement already did
+that. It decides what a person is asked about, and when. A procedure seen once
+or twice is recorded and left to accumulate — it does not reach
+`/review-candidates` until it has recurred enough to be a pattern, so record
+freely and do not weigh whether something is "worth promoting". That is a
+different question, asked later, by someone else.
 
 ## Finally, mark the session reviewed
 

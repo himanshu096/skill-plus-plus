@@ -1,7 +1,9 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree. The work an earlier revision of this
-document described as uncommitted is committed (`c737017` and later). **168 tests pass:** `python3 -m unittest discover -s tests -q`.
+Branch: `feat/pattern-detection`, clean tree.
+**165 tests pass:** `python3 -m unittest discover -s tests -q`.
+**7 evals pass:** `python3 tests/evals/run.py` — a few minutes and a few cents,
+because each one spends a real model call.
 No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
 Invoke the CLI as `python3 bin/skillpp`.
 
@@ -17,15 +19,15 @@ it further — what to try, and what already passed, is under *Testing* below.
 
 ```
 /log-session          review a session, propose skills          ─┐
-                                                                 │  PATTERNS.md
+                                                                 │  the store
 /review-candidates    decide on one, write it out as a skill    ─┘
 ```
 
-Two documents, and only two:
-
 | path | what |
 | --- | --- |
-| `~/.claude/skillpp/PATTERNS.md` | the store — every candidate, counted, ordered, in two sections |
+| `~/.claude/skillpp/patterns/<name>.md` | one candidate, written once, never reopened for writing |
+| `~/.claude/skillpp/occurrences.jsonl` | one line per sighting; the count is how many there are |
+| `~/.claude/skillpp/decisions.jsonl` | one line per human decision; the last one is the status |
 | `~/.claude/skillpp/reviews/<session-id>.md` | what a session proposed **and how far it read** |
 | `<repo>/.claude/skills/<name>/SKILL.md` | a promoted skill — the only thing that lands in a repo |
 
@@ -55,22 +57,35 @@ is gone because the failure is now impossible.
 
 ---
 
-## Uncommitted since `9e8e907`
+## The store, and the two designs it replaced
 
-The commit describes a per-conversation store. **That was replaced.** Working
-tree holds:
+**Per-conversation documents came first.** A count could only rise when one
+conversation repeated a whole procedure — and 82% of conversations are a single
+session, so counts sat at 1 and the ordering they were meant to drive did
+nothing. Pooling every session is what makes recurrence visible.
 
-- **`PATTERNS.md` replaces `conversations/<id>.md`.** A per-conversation store
-  meant a count could only rise when one conversation repeated a whole procedure
-  — and 82% of conversations are a single session, so counts sat at 1 and the
-  ordering they were meant to drive did nothing. One store makes recurrence
-  visible.
+**One `PATTERNS.md` came next, and was worse.** Its parser ended an entry at the
+next `##`, and skill bodies use `##` for their own rules, so every body was cut
+at its first rule. Because a write re-serialised the whole document, recording
+against one entry destroyed the bodies of entries nobody had touched. The
+append-only shape above is not a convention to be careful about — it is why that
+failure cannot recur.
+
+The same ambiguous-delimiter mistake then appeared a second time in the rewrite
+(`text.split("\n---\n", 2)[-1]`, breaking on a body containing a horizontal
+rule). **Assume a third.** Anchor the match; never take the last split.
 - **The bookmark moved into `reviews/`.** Each review records `last_message` and
   `last_timestamp`, so there is no third place for state to live and disagree.
   A session that proposes nothing still writes one, or its messages are read
   again forever.
-- **Status:** `candidate → promoted`, with `skill_path` and dates.
-- **New commands:** `candidates`, `promote-candidate`, and `/review-candidates`.
+- **The bookmark lives in `reviews/`**, so there is no third place for state to
+  disagree. A session that proposes nothing still writes one, or its messages
+  are read again forever.
+- **Status:** `candidate → promoted`, from the last decision logged.
+- **A threshold, `memory.THRESHOLD = 3`.** Below it a recording is a log entry,
+  not a question: `--open-only` filters on it and `/review-candidates` never
+  offers it. What is recorded and what a person is asked about are separate,
+  the same way status and evidence are.
 
 ---
 
@@ -106,7 +121,7 @@ claim that they were already read.
 | `transcript.py` | JSONL → `Message`/`Block`. The only module touching undocumented internals |
 | `identity.py` | messages → conversation id |
 | `extract.py` | messages → compressed text (**324 MB → 12.3 MB, 26×**) |
-| `memory.py` | the store: parse, upsert, promote, render |
+| `memory.py` | the store: entry files, the two logs, derived counts, the threshold |
 | `prepare.py` | resolve, slice against the bookmark, floor, record, commit |
 
 ### Decisions measurement forced
@@ -151,42 +166,69 @@ Four, all silent, none caught by the suite:
   two fixtures named `recurrence-a`/`recurrence-b` collided: the second read as
   already present, so **the count stopped rising with no error**. Now the full
   stem, with a regression test verified to fail against the old line.
-
 ---
 
 ## Testing
 
-### Passed live, on real data
+Three layers, and the split matters: **anything with one right answer belongs in
+`tests/`, where it is free.** Only judgement is worth a model call.
 
-| | |
-| --- | --- |
-| extract candidates from a real session | imperative, instance-noise stripped |
-| store + review written | frontmatter, provenance, both files |
-| idempotence | "nothing new", nothing written |
-| cross-conversation accumulation | two conversations, one `PATTERNS.md` |
-| correct rejection of mundane work | *"standard git merge… Mundane git. Skip recording."* |
-| barren session | `_No candidate found_`, bookmark still advanced |
-| count merge | `seen 2×`, both sessions listed |
-| body merge | every rule from both occurrences present |
-| `/review-candidates` | showed it, asked, promoted with a written description |
-| **a match against an already-promoted entry** | **`--matches` reached for; stayed promoted, `seen 2×`, both sessions, bodies merged** |
+### `python3 -m unittest discover -s tests -q` — 165, ~2s
 
-`tests/fixtures/seed_recurrence.py` builds two snapshots of one conversation
-doing the same procedure twice, the second hitting an obstacle the first did
-not. It tests what unit tests cannot — whether the model *reaches for*
-`--matches`, and whether a merge combines bodies rather than replacing.
-Regenerate its `.jsonl` output; it is gitignored.
+Counts, dates, ordering, the threshold, and the four append-only properties
+(round-trip with `##` sections, an occurrence not touching the entry file, a
+neighbour left byte-identical, a body containing a horizontal rule).
 
-### Not yet tested — start here
+### `python3 tests/evals/run.py` — 7 cases, ~4 min, a few cents
 
-**Body quality across several candidates.** The one promoted skill so far says
-*don't regenerate, edit the pixels* but omits the venv bootstrap, the grid
-overlay and the luminance-only transfer that the original review captured. A
-skill you cannot follow is a note. One instance is not a pattern — watch the
-next few before changing the prompt.
+The model makes exactly two judgements. The cases are that 2×2, plus the
+conditions that stress it:
 
-**`when_to_use` in practice.** Now written when supplied. Unverified whether
-richer trigger phrasing actually improves firing.
+| | is there a procedure? | is it one we have? |
+| --- | --- | --- |
+| **yes** | `new`, `big` | `match` |
+| **no** | `barren`, `incomplete` | `distinct` |
+
+`two` covers arity — a review that hands back the strongest and stops loses the
+second silently, because the session is bookmarked as read either way.
+
+`new` and `big` also assert body quality in the same call: no instance detail
+(`OPS-4471`, the support URL, the exception class), and at least one of the
+rules the run actually established.
+
+Each case shells out to the **real** `/log-session`, sandboxed by `SKILLPP_ROOT`
+alone. An eval that reconstructs the prompt tests the reconstruction, and the
+two drift the first time someone edits the command file.
+
+`big` is 1,879 records / **433 KB raw** — the median real increment, not a toy —
+extracting to ~16k tokens. Everything between the extractor and the judgement
+was untested at that size before it.
+
+**Do not assert on vocabulary.** The first `two` check required the word
+"ticket" and failed a correct body that said "issue" and "tracker" throughout.
+A flaky eval gets muted, and a muted eval is worse than none.
+
+### Found by the evals, not by the suite
+
+`prepare-session` printed `store  <root>/patterns`. The model read that path and
+passed it back as `--root`, building a complete second store at
+`patterns/patterns/` with every count restarting from zero and **nothing
+reporting a problem**. Nothing was wrong with the code — only with what the code
+told a model. Fixed by printing `config.root`, which is the path the flag
+actually takes.
+
+### Not yet tested
+
+**`/review-candidates` end to end.** `AskUserQuestion` needs a human; automating
+it means stubbing the tool and testing the stub. The queue-filtering half is a
+unit test.
+
+**Cold discovery.** Whether a promoted skill fires unprompted — the real test of
+`description` and `when_to_use`. Needs a different harness and something
+promoted.
+
+**Above the budget.** 72% of real increments exceed ~30k tokens; `big` sits at
+16k. Whether `prepare-session` truncates or floods at 2× that is unknown.
 
 ---
 
@@ -196,12 +238,6 @@ richer trigger phrasing actually improves firing.
 chance if it recurs. Not built. Consequence, accepted: nothing records the
 rejection, so the same thing can be proposed again immediately — at `1×` it
 sorts to the bottom, and `reviews/<session>.md` still holds the original.
-
-**No `reconcile`.** Nothing notices when a promoted skill's file is deleted, so
-the store keeps claiming it exists and the procedure is never re-proposed.
-
-**No `expire`.** Candidates never decay. Dates are recorded, so this is
-buildable whenever volume warrants.
 
 **A promoted skill's file goes stale, and updating it is deliberately deferred.**
 Measured after the promoted-match test: the store held `seen 2×`, both sessions

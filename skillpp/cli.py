@@ -110,16 +110,14 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
 def cmd_promote_candidate(args: argparse.Namespace) -> int:
     """Turn a candidate into a skill on disk, and record that it happened.
 
-    Writes the SKILL.md, then moves the entry. In that order: a store claiming
-    a skill exists when the file was never written is worse than a file with no
-    record, because nothing will ever propose the procedure again.
+    Writes the SKILL.md first, then appends the decision. In that order: a log
+    claiming a skill exists when the file was never written is worse than a
+    file with no record, because nothing will ever propose the procedure again.
     """
-    from .memory import find, parse, promote, render as render_store
+    from .memory import PROMOTED, find, load, record_decision
 
     config = Config(args.root)
-    store = config.patterns_file
-    entries = parse(store.read_text(encoding="utf-8")) if store.exists() else []
-    entry = find(entries, args.name)
+    entry = find(load(config), args.name)
     if entry is None:
         print(f"No candidate named '{args.name}'. See: skillpp candidates",
               file=sys.stderr)
@@ -158,10 +156,10 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
         "",
     ]), encoding="utf-8")
 
-    updated = promote(entries, entry.name, skill_path=str(path))
-    tmp = store.with_suffix(".md.tmp")
-    tmp.write_text(render_store(updated).strip() + "\n", encoding="utf-8")
-    tmp.replace(store)
+    # Appended after the file exists, never before: a decision claiming a skill
+    # is on disk when it is not stops the procedure ever being proposed again.
+    record_decision(config, name=entry.name, action=PROMOTED,
+                    skill_path=str(path))
 
     print(f"wrote {path}")
     print(f"description: {description}")
@@ -170,40 +168,52 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
 
 
 def cmd_candidates(args: argparse.Namespace) -> int:
-    """List what has been proposed, most-seen first."""
-    from .memory import parse
+    """List what has been recorded, most-seen first."""
+    from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
 
     config = Config(args.root)
-    store = config.patterns_file
-    entries = parse(store.read_text(encoding="utf-8")) if store.exists() else []
+    store = config.patterns_dir
+    entries = load(config)
     if not entries:
         print(f"Nothing recorded yet. Review a session with /log-session.\n"
               f"Store: {store}")
         return 0
 
+    ready = reviewable(entries)
+    # --open-only feeds the review queue, so it is the threshold that applies
+    # rather than the status alone. The plain listing below still shows
+    # everything: what has been seen once is a log, and a log is worth reading.
     if args.open_only:
-        entries = [e for e in entries if e.status == "candidate"]
+        entries = ready
     if args.json:
         print(json.dumps([{
             "name": e.name, "status": e.status, "count": e.count,
-            "sessions": e.sessions, "aliases": e.aliases,
+            "sessions": e.sessions,
             "first_seen": e.first_seen, "last_seen": e.last_seen,
             "skill_path": e.skill_path, "body": e.body,
         } for e in entries], indent=2))
         return 0
 
-    open_ = [e for e in entries if e.status == "candidate"]
-    done = [e for e in entries if e.status == "promoted"]
-    print(f"{len(open_)} candidate(s), {len(done)} promoted — {store}\n")
+    logged = [e for e in entries
+              if e.status == CANDIDATE and e.count < THRESHOLD]
+    done = [e for e in entries if e.status == PROMOTED]
+    print(f"{len(ready)} ready to review, {len(logged)} still logging, "
+          f"{len(done)} promoted — {store}\n")
     for entry in entries:
-        mark = "  " if entry.status == "candidate" else "✓ "
+        if entry.status == PROMOTED:
+            mark = "✓ "
+        elif entry.count >= THRESHOLD:
+            mark = "▸ "
+        else:
+            mark = "  "
         print(f"{mark}x{entry.count}  {entry.name}")
         if entry.skill_path:
             print(f"        {entry.skill_path}")
-        if entry.aliases:
-            print(f"        also seen as {', '.join(entry.aliases)}")
-        print(f"        {', '.join(s[:8] for s in entry.sessions)}")
-    print("\nRead one in full:  less " + str(store))
+        # Not truncated. Shortening a session id for display is what once hid
+        # a collision that froze a count at 1 with no error.
+        print(f"        {', '.join(entry.sessions)}")
+    print(f"\n▸  seen {THRESHOLD}× or more — /review-candidates asks about these.")
+    print(f"Read one in full:  less {store}/<name>.md")
     return 0
 
 
