@@ -228,6 +228,25 @@ symmetric round above: on six sessions built from that branch's own scenario
 table, in its own vocabulary, it scored two of six. The bias was real and it
 was not what decided the outcome.
 
+**Its planned local-model pre-filter is not built, and was not measured.**
+`README.md` on that branch lists it as an open question — "whether a deferred
+local model should pre-filter before review" — and `docs/detection.md` records
+the Ollama experiments behind it. There is no such code on the branch: no
+import, no call to `11434`, nothing in `capture.py`. What is measured here is
+what runs.
+
+It would not change these results either, and not as a matter of opinion. A
+pre-filter is a precision tool that drops junk already captured, and all three
+deciding failures happen upstream of anything it could see: fragmentation
+happens in `fold_pending` during capture, the missed recurrence happens in
+lexical dedup, and `big` abandons its spans before anything is banked at all.
+Their own conclusion table says as much — a small local model can "extract a
+visible fact" but cannot "decide which six of forty steps are the method".
+
+Where it *would* help is `barren`, where that pipeline banked `'run the tests'`
+and `"what's on this branch"`. That is exactly the junk a cheap local filter
+kills, and it is the one column where this comparison understates that branch.
+
 **Only half of that branch has been measured.** Its design puts judgement at
 review time: `/skillpp-review` reads the repo, resolves what it can, and asks
 at most three questions. A bad span or a greeting for a title could be
