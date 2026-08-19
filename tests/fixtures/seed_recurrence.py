@@ -14,7 +14,7 @@ entries at `seen 1x`, it is not reaching for `--matches` at all.
 
     python3 tests/fixtures/seed_recurrence.py
 
-Writes seeds/recurrence-a.jsonl and seeds/recurrence-b.jsonl, where b is a is a
+Writes recurrence-a.jsonl and recurrence-b.jsonl beside this file, where b is a
 resumed snapshot of a: same opening message, so the same conversation id, with
 the second occurrence appended.
 """
