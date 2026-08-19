@@ -68,10 +68,18 @@ class Candidate:
 
     @property
     def count(self) -> int:
-        """How many times this has been seen.
+        """In how many distinct sessions this has been seen.
 
         Derived from the provenance rather than stored beside it, so the two
         cannot drift apart.
+
+        Distinct *sessions*, not sightings: sessions are deduplicated as the
+        occurrence log is read, so doing the same work twice in one sitting
+        leaves two lines in the log and a count of 1. Deliberate -- three
+        separate sessions weeks apart is evidence a procedure recurs, and
+        repeating it once while it is fresh is not. The consequence to know is
+        that the threshold cannot be reached inside a single session however
+        many times the work is done.
         """
         return len(self.sessions)
 

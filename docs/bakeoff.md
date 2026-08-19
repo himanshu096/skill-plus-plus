@@ -151,8 +151,18 @@ on every real pair.
 
 **This branch has the better detector.** The deciding results, in order:
 
-1. **`recurs`.** A count-based promotion gate that cannot count an identical
-   repeated procedure has no path to promoting anything.
+1. **`recurs`, narrower than first stated.** That branch banked three separate
+   entries at ×1 for two runs of one procedure — it never recognised them as the
+   same work, so its lexical dedup did not fire where it should be strongest.
+   This branch did recognise them: one entry, two sightings in
+   `occurrences.jsonl`.
+
+   The first version of this document claimed the count therefore rose to ×2 and
+   that this was the deciding result. **That was wrong.** `count` is
+   `len(sessions)` with sessions deduplicated, so two runs inside one session
+   count as 1 here too. Neither branch advances a threshold from a single
+   session. What separates them is recognition, not counting — and recognition
+   is the half that has to work first.
 2. **`big`.** Budgets on banks nothing from a long session; budgets off banks
    one 440-step blob. No setting between them, and a long session is where a
    recurring procedure hides.
@@ -187,6 +197,13 @@ review has nothing to look at. That failure is final.
 
 - The paid half: `/skillpp-review` against the candidates banked above, to see
   how much of a bad span a review recovers.
+- **`their-explore` is unmeasured.** Its `record-candidate` and
+  `commit-session` calls were refused by the permission layer, so nothing was
+  recorded and no judgement was observed. The harness caught it and said so
+  rather than reading an empty store as "found nothing", which is the one thing
+  that must not happen here. Cause unknown — the same `--allowed-tools` value
+  worked on the other five. Needs a rerun with the run kept.
+
 - **This branch against the same six symmetric fixtures.** Added to
   `tests/evals/run.py` as `their-refine`, `their-retry`, `their-distinct`,
   `their-explore`, `their-mid`, `their-recurs`. This is the other half of the

@@ -144,11 +144,19 @@ INSTANCE = ("OPS-4471", "88213", "support.example", "ExportSerializer")
 RULES = ("signature", "duplicate", "rubric", "catalogue", "severity")
 
 
-def _quality(body: str) -> str | None:
+def _quality(body: str, rules: tuple[str, ...] = RULES) -> str | None:
+    """Instance details out, at least one rule in.
+
+    ``rules`` is a parameter because the default set is the bug-filing
+    fixture's vocabulary, and reusing it on another fixture fails a correct
+    body on words that could not possibly appear in it -- a rate-limiting
+    procedure has no "signature" or "catalogue" in it, and a check that
+    demands one is testing which fixture it was pointed at.
+    """
     leaked = [v for v in INSTANCE if v in body]
     if leaked:
         return f"body keeps this run's details: {leaked}"
-    if not any(r in body.lower() for r in RULES):
+    if not any(r in body.lower() for r in rules):
         return f"body has the steps but none of the rules: {body[:200]!r}"
     return None
 
@@ -280,6 +288,66 @@ def _kept_the_neighbour_apart(entries: list[dict]) -> str | None:
                 f"'escalating-a-sev-1' rose to x{seeded['count']}")
     if len(entries) != 2:
         return f"expected the seeded entry plus a new one, got {len(entries)}"
+    return None
+
+
+def _limit_rules(entries: list[dict]) -> str | None:
+    if len(entries) != 1:
+        return (f"expected 1 entry, got {len(entries)}: "
+                f"{[e['name'] for e in entries]}")
+    return _quality(entries[0]["body"],
+                    ("tenant", "per-tenant", "scope", "global"))
+
+
+def _folded_but_not_counted(root: Path, said: str,
+                            entries: list[dict]) -> str | None:
+    """Two runs in one session: one entry, two sightings, count still 1.
+
+    The count is `len(sessions)` and sessions are deduplicated, so repeating a
+    procedure in one sitting does not advance the threshold -- three separate
+    sessions do. That is the intended reading of "recurring" and it is why this
+    asserts on the occurrence log rather than on the count: what is being
+    tested is that the second run was recognised as the *same* procedure, which
+    is the step the capture branch never reached.
+    """
+    if len(entries) != 1:
+        return (f"expected the two rollouts folded into 1 entry, got "
+                f"{len(entries)}: {[(e['name'], e['count']) for e in entries]}")
+    log = root / "occurrences.jsonl"
+    sightings = [l for l in log.read_text().splitlines()
+                 if entries[0]["name"] in l] if log.exists() else []
+    if len(sightings) != 2:
+        return (f"the second run was not recorded as a sighting: "
+                f"{len(sightings)} in occurrences.jsonl")
+    if entries[0]["count"] != 1:
+        return (f"count is {entries[0]['count']} — two runs in one session "
+                f"should not advance the threshold")
+    return None
+
+
+def _did_not_merge_the_two(root: Path, said: str,
+                           entries: list[dict]) -> str | None:
+    """Scored on this branch's definition, not head-to-head.
+
+    Their table expects two recipes because any finished mutation span is one.
+    Under this branch's rules a CI version bump is edit/test/commit with no rule
+    worth writing down, and recording it is the `barren` failure -- so one entry
+    here is a defensible answer and two is also defensible. What is *not* is
+    merging them, which is the silent failure: one inflated count and a
+    discarded proposal.
+    """
+    tag = _entry(entries, "release-tag") or _entry(entries, "tag")
+    if tag is None:
+        return (f"the release-tag procedure was not recorded: "
+                f"{[e['name'] for e in entries]}")
+    if len(entries) > 2:
+        return f"fragmented into {len(entries)}: {[e['name'] for e in entries]}"
+    if len(entries) == 2:
+        first, second = (set(e["body"].lower().split()) for e in entries)
+        overlap = len(first & second) / len(first | second)
+        if overlap > 0.5:
+            return (f"the two bodies are {overlap:.0%} the same words — one "
+                    f"procedure split rather than two found")
     return None
 
 
@@ -479,7 +547,7 @@ CASES = [
          breaks="a procedure that took two requests is recorded as two",
          transcripts=lambda out: [_their("refine", out)],
          min_messages=1,
-         check=_records_something),
+         check=_limit_rules),
     Case("their-retry",
          asks="a migration that failed on a lock, then passed",
          breaks="the failure is recorded as something that happened rather "
@@ -493,7 +561,7 @@ CASES = [
                 "fragment",
          transcripts=lambda out: [_their("distinct-tasks", out)],
          min_messages=1,
-         check=_two_procedures),
+         check_run=_did_not_merge_the_two),
     Case("their-explore",
          asks="eight greps then a one-line fix, committed",
          breaks="ordinary debugging is recorded as a procedure, which is how "
@@ -516,7 +584,7 @@ CASES = [
                 "recurrence, so no threshold is ever reached",
          transcripts=lambda out: [_their("recurs", out)],
          min_messages=1,
-         check=_matched_itself),
+         check_run=_folded_but_not_counted),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
