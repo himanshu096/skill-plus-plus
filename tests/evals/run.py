@@ -42,7 +42,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "tests" / "fixtures"), str(Path(__file__).parent)]
 
 from skillpp.config import Config          # noqa: E402
-from skillpp.memory import add_entry, add_occurrence  # noqa: E402
+from skillpp.memory import (PROMOTED, add_entry, add_occurrence,  # noqa: E402
+                            record_decision)
 
 RECURRENCE_A = REPO / "tests" / "fixtures" / "recurrence-a.jsonl"
 RECURRENCE_B = REPO / "tests" / "fixtures" / "recurrence-b.jsonl"
@@ -63,6 +64,37 @@ window where the release exists and its commit does not.
 """
 
 
+NEARBY = """Escalate a sev-1 the moment it is confirmed, before diagnosing.
+
+## Confirm scope before paging
+
+Check the error rate is service-wide and not one tenant. Paging on a single
+tenant's outage burns the rotation and the next real sev-1 is answered slower.
+
+## Page, then investigate
+
+Open the incident channel and page the on-call rota *before* looking for a
+cause. Diagnosis while unpaged is the single longest delay in every postmortem
+we have run.
+"""
+
+# What the store already knows when a procedure recurs after being promoted.
+ALREADY = """Read the intake spec before filing anything — the required fields
+change and a remembered list goes stale.
+
+## Search before filing
+
+Search the tracker by the stack-trace signature, not the report's title.
+Titles get phrased differently every time; a title search misses duplicates a
+signature search finds.
+
+## Link, do not duplicate
+
+If a match exists, attach the source thread to it rather than filing a second
+copy, and post the tracker link back into the thread.
+"""
+
+
 @dataclass
 class Case:
     name: str
@@ -73,8 +105,18 @@ class Case:
     # repeats a procedure sees one procedure, correctly. Matching is what the
     # *second* review does against what the first one stored.
     transcripts: Callable[[Path], list[Path]]
-    check: Callable[[list[dict]], str | None]
+    check: Callable[[list[dict]], str | None] | None = None
     seed: Callable[[Config], None] | None = None
+    command: str = "/log-session"
+    # AskUserQuestion is withheld from the review cases deliberately. What can
+    # be observed without a human is everything up to the question: which
+    # candidates the queue offered, and that nothing was written before an
+    # answer existed. Answering it would mean stubbing the tool and asserting
+    # on the stub.
+    tools: str = "Bash(python3 bin/skillpp *)"
+    denials_expected: bool = False
+    bookmarks: bool = True
+    check_run: Callable[[Path, str, list[dict]], str | None] | None = None
 
 
 def _entry(entries: list[dict], name_part: str) -> dict | None:
@@ -179,14 +221,132 @@ def _kept_them_apart(entries: list[dict]) -> str | None:
 
 def _recorded_nothing(entries: list[dict]) -> str | None:
     if entries:
-        return (f"recorded {len(entries)} from ordinary work: "
-                f"{[e['name'] for e in entries]}")
+        return (f"recorded {len(entries)}: {[e['name'] for e in entries]}")
+    return None
+
+
+def _bookmarked(root: Path) -> str | None:
+    """Finding nothing still has to be written down.
+
+    The hole this closes: every case so far asserted on the store, and a store
+    that stays empty looks identical whether the session was reviewed and
+    dismissed or never reviewed at all. Skip the bookmark and those messages
+    arrive again in the next batch, forever.
+    """
+    reviews = list((root / "reviews").glob("*.md"))
+    if not reviews:
+        return "no review written — the session will be read again forever"
+    if not any("last_message:" in r.read_text() for r in reviews):
+        return "review written without a bookmark; the messages stay unread"
+    return None
+
+
+def _redacted(entries: list[dict]) -> str | None:
+    if len(entries) != 1:
+        return f"expected 1 entry, got {len(entries)}: {[e['name'] for e in entries]}"
+    body = entries[0]["body"]
+    if "dsh_live_4Kq9wRt2bNm7xZ" in body:
+        return "the credential is in the body verbatim"
+    if "dsh_live" in body:
+        return "part of the credential survived into the body"
+    return None
+
+
+def _stayed_promoted(entries: list[dict]) -> str | None:
+    if len(entries) != 1:
+        return (f"filed a duplicate of a promoted skill instead of matching it: "
+                f"{[(e['name'], e['status']) for e in entries]}")
+    entry = entries[0]
+    if entry["count"] != 2:
+        return f"count is {entry['count']}, expected the sighting to be logged"
+    if entry["status"] != "promoted":
+        return f"status fell back to {entry['status']!r}"
+    return None
+
+
+def _kept_the_neighbour_apart(entries: list[dict]) -> str | None:
+    seeded = _entry(entries, "escalating-a-sev-1")
+    if seeded is None:
+        return "the seeded entry vanished"
+    if seeded["count"] != 1:
+        return (f"matched a different procedure from the same domain — "
+                f"'escalating-a-sev-1' rose to x{seeded['count']}")
+    if len(entries) != 2:
+        return f"expected the seeded entry plus a new one, got {len(entries)}"
     return None
 
 
 def _seed_unrelated(config: Config) -> None:
     add_entry(config, name="cutting-a-release-tag", body=UNRELATED)
     add_occurrence(config, name="cutting-a-release-tag", session="seeded")
+
+
+def _seed_nearby(config: Config) -> None:
+    add_entry(config, name="escalating-a-sev-1-incident", body=NEARBY)
+    add_occurrence(config, name="escalating-a-sev-1-incident", session="seeded")
+
+
+def _seed_promoted(config: Config) -> None:
+    add_entry(config, name="filing-a-bug-from-a-support-report", body=ALREADY)
+    add_occurrence(config, name="filing-a-bug-from-a-support-report",
+                   session="seeded")
+    record_decision(config, name="filing-a-bug-from-a-support-report",
+                    action=PROMOTED, skill_path="/tmp/does-not-matter/SKILL.md")
+
+
+def _promotions(root: Path) -> list[str]:
+    log = root / "decisions.jsonl"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+def _skills_written(root: Path) -> list[str]:
+    return [p.name for p in (root / "skills").glob("*/SKILL.md")]
+
+
+def _asked_nothing_of_an_empty_queue(root: Path, said: str,
+                                     entries: list[dict]) -> str | None:
+    """Below the threshold is not a question, and must not become one."""
+    if _promotions(root):
+        return f"promoted from an empty queue: {_promotions(root)}"
+    if _skills_written(root):
+        return f"wrote a skill with nothing waiting: {_skills_written(root)}"
+    if len(entries) != 2:
+        return f"the store changed: {[(e['name'], e['count']) for e in entries]}"
+    return None
+
+
+def _offered_all_of_them(root: Path, said: str,
+                         entries: list[dict]) -> str | None:
+    """The bug this was built for: only the strongest was ever shown.
+
+    A queue that hands back one candidate and stops is not a queue. The others
+    are not rejected -- they are never mentioned, so nobody knows to ask.
+    """
+    missing = [e["name"] for e in entries if e["name"] not in said]
+    if missing:
+        return f"waiting but never mentioned: {missing}"
+    if _promotions(root):
+        return f"promoted without being answered: {_promotions(root)}"
+    if _skills_written(root):
+        return f"wrote a skill before any answer: {_skills_written(root)}"
+    return None
+
+
+def _seed_below(config: Config) -> None:
+    for name, body, seen in (("cutting-a-release-tag", UNRELATED, 1),
+                             ("escalating-a-sev-1-incident", NEARBY, 2)):
+        add_entry(config, name=name, body=body)
+        for n in range(seen):
+            add_occurrence(config, name=name, session=f"{name}-{n}")
+
+
+def _seed_queue(config: Config) -> None:
+    for name, body in (("cutting-a-release-tag", UNRELATED),
+                       ("escalating-a-sev-1-incident", NEARBY),
+                       ("filing-a-bug-from-a-support-report", ALREADY)):
+        add_entry(config, name=name, body=body)
+        for n in range(3):
+            add_occurrence(config, name=name, session=f"{name}-{n}")
 
 
 def _mundane(out: Path) -> Path:
@@ -236,6 +396,50 @@ CASES = [
                 "rejected, it is lost",
          transcripts=lambda out: [_session("two", out)],
          check=_two_procedures),
+    Case("near",
+         asks="a store holding a different procedure from the same domain",
+         breaks="the false match nobody catches — `distinct` only rules out "
+                "matching things with nothing in common",
+         transcripts=lambda out: [RECURRENCE_A],
+         seed=_seed_nearby,
+         check=_kept_the_neighbour_apart),
+    Case("promoted",
+         asks="the procedure recurs after it was already made into a skill",
+         breaks="a duplicate candidate for a skill that already exists, and "
+                "the evidence the skill earns its place is lost",
+         transcripts=lambda out: [RECURRENCE_A],
+         seed=_seed_promoted,
+         check=_stayed_promoted),
+    Case("secrets",
+         asks="a finished procedure whose commands carry a live token",
+         breaks="the credential lands in a SKILL.md, which is the artifact "
+                "that gets committed and shared",
+         transcripts=lambda out: [_session("secrets", out)],
+         check=_redacted),
+    Case("stop",
+         asks="the same session reviewed twice, nothing new the second time",
+         breaks="every re-review re-records, and counts inflate without the "
+                "procedure ever recurring",
+         transcripts=lambda out: [RECURRENCE_A, RECURRENCE_A],
+         check=_records_something),
+    Case("review-empty",
+         asks="/review-candidates with everything below the threshold",
+         breaks="the threshold gates the listing but not the promotion, so a "
+                "procedure seen once can still be made into a skill",
+         transcripts=lambda out: [],
+         seed=_seed_below,
+         command="/review-candidates",
+         denials_expected=True, bookmarks=False,
+         check_run=_asked_nothing_of_an_empty_queue),
+    Case("review-lists-all",
+         asks="/review-candidates with three candidates past the threshold",
+         breaks="only the strongest is offered — the rest are not rejected, "
+                "they are never mentioned",
+         transcripts=lambda out: [],
+         seed=_seed_queue,
+         command="/review-candidates",
+         denials_expected=True, bookmarks=False,
+         check_run=_offered_all_of_them),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
@@ -255,25 +459,73 @@ def store(root: Path) -> list[dict]:
     return json.loads(text) if text.startswith("[") else []
 
 
+def _spoken(stream: str) -> str:
+    """Every assistant turn, not just the last one.
+
+    ``claude -p`` prints the final message alone. A case asserting on what the
+    model *offered* -- which candidates it listed before asking -- sees none of
+    it, because by the last turn that is already summarised away. Streamed
+    events are the only place the middle of the run survives.
+    """
+    out = []
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "assistant":
+            for block in event.get("message", {}).get("content", []):
+                if block.get("type") == "text":
+                    out.append(block["text"])
+        elif event.get("type") == "result" and event.get("result"):
+            out.append(str(event["result"]))
+    return "\n".join(out)
+
+
 def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
     root = Path(tempfile.mkdtemp(prefix=f"skillpp-eval-{case.name}-"))
     config = Config(root)
     if case.seed:
         case.seed(config)
-    env = {**os.environ, "SKILLPP_ROOT": str(root)}
+    # SKILLPP_SKILLS_DIR too: the root redirects the store, but promotion
+    # writes outside it, and without this a case that wrongly promotes lands a
+    # SKILL.md in the developer's real ~/.claude/skills.
+    env = {**os.environ, "SKILLPP_ROOT": str(root),
+           "SKILLPP_SKILLS_DIR": str(root / "skills")}
     said, why = [], ""
-    for path in case.transcripts(root):
+    for path in case.transcripts(root) or [None]:
+        prompt = f"{case.command} {path}".strip() if path else case.command
         proc = subprocess.run(
-            ["claude", "-p", f"/log-session {path}",
+            ["claude", "-p", prompt,
              "--no-session-persistence",
-             "--allowed-tools", "Bash(python3 bin/skillpp *)"],
+             "--output-format", "stream-json", "--verbose",
+             "--allowed-tools", case.tools],
             cwd=REPO, env=env, capture_output=True, text=True, timeout=600)
-        said.append(proc.stdout)
+        said.append(_spoken(proc.stdout))
         if proc.returncode != 0:
             why = f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}"
             break
+        # A refused tool call reaches the store as an empty store, which is
+        # indistinguishable from a judgement that found nothing. Caught here so
+        # a permissions problem is never read as a model getting it wrong.
+        if not case.denials_expected and any(
+                w in said[-1].lower() for w in ("denied", "permission to use")):
+            why = ("the model was refused a tool call, so nothing was recorded "
+                   "— this is the harness, not the judgement")
+            break
 
-    why = why or case.check(store(root)) or ""
+    # Every review bookmarks, whatever it concluded. Checked for all of them
+    # rather than per case: it is the one thing a session owes the next one.
+    entries = store(root)
+    if not why and case.check:
+        why = case.check(entries) or ""
+    if not why and case.check_run:
+        why = case.check_run(root, "\n".join(said), entries) or ""
+    if not why and case.bookmarks:
+        why = _bookmarked(root) or ""
     if not why and not keep:
         shutil.rmtree(root, ignore_errors=True)
     return (not why), why, root, "\n--- next review ---\n".join(said)

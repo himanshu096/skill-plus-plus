@@ -1,9 +1,12 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree.
-**165 tests pass:** `python3 -m unittest discover -s tests -q`.
-**7 evals pass:** `python3 tests/evals/run.py` — a few minutes and a few cents,
-because each one spends a real model call.
+Branch: `feat/pattern-detection`, pushed through `4c629f8`. **Uncommitted:**
+six more eval cases, the streamed-output change, and `SKILLPP_SKILLS_DIR`
+(`skillpp/config.py`, `tests/evals/*`, `tests/test_skillpp.py` — +333/−11).
+**167 tests pass:** `python3 -m unittest discover -s tests -q`.
+**13 evals**, of which six are verified since the last full run — see *Testing*.
+`python3 tests/evals/run.py` spends a real model call per case, so run
+`--case <name>` unless a full sweep is actually wanted.
 No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
 Invoke the CLI as `python3 bin/skillpp`.
 
@@ -124,6 +127,16 @@ claim that they were already read.
 | `memory.py` | the store: entry files, the two logs, derived counts, the threshold |
 | `prepare.py` | resolve, slice against the bookmark, floor, record, commit |
 
+And the tests, which are two different things and should stay that way:
+
+| path | job |
+| --- | --- |
+| `tests/test_skillpp.py` | everything with one right answer. Free, ~2s |
+| `tests/evals/run.py` | the judgement cases. One real model call each |
+| `tests/evals/sessions.py` | fixtures the recurrence seeder cannot express |
+| `tests/evals/mundane.py` | a session worth no skill at all |
+| `tests/fixtures/seed_recurrence.py` | two snapshots of one conversation doing the same procedure twice. Regenerate; the `.jsonl` is gitignored |
+
 ### Decisions measurement forced
 
 **Conversation id is the first message's uuid, in full.** A prefix of 3+ splits
@@ -173,59 +186,101 @@ Four, all silent, none caught by the suite:
 Three layers, and the split matters: **anything with one right answer belongs in
 `tests/`, where it is free.** Only judgement is worth a model call.
 
-### `python3 -m unittest discover -s tests -q` — 165, ~2s
+### `python3 -m unittest discover -s tests -q` — 167, ~2s
 
 Counts, dates, ordering, the threshold, and the four append-only properties
 (round-trip with `##` sections, an occurrence not touching the entry file, a
 neighbour left byte-identical, a body containing a horizontal rule).
 
-### `python3 tests/evals/run.py` — 7 cases, ~4 min, a few cents
+### `python3 tests/evals/run.py` — 13 cases, minutes and cents each
 
-The model makes exactly two judgements. The cases are that 2×2, plus the
-conditions that stress it:
-
-| | is there a procedure? | is it one we have? |
-| --- | --- | --- |
-| **yes** | `new`, `big` | `match` |
-| **no** | `barren`, `incomplete` | `distinct` |
-
-`two` covers arity — a review that hands back the strongest and stops loses the
-second silently, because the session is bookmarked as read either way.
-
-`new` and `big` also assert body quality in the same call: no instance detail
-(`OPS-4471`, the support URL, the exception class), and at least one of the
-rules the run actually established.
-
-Each case shells out to the **real** `/log-session`, sandboxed by `SKILLPP_ROOT`
+Each case shells out to the **real** command file, sandboxed by environment
 alone. An eval that reconstructs the prompt tests the reconstruction, and the
 two drift the first time someone edits the command file.
 
+**Detection.** The model makes exactly two judgements, and the cases are that
+2×2 plus what stresses it:
+
+| | is there a procedure? | is it one we have? |
+| --- | --- | --- |
+| **yes** | `new`, `big` | `match`, `promoted` |
+| **no** | `barren`, `incomplete` | `distinct`, `near` |
+
+- `two` — arity. A review handing back the strongest and stopping loses the
+  second silently, since the session is bookmarked as read either way.
+- `stop` — the same session reviewed twice. Must obey "write nothing" rather
+  than re-record and inflate the count without the procedure recurring.
+- `secrets` — a finished procedure whose commands carry a token. A leaked
+  credential in a SKILL.md travels further than the transcript ever would,
+  because that file gets committed and shared.
+- `near` is the one that matters more than `distinct`. `distinct` only proves
+  the model will not match things with *nothing* in common; `near` seeds a
+  different procedure from the same domain, which is where a false match
+  actually happens. A missed match costs a visible duplicate; a wrong match
+  inflates a count, drops the proposal, and leaves no trace.
+- `new` and `big` assert body quality in the same call, so it is free: no
+  instance detail, and at least one rule the run established.
+- Every case asserts a bookmark was written. An empty store looks identical
+  whether a session was reviewed and dismissed or never reviewed at all.
+
 `big` is 1,879 records / **433 KB raw** — the median real increment, not a toy —
-extracting to ~16k tokens. Everything between the extractor and the judgement
-was untested at that size before it.
+extracting to ~16k tokens.
+
+**Review.** `AskUserQuestion` is withheld deliberately: everything up to the
+question is observable, and answering it would mean stubbing the tool and
+asserting on the stub.
+
+- `review-empty` — everything below the threshold. Nothing promoted, no
+  SKILL.md, store unchanged. The threshold gates the listing; this is what
+  proves it also gates the promotion.
+- `review-lists-all` — three past the threshold, all three named in the output,
+  nothing written before an answer exists.
 
 **Do not assert on vocabulary.** The first `two` check required the word
-"ticket" and failed a correct body that said "issue" and "tracker" throughout.
-A flaky eval gets muted, and a muted eval is worse than none.
+"ticket" and failed a correct body saying "issue" and "tracker" throughout. It
+compares word overlap between entries now. A flaky eval gets muted, and a muted
+eval is worse than none.
 
 ### Found by the evals, not by the suite
 
-`prepare-session` printed `store  <root>/patterns`. The model read that path and
-passed it back as `--root`, building a complete second store at
-`patterns/patterns/` with every count restarting from zero and **nothing
-reporting a problem**. Nothing was wrong with the code — only with what the code
-told a model. Fixed by printing `config.root`, which is the path the flag
-actually takes.
+Three, none reachable by a unit test, because in each the code was correct and
+what it *told a model* was not:
+
+- **`prepare-session` printed `store  <root>/patterns`.** Handed that path, the
+  model passed it back as `--root` and built a second store at
+  `patterns/patterns/`, every count restarting from zero, nothing reporting a
+  problem. Prints `config.root` now — the path the flag actually takes.
+- **Promotion escaped the sandbox.** `default_skills_dir()` falls back to
+  `~/.claude/skills`, and this repo has no `.claude/skills/`. `SKILLPP_ROOT`
+  redirects the store, but promotion writes *outside* it, so a review case that
+  wrongly promoted would have landed a SKILL.md in the developer's real skills
+  directory. `SKILLPP_SKILLS_DIR` now overrides both, which is what the config
+  docstring already claimed. Two unit tests pin it.
+- **A refused tool call read as a wrong judgement.** `near` failed once with
+  the model's reasoning visibly correct and both Bash calls denied — the store
+  stays empty either way. The runner detects refusals and reports them as
+  harness failures now.
+
+### Harness notes
+
+`claude -p` prints the **final message only**. `review-lists-all` first failed
+with the model reporting "leaving all three as candidates" — it *had* listed
+them, but by the last turn that was summarised away. The runner parses
+`--output-format stream-json` and keeps every assistant turn.
+
+Verified since the last full sweep: `near`, `promoted`, `secrets`, `stop`,
+`review-empty`, `review-lists-all`. The original seven passed before the
+universal bookmark check, the streamed output and `SKILLPP_SKILLS_DIR` landed,
+and have not been re-run against them.
 
 ### Not yet tested
 
-**`/review-candidates` end to end.** `AskUserQuestion` needs a human; automating
-it means stubbing the tool and testing the stub. The queue-filtering half is a
-unit test.
+**The accept path.** `/review-candidates` up to the question is covered; what
+happens after a person answers "make it a skill" is not, and needs a human.
 
 **Cold discovery.** Whether a promoted skill fires unprompted — the real test of
 `description` and `when_to_use`. Needs a different harness and something
-promoted.
+promoted; both promoted skills were cleared to give the threshold a clean run.
 
 **Above the budget.** 72% of real increments exceed ~30k tokens; `big` sits at
 16k. Whether `prepare-session` truncates or floods at 2× that is unknown.
@@ -239,30 +294,30 @@ chance if it recurs. Not built. Consequence, accepted: nothing records the
 rejection, so the same thing can be proposed again immediately — at `1×` it
 sorts to the bottom, and `reviews/<session>.md` still holds the original.
 
-**A promoted skill's file goes stale, and updating it is deliberately deferred.**
-Measured after the promoted-match test: the store held `seen 2×`, both sessions
-and a seven-section merged body, while the live
-`~/.claude/skills/<name>/SKILL.md` still read `seen: 1`, `["recurrence-a"]` and a
-single paragraph. `record-candidate --matches` updates the store only, and
-`promote()` refuses a second promotion, so **everything learned after promotion
-accumulates where no agent reads it.** The store gets smarter; the skill does not.
+**A promoted skill's file goes stale, and refreshing it is deferred.** A match
+logs a sighting and nothing else — the stored body is what the *first*
+occurrence taught, and later accounts live in their own `reviews/<session>.md`.
+So a procedure can recur ten times and neither the entry nor the promoted
+SKILL.md learns anything from nine of them. Deliberate: the alternative is a
+body rewritten on every match, which is exactly the write pattern that
+corrupted the old store.
 
-Not a truncation bug in `promote-candidate` — it writes `entry.body.strip()`
-verbatim (`cli.py`, in `cmd_promote_candidate`). **Unexplained, and worth a look
-before building the refresh:** A's review recorded five `##` sections, yet the
-promoted file has only A's opening paragraph. Either the store body at promotion
-time was already just that paragraph, or something between the review and the
-store dropped the sections. Do not build a refresh path on the assumption the
-merge is sound until that is understood.
+Explained, and now closed: the earlier note here called it *unexplained* that a
+review recording five `##` sections produced a promoted file holding only the
+opening paragraph. That was the `SECTION_HEAD` parser ending an entry at the
+next `##`. It is gone with the document, and a test pins bodies with sections
+through a round trip.
 
-Same mechanism as the earlier observation about a promoted skill omitting the
-venv bootstrap and grid overlay — two instances now, so it is a pattern.
+When the refresh is picked up, the question is not mechanical (`--force`
+exists) but whether a skill's text may change under the developer without
+review, which cuts against "promoting one is a separate deliberate act". Middle
+option: flag drift in `/review-candidates` and let a person refresh.
 
-Decided: **skip for now.** When it is picked up, the real question is not
-mechanical (`--force` already exists) but whether a skill's text may change
-under the developer without review, which cuts against "promoting one is a
-separate deliberate act". A middle option is to flag drift in
-`/review-candidates` and let a person refresh.
+**The store on this machine is deliberately empty of promotions.** Both promoted
+skills were test artifacts and were cleared, along with
+`PATTERNS.md.superseded`, so the threshold gets a clean run. Three candidates
+remain (`x2`, `x2`, `x1`); nothing reaches the queue until something hits `x3`.
+Cold-discovery testing is blocked until something is promoted again.
 
 **Automatic triggering is deferred, not rejected.** The `SessionEnd` hook still
 enqueues to `ended-sessions.jsonl` and nothing drains it — deliberately, since
