@@ -1,8 +1,6 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, pushed through `4c629f8`. **Uncommitted:**
-six more eval cases, the streamed-output change, and `SKILLPP_SKILLS_DIR`
-(`skillpp/config.py`, `tests/evals/*`, `tests/test_skillpp.py` — +333/−11).
+Branch: `feat/pattern-detection`, clean tree, pushed through `6572b44`.
 **167 tests pass:** `python3 -m unittest discover -s tests -q`.
 **13 evals**, of which six are verified since the last full run — see *Testing*.
 `python3 tests/evals/run.py` spends a real model call per case, so run
@@ -77,13 +75,10 @@ failure cannot recur.
 The same ambiguous-delimiter mistake then appeared a second time in the rewrite
 (`text.split("\n---\n", 2)[-1]`, breaking on a body containing a horizontal
 rule). **Assume a third.** Anchor the match; never take the last split.
-- **The bookmark moved into `reviews/`.** Each review records `last_message` and
+- **The bookmark lives in `reviews/`.** Each review records `last_message` and
   `last_timestamp`, so there is no third place for state to live and disagree.
   A session that proposes nothing still writes one, or its messages are read
   again forever.
-- **The bookmark lives in `reviews/`**, so there is no third place for state to
-  disagree. A session that proposes nothing still writes one, or its messages
-  are read again forever.
 - **Status:** `candidate → promoted`, from the last decision logged.
 - **A threshold, `memory.THRESHOLD = 3`.** Below it a recording is a log entry,
   not a question: `--open-only` filters on it and `/review-candidates` never
