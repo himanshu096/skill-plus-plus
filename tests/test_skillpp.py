@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1457,6 +1459,28 @@ class TestPrepare(TempRoot):
                               config=self.config))
         self.assertIn("what-we-learned", text)
         self.assertIn("New in this session", text)
+
+
+class TestSkillsDirRedirect(unittest.TestCase):
+    """The one write that leaves the root has to be redirectable too."""
+
+    def test_the_environment_wins_over_both_defaults(self):
+        # Without this, an eval pointing SKILLPP_ROOT at a scratch directory
+        # still promoted into the developer's real ~/.claude/skills.
+        from skillpp.config import default_skills_dir
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.dict(os.environ,
+                                          {"SKILLPP_SKILLS_DIR": tmp}):
+                self.assertEqual(default_skills_dir(), Path(tmp))
+
+    def test_without_it_the_project_directory_still_wins(self):
+        from skillpp.config import default_skills_dir
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / ".claude" / "skills"
+            local.mkdir(parents=True)
+            with unittest.mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("SKILLPP_SKILLS_DIR", None)
+                self.assertEqual(default_skills_dir(tmp), local)
 
 
 class TestReviewThreshold(TempRoot):

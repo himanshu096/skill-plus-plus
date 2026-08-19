@@ -131,7 +131,16 @@ class Config:
 
 
 def default_skills_dir(cwd: str | Path | None = None) -> Path:
-    """Project-local skills directory, falling back to the personal one."""
+    """Project-local skills directory, falling back to the personal one.
+
+    ``SKILLPP_SKILLS_DIR`` overrides both. Without it this module's promise
+    that everything is redirectable by environment stopped one step short of
+    the only command that writes outside the root: pointing ``SKILLPP_ROOT`` at
+    a scratch directory still left a promotion landing in the real
+    ``~/.claude/skills``.
+    """
+    if os.environ.get("SKILLPP_SKILLS_DIR"):
+        return Path(os.environ["SKILLPP_SKILLS_DIR"]).expanduser()
     base = Path(cwd) if cwd else Path.cwd()
     project = base / ".claude" / "skills"
     if project.exists():
