@@ -1,7 +1,7 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, one commit ahead at `9e8e907` plus uncommitted
-work described below. **168 tests pass:** `python3 -m unittest discover -s tests -q`.
+Branch: `feat/pattern-detection`, clean tree. The work an earlier revision of this
+document described as uncommitted is committed (`c737017` and later). **168 tests pass:** `python3 -m unittest discover -s tests -q`.
 No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
 Invoke the CLI as `python3 bin/skillpp`.
 
@@ -169,6 +169,7 @@ Four, all silent, none caught by the suite:
 | count merge | `seen 2×`, both sessions listed |
 | body merge | every rule from both occurrences present |
 | `/review-candidates` | showed it, asked, promoted with a written description |
+| **a match against an already-promoted entry** | **`--matches` reached for; stayed promoted, `seen 2×`, both sessions, bodies merged** |
 
 `tests/fixtures/seed_recurrence.py` builds two snapshots of one conversation
 doing the same procedure twice, the second hitting an obstacle the first did
@@ -177,11 +178,6 @@ not. It tests what unit tests cannot — whether the model *reaches for*
 Regenerate its `.jsonl` output; it is gitignored.
 
 ### Not yet tested — start here
-
-**Does a promoted skill stop being re-proposed?** `prepare-session` does put the
-`## Made into skills` section in the prompt, so the model can see it. Whether it
-*uses* it is unverified. Needs a session doing work already promoted. **This is
-the difference between a tool that learns and one that nags.**
 
 **Body quality across several candidates.** The one promoted skill so far says
 *don't regenerate, edit the pixels* but omits the venv bootstrap, the grid
@@ -207,9 +203,30 @@ the store keeps claiming it exists and the procedure is never re-proposed.
 **No `expire`.** Candidates never decay. Dates are recorded, so this is
 buildable whenever volume warrants.
 
-**Re-promotion is blocked.** `promote()` refuses to promote twice, which is right
-in general but means a description cannot be fixed by re-running
-`promote-candidate --force`. Small rough edge.
+**A promoted skill's file goes stale, and updating it is deliberately deferred.**
+Measured after the promoted-match test: the store held `seen 2×`, both sessions
+and a seven-section merged body, while the live
+`~/.claude/skills/<name>/SKILL.md` still read `seen: 1`, `["recurrence-a"]` and a
+single paragraph. `record-candidate --matches` updates the store only, and
+`promote()` refuses a second promotion, so **everything learned after promotion
+accumulates where no agent reads it.** The store gets smarter; the skill does not.
+
+Not a truncation bug in `promote-candidate` — it writes `entry.body.strip()`
+verbatim (`cli.py`, in `cmd_promote_candidate`). **Unexplained, and worth a look
+before building the refresh:** A's review recorded five `##` sections, yet the
+promoted file has only A's opening paragraph. Either the store body at promotion
+time was already just that paragraph, or something between the review and the
+store dropped the sections. Do not build a refresh path on the assumption the
+merge is sound until that is understood.
+
+Same mechanism as the earlier observation about a promoted skill omitting the
+venv bootstrap and grid overlay — two instances now, so it is a pattern.
+
+Decided: **skip for now.** When it is picked up, the real question is not
+mechanical (`--force` already exists) but whether a skill's text may change
+under the developer without review, which cuts against "promoting one is a
+separate deliberate act". A middle option is to flag drift in
+`/review-candidates` and let a person refresh.
 
 **Automatic triggering is deferred, not rejected.** The `SessionEnd` hook still
 enqueues to `ended-sessions.jsonl` and nothing drains it — deliberately, since
