@@ -1648,3 +1648,145 @@ class TestAppendOnlyStore(TempRoot):
         out = memory.render(memory.load(self.config))
         self.assertIn("## Second rule", out)
         self.assertIn("**seen 1×** · s1", out)
+
+
+class TestTheAcceptPath(TempRoot):
+    """What happens after a person answers "make it a skill".
+
+    Everything before this was covered: which candidates the queue offers, and
+    that nothing is written before an answer exists. The answer itself was not,
+    because it arrives through ``AskUserQuestion`` and an eval cannot press the
+    button. So the eval stops at the question and this starts one step later,
+    at the command the answer triggers -- which is deterministic, and until now
+    was the only part of the whole flow with no test at all.
+
+    The invariant that matters most here: promotion is the one operation that
+    writes *outside* the store, and it must still not rewrite anything inside
+    it. An accepted candidate keeps its file, byte for byte.
+    """
+
+    BODY = ("Read the intake spec first — required fields change.\n\n"
+            "## Search before filing\n\n"
+            "Search by the stack-trace signature, not the title.\n\n"
+            "---\n\n"
+            "## Link, do not duplicate\n\n"
+            "Attach the thread to the existing issue.")
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.skills = self.root / "skills"
+        self.entry_file = memory.add_entry(
+            self.config, name="filing-a-bug", body=self.BODY)
+        for n in range(3):
+            memory.add_occurrence(self.config, name="filing-a-bug",
+                                  session=f"s{n}")
+
+    def promote(self, *extra: str) -> int:
+        from skillpp.cli import main
+        return main(["--root", str(self.config.root), "promote-candidate",
+                     "filing-a-bug", "--skills-dir", str(self.skills), *extra])
+
+    @property
+    def skill(self) -> Path:
+        return self.skills / "filing-a-bug" / "SKILL.md"
+
+    def _decisions(self) -> list[dict]:
+        path = self.config.decisions_file
+        if not path.exists():
+            return []
+        return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+
+    def test_accepting_writes_the_skill_and_logs_one_decision(self):
+        self.assertEqual(self.promote(), 0)
+        self.assertTrue(self.skill.is_file())
+        decisions = self._decisions()
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0]["action"], memory.PROMOTED)
+        self.assertEqual(decisions[0]["skill_path"], str(self.skill))
+
+    def test_the_body_survives_promotion_intact(self):
+        # The old store cut a body at its first `##`, and a `---` inside one
+        # was read as a frontmatter delimiter. A skill written from a truncated
+        # body is the artifact that actually gets committed, so this is where
+        # that class of bug would have done its damage.
+        self.promote()
+        text = self.skill.read_text()
+        self.assertIn("## Search before filing", text)
+        self.assertIn("## Link, do not duplicate", text)
+        self.assertIn("Attach the thread to the existing issue.", text)
+
+    def test_when_to_use_reaches_the_frontmatter(self):
+        # The field discovery actually reads. Absent, the skill is on disk and
+        # never fires, which looks identical to it not existing.
+        self.promote("--when-to-use", "a customer reports a bug")
+        front = self.skill.read_text().split("\n---\n")[0]
+        self.assertIn("when_to_use:", front)
+        self.assertIn("a customer reports a bug", front)
+
+    def test_no_when_to_use_means_no_empty_field(self):
+        self.promote()
+        self.assertNotIn("when_to_use:", self.skill.read_text())
+
+    def test_accepting_does_not_touch_the_entry_file(self):
+        before, mtime = self.entry_file.read_bytes(), \
+            self.entry_file.stat().st_mtime_ns
+        self.promote()
+        self.assertEqual(self.entry_file.read_bytes(), before)
+        self.assertEqual(self.entry_file.stat().st_mtime_ns, mtime)
+
+    def test_the_entry_becomes_promoted_without_losing_its_count(self):
+        self.promote()
+        entry = memory.find(memory.load(self.config), "filing-a-bug")
+        self.assertEqual(entry.status, memory.PROMOTED)
+        self.assertEqual(entry.count, 3)
+        self.assertEqual(entry.body, self.BODY)
+
+    def test_a_promoted_candidate_leaves_the_review_queue(self):
+        self.promote()
+        waiting = [e.name for e in memory.reviewable(memory.load(self.config))]
+        self.assertNotIn("filing-a-bug", waiting)
+
+    def test_promoting_twice_refuses_rather_than_overwriting(self):
+        self.promote()
+        self.skill.write_text("edited by hand\n")
+        self.assertEqual(self.promote(), 1)
+        self.assertEqual(self.skill.read_text(), "edited by hand\n")
+        # And no second decision: a refused promotion that still logged one
+        # would report a skill written at a path holding something else.
+        self.assertEqual(len(self._decisions()), 1)
+
+    def test_a_failed_write_logs_no_decision(self):
+        # The ordering the command's docstring promises. A decision claiming a
+        # skill exists when the file was never written is the worse failure:
+        # nothing proposes the procedure again, so the loss is permanent.
+        #
+        # The OSError here is unhandled -- an unwritable skills directory exits
+        # with a traceback rather than a message. Pinned rather than endorsed:
+        # what this asserts is that the store stays clean either way.
+        blocked = self.root / "blocked"
+        blocked.write_text("not a directory\n")
+        with self.assertRaises(OSError):
+            from skillpp.cli import main
+            main(["--root", str(self.config.root), "promote-candidate",
+                  "filing-a-bug", "--skills-dir", str(blocked / "skills")])
+        self.assertEqual(self._decisions(), [])
+
+    def test_the_skills_dir_env_var_is_honoured(self):
+        # Without this the eval harness cannot sandbox promotion, and a case
+        # that wrongly accepts lands a SKILL.md in the developer's real
+        # ~/.claude/skills.
+        from skillpp.cli import main
+        elsewhere = self.root / "by-env"
+        with unittest.mock.patch.dict(
+                os.environ, {"SKILLPP_SKILLS_DIR": str(elsewhere)}):
+            self.assertEqual(main(["--root", str(self.config.root),
+                                   "promote-candidate", "filing-a-bug"]), 0)
+        self.assertTrue((elsewhere / "filing-a-bug" / "SKILL.md").is_file())
+
+    def test_accepting_something_that_is_not_there_writes_nothing(self):
+        from skillpp.cli import main
+        self.assertEqual(main(["--root", str(self.config.root),
+                               "promote-candidate", "no-such-candidate",
+                               "--skills-dir", str(self.skills)]), 1)
+        self.assertFalse(self.skills.exists())
+        self.assertEqual(self._decisions(), [])
