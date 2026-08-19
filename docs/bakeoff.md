@@ -12,6 +12,7 @@ one's fixtures.
 | Cost per session | one model call | none |
 | Runs unattended | no — someone types `/log-session` | yes |
 | Needs an API key | yes | no |
+| Shortest session it will look at | 25 new messages | any size |
 
 The last three rows are the capture branch's case, and they are not small. What
 follows is only about accuracy.
@@ -159,7 +160,11 @@ on every real pair.
    rather than tuned — folding at each passed gate is what `Stop` is for.
 
 **What that branch wins, and it is not small:** no model call, no latency, no
-API key, and it runs unattended. This branch costs one frontier call per
+API key, it runs unattended, and it will look at a session of any length. This
+branch declines anything under 25 new messages, because a small increment is
+not worth a model call — the messages are not lost, but they wait. On a real
+session that rarely bites; on a short one, that branch covers ground this one
+does not. This branch costs one frontier call per
 session and only runs when a person types `/log-session`. The end state that
 follows from both columns is that branch's trigger with this branch's judgement
 — not a merge of two detectors.
@@ -188,5 +193,12 @@ review has nothing to look at. That failure is final.
   symmetric round and the only thing that could still overturn the verdict: if
   this branch also fragments `refine` or misses the recurrence in `recurs`, the
   gap is smaller than stated. Needs model calls.
+
+  First attempt returned 0/6 and none of it was about detection: all six
+  fixtures were built to that branch's span budgets, which put every one of them
+  under this branch's 25-message floor, so `prepare-session` correctly answered
+  "stop" and the model was never asked. The floor is now overridable
+  (`SKILLPP_MIN_NEW`) and the six cases set it, since an eval is the one caller
+  that means to pay the cost of a small session.
 - This branch's original 13 cases as one sweep. Six were verified after the
   last prompt change; the other seven are older than the current command file.

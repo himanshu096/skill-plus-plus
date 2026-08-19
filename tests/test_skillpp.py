@@ -1790,3 +1790,28 @@ class TestTheAcceptPath(TempRoot):
                                "--skills-dir", str(self.skills)]), 1)
         self.assertFalse(self.skills.exists())
         self.assertEqual(self._decisions(), [])
+
+
+class TestTheMessageFloor(TempRoot):
+    """The floor is a cost guard, and had to be overridable to be testable.
+
+    It exists so a two-message increment does not spend a model call, and it
+    loses nothing when it fires: the bookmark stays put and those messages
+    arrive with the next batch. But it was a module constant, so a fixture
+    built small on purpose was answered "stop" and the judgement under test was
+    never put to the model at all -- six eval cases failed for that reason and
+    none of them was about detection.
+    """
+
+    def test_the_default_is_unchanged(self):
+        self.assertEqual(Config(self.root / "a").min_new_messages,
+                         MIN_NEW_MESSAGES)
+
+    def test_the_environment_can_lower_it(self):
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_MIN_NEW": "1"}):
+            self.assertEqual(Config(self.root / "b").min_new_messages, 1)
+
+    def test_nonsense_falls_back_to_the_default(self):
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_MIN_NEW": "many"}):
+            self.assertEqual(Config(self.root / "c").min_new_messages,
+                             MIN_NEW_MESSAGES)

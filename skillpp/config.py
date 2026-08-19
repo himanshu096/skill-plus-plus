@@ -12,6 +12,10 @@ from pathlib import Path
 
 DEFAULT_ROOT = Path.home() / ".claude" / "skillpp"
 
+# The messages are never lost when a run is skipped for being too small:
+# the bookmark does not advance, so they arrive with the next batch.
+MIN_NEW_MESSAGES = 25
+
 
 def _int_env(name: str, default: int) -> int:
     try:
@@ -49,6 +53,12 @@ class Config:
         self.max_field_chars = _int_env("SKILLPP_MAX_FIELD", 2000)
         # Never ask the developer more than this many questions (README 4).
         self.max_questions = _int_env("SKILLPP_MAX_QUESTIONS", 3)
+        # Below this many new messages a review is not worth its fixed cost.
+        # Overridable because it is a cost guard rather than a judgement: an
+        # eval deliberately pays that cost on a small session, and until this
+        # was here it could not, so a short fixture returned "stop" and the
+        # detection question was never put to the model at all.
+        self.min_new_messages = _int_env("SKILLPP_MIN_NEW", MIN_NEW_MESSAGES)
 
     @property
     def ledger_dir(self) -> Path:

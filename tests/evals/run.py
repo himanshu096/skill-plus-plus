@@ -116,6 +116,13 @@ class Case:
     tools: str = "Bash(python3 bin/skillpp *)"
     denials_expected: bool = False
     bookmarks: bool = True
+    # Lowers the new-message floor for this case. That floor is a cost guard --
+    # a small increment is not worth a model call, and the messages are not
+    # lost because the bookmark does not advance. An eval is the one caller
+    # that deliberately pays the cost, so a fixture built small on purpose
+    # would otherwise be answered "stop" without the judgement ever being put
+    # to the model. Only set it where the fixture is small by design.
+    min_messages: int | None = None
     check_run: Callable[[Path, str, list[dict]], str | None] | None = None
 
 
@@ -471,18 +478,21 @@ CASES = [
          asks="one procedure refined across two requests, its way",
          breaks="a procedure that took two requests is recorded as two",
          transcripts=lambda out: [_their("refine", out)],
+         min_messages=1,
          check=_records_something),
     Case("their-retry",
          asks="a migration that failed on a lock, then passed",
          breaks="the failure is recorded as something that happened rather "
                 "than as the rule that stops it happening again",
          transcripts=lambda out: [_their("retry", out)],
+         min_messages=1,
          check=_kept_the_lock_rule),
     Case("their-distinct",
          asks="two tasks back to back, separated by 'lgtm'",
          breaks="given every boundary signal there is, they still merge or "
                 "fragment",
          transcripts=lambda out: [_their("distinct-tasks", out)],
+         min_messages=1,
          check=_two_procedures),
     Case("their-explore",
          asks="eight greps then a one-line fix, committed",
@@ -492,17 +502,20 @@ CASES = [
          # branch is right to bank a finished mutation here, and this one is
          # right to record nothing. See their_scenarios.explore_then_fix.
          transcripts=lambda out: [_their("explore-then-fix", out)],
+         min_messages=1,
          check=_recorded_nothing),
     Case("their-mid",
          asks="six reads and no conclusion — the one both designs agree on",
          breaks="an abandoned investigation becomes a candidate",
          transcripts=lambda out: [_their("mid-investigation", out)],
+         min_messages=1,
          check=_recorded_nothing),
     Case("their-recurs",
          asks="the same rollout run twice in one session, two services",
          breaks="an identical procedure repeated does not count as a "
                 "recurrence, so no threshold is ever reached",
          transcripts=lambda out: [_their("recurs", out)],
+         min_messages=1,
          check=_matched_itself),
     Case("barren",
          asks="a long session of ordinary git work",
@@ -559,6 +572,8 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
     # SKILL.md in the developer's real ~/.claude/skills.
     env = {**os.environ, "SKILLPP_ROOT": str(root),
            "SKILLPP_SKILLS_DIR": str(root / "skills")}
+    if case.min_messages is not None:
+        env["SKILLPP_MIN_NEW"] = str(case.min_messages)
     said, why = [], ""
     for path in case.transcripts(root) or [None]:
         prompt = f"{case.command} {path}".strip() if path else case.command

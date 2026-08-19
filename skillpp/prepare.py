@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import Config
+from .config import MIN_NEW_MESSAGES as _MIN_NEW_MESSAGES, Config
 from .extract import extract
 from .identity import conversation_id
 from .lifecycle import parse_frontmatter
@@ -50,10 +50,10 @@ from .transcript import Message, read
 
 PROJECTS = Path.home() / ".claude" / "projects"
 
-# Below this many new messages a run is not worth its fixed cost: loading the
-# context dominates, and the messages are not lost -- the bookmark does not
-# advance, so they arrive in the next run instead.
-MIN_NEW_MESSAGES = 25
+# Re-exported from config, where every other threshold lives and where this
+# one is read from the environment. Kept importable under this name because it
+# is what the tests assert the default against.
+MIN_NEW_MESSAGES = _MIN_NEW_MESSAGES
 
 
 class TranscriptNotFound(FileNotFoundError):
@@ -83,7 +83,7 @@ class Prepared:
 
     @property
     def has_enough(self) -> bool:
-        return len(self.new_messages) >= MIN_NEW_MESSAGES
+        return len(self.new_messages) >= self.config.min_new_messages
 
 
 def project_slug(cwd: str | Path | None = None) -> str:
@@ -255,7 +255,8 @@ def render(prepared: Prepared) -> str:
     if not prepared.has_enough:
         return "\n".join(head + [
             "", f"Only {len(prepared.new_messages)} new messages, below the "
-            f"{MIN_NEW_MESSAGES} needed to be worth a review. Stop here and "
+            f"{prepared.config.min_new_messages} needed to be worth a "
+            f"review. Stop here and "
             f"write nothing — they stay unread and will arrive with the next "
             f"batch."])
 
