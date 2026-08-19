@@ -22,7 +22,8 @@ from skillpp.signals import detect, effects
 from skillpp.summary import check_dependencies, scaffold_skill
 from skillpp.extract import extract
 from skillpp.identity import NoConversationError, conversation_id
-from skillpp.memory import Candidate, parse, upsert
+from skillpp.memory import (CANDIDATE, PROMOTED, Candidate, find,
+                            parse, promote, upsert)
 from skillpp.memory import render as render_memory
 from skillpp.prepare import (MIN_NEW_MESSAGES, TranscriptNotFound,
                                      commit, prepare, project_slug, record,
@@ -1236,14 +1237,15 @@ class TestPrepare(TempRoot):
 
     def test_first_run_offers_everything(self):
         prepared = self.prep(self.session(*self.many(30)))
-        self.assertTrue(prepared.is_first_run)
         self.assertEqual(len(prepared.new_messages), 30)
-        self.assertIn("not been reviewed before", render(prepared))
+        self.assertIn("Nothing has been recorded yet", render(prepared))
 
-    def test_conversation_id_names_the_memory_file(self):
+    def test_every_session_writes_into_one_store(self):
+        # Counts only mean anything when every session pools into the same
+        # place; a store per conversation leaves everything at one occurrence.
         prepared = self.prep(self.session(*self.many(30)))
-        self.assertEqual(prepared.memory_path.name, f"{prepared.conversation}.md")
-        self.assertEqual(prepared.memory_path.parent, self.config.conversations_dir)
+        self.assertEqual(prepared.config.patterns_file.name, "PATTERNS.md")
+        self.assertEqual(prepared.review_path.name, f"{prepared.session}.md")
 
     # -- the floor -------------------------------------------------------
 
@@ -1271,8 +1273,7 @@ class TestPrepare(TempRoot):
         second = prepare(str(self.session(*self.many(45), name="b.jsonl")),
                          config=self.config)
         self.assertEqual(len(second.new_messages), 15)
-        self.assertFalse(second.is_first_run)
-        self.assertIn("filing-a-ticket", second.memory)
+        self.assertIn("filing-a-ticket", second.patterns)
 
     def test_rerunning_the_same_transcript_offers_nothing(self):
         path = self.session(*self.many(30))
@@ -1321,13 +1322,26 @@ class TestPrepare(TempRoot):
 
     # -- recording and committing ----------------------------------------
 
-    def test_commit_writes_the_watermark(self):
+    def test_commit_writes_the_bookmark_into_the_review(self):
         prepared = self.prep(self.session(*self.many(30)))
-        text = self.review(prepared, ("filing-a-ticket", "Check the spec.")).read_text()
-        self.assertIn("### filing-a-ticket", text)
-        self.assertIn(f"conversation: {prepared.conversation}", text)
-        self.assertIn(f"last_message: {prepared.new_messages[-1].uuid}", text)
-        self.assertIn("last_timestamp: 2026-08-17T09:29", text)
+        review = self.review(prepared, ("filing-a-ticket", "Check the spec.")).read_text()
+        self.assertIn(f"conversation: {prepared.conversation}", review)
+        self.assertIn(f"last_message: {prepared.new_messages[-1].uuid}", review)
+        self.assertIn("last_timestamp: 2026-08-17T09:29", review)
+        self.assertIn("## filing-a-ticket", review)
+        # The candidate itself lives in the shared store, not the review.
+        self.assertIn("### filing-a-ticket",
+                      self.config.patterns_file.read_text())
+
+    def test_a_barren_session_still_leaves_a_bookmark(self):
+        # Without one its messages are read again forever, and "reviewed,
+        # found nothing" is the only evidence the filter is not too strict.
+        prepared = self.prep(self.session(*self.many(30)))
+        commit(prepared)
+        review = prepared.review_path.read_text()
+        self.assertIn("No candidate found", review)
+        self.assertIn(f"last_message: {prepared.new_messages[-1].uuid}", review)
+        self.assertEqual(len(self.prep(self.session(*self.many(30))).new_messages), 0)
 
     def test_two_sessions_sharing_a_prefix_count_separately(self):
         # A truncated session id silently merged these: the second was read as
@@ -1338,7 +1352,7 @@ class TestPrepare(TempRoot):
         second = prepare(str(self.session(*self.many(60), name="recurrence-b.jsonl")),
                          config=self.config)
         record(second, name="filing", body="one and two", matches="filing")
-        entries = parse(second.memory)
+        entries = parse(second.patterns)
         self.assertEqual(entries[0].count, 2)
         self.assertEqual(entries[0].sessions,
                          ["recurrence-a", "recurrence-b"])
@@ -1352,7 +1366,7 @@ class TestPrepare(TempRoot):
 
     def test_commit_leaves_no_temporary_file(self):
         self.review(self.prep(self.session(*self.many(30))), ("x", "body"))
-        self.assertEqual(list(self.config.conversations_dir.glob("*.tmp")), [])
+        self.assertEqual(list(self.config.reviews_dir.glob("*.tmp")), [])
 
     def test_a_later_session_cannot_drop_an_earlier_candidate(self):
         """The reason the model no longer rewrites the whole document.
@@ -1364,9 +1378,10 @@ class TestPrepare(TempRoot):
         self.review(first, ("filing-a-ticket", "one"), ("merging", "two"))
         second = prepare(str(self.session(*self.many(60), name="b.jsonl")),
                          config=self.config)
-        text = self.review(second, ("something-else", "three")).read_text()
+        self.review(second, ("something-else", "three"))
+        store = self.config.patterns_file.read_text()
         for name in ("filing-a-ticket", "merging", "something-else"):
-            self.assertIn(f"### {name}", text)
+            self.assertIn(f"### {name}", store)
 
     # -- the review record -----------------------------------------------
 
@@ -1411,17 +1426,17 @@ class TestPrepare(TempRoot):
                          config=self.config)
         record(second, name="filing", body="both accounts combined",
                matches="filing")
-        self.assertIn("both accounts combined", second.memory)
-        self.assertNotIn("the first account", second.memory)
+        self.assertIn("both accounts combined", second.patterns)
+        self.assertNotIn("the first account", second.patterns)
         self.assertIn("the first account", self.review_file(first).read_text())
 
-    def test_render_carries_the_memory_and_the_new_work(self):
+    def test_render_carries_the_store_and_the_new_work(self):
         first = self.prep(self.session(*self.many(30), name="a.jsonl"))
         self.review(first, ("what-we-learned", "Check the spec page first."))
         text = render(prepare(str(self.session(*self.many(60), name="b.jsonl")),
                               config=self.config))
         self.assertIn("what-we-learned", text)
-        self.assertIn("New since the last review", text)
+        self.assertIn("New in this session", text)
 
 
 class TestMemory(unittest.TestCase):
@@ -1489,6 +1504,85 @@ class TestMemory(unittest.TestCase):
         entries = upsert(self.doc(("old-name", ["a1"])), name="new-name",
                          body="b", session="b2", matches="old-name")
         self.assertEqual(parse(render_memory(entries))[0].aliases, ["old-name"])
+
+    # -- status ----------------------------------------------------------
+
+    def test_a_new_candidate_starts_undecided(self):
+        entries = self.doc(("filing", ["a1"]))
+        self.assertEqual(entries[0].status, CANDIDATE)
+        self.assertEqual(entries[0].skill_path, "")
+
+    def test_promoting_moves_an_entry_without_touching_its_evidence(self):
+        # The count and provenance are *why* it was promoted; losing them
+        # would erase the case for a skill the moment it becomes one.
+        entries = self.doc(("filing", ["a1", "b2", "c3"]))
+        entries = promote(entries, "filing", skill_path="/s/filing/SKILL.md",
+                          today="2026-08-19")
+        entry = entries[0]
+        self.assertEqual(entry.status, PROMOTED)
+        self.assertEqual(entry.skill_path, "/s/filing/SKILL.md")
+        self.assertEqual(entry.promoted_on, "2026-08-19")
+        self.assertEqual(entry.count, 3)
+        self.assertEqual(entry.sessions, ["a1", "b2", "c3"])
+
+    def test_promoting_twice_is_refused(self):
+        entries = promote(self.doc(("filing", ["a1"])), "filing",
+                          skill_path="/s/x/SKILL.md")
+        with self.assertRaises(ValueError):
+            promote(entries, "filing", skill_path="/s/y/SKILL.md")
+
+    def test_promoting_something_absent_raises(self):
+        with self.assertRaises(KeyError):
+            promote([], "nothing-here", skill_path="/s/x")
+
+    def test_promoting_by_an_old_name_works(self):
+        entries = self.doc(("original", ["a1"]))
+        entries = upsert(entries, name="renamed", body="b", session="b2",
+                         matches="original")
+        entries = promote(entries, "original", skill_path="/s/renamed/SKILL.md")
+        self.assertEqual(entries[0].status, PROMOTED)
+
+    def test_a_promoted_entry_stays_promoted_when_it_recurs(self):
+        # The procedure happening again is evidence the skill earns its place,
+        # not a reason to put it back in the queue.
+        entries = promote(self.doc(("filing", ["a1"])), "filing",
+                          skill_path="/s/filing/SKILL.md")
+        entries = upsert(entries, name="filing", body="sharper", session="b2",
+                         matches="filing")
+        self.assertEqual(entries[0].status, PROMOTED)
+        self.assertEqual(entries[0].count, 2)
+
+    def test_candidates_sort_above_promoted(self):
+        entries = self.doc(("rare", ["a1"]), ("common", ["a1", "b2", "c3"]))
+        entries = promote(entries, "common", skill_path="/s/c")
+        self.assertEqual([c.name for c in entries], ["rare", "common"])
+
+    def test_status_survives_a_round_trip(self):
+        entries = promote(self.doc(("filing", ["a1", "b2"])), "filing",
+                          skill_path="/s/filing/SKILL.md", today="2026-08-19")
+        reparsed = parse(render_memory(entries))
+        self.assertEqual(reparsed[0].status, PROMOTED)
+        self.assertEqual(reparsed[0].skill_path, "/s/filing/SKILL.md")
+        self.assertEqual(reparsed[0].promoted_on, "2026-08-19")
+        self.assertEqual(reparsed[0].count, 2)
+
+    def test_dates_survive_a_round_trip(self):
+        entries = upsert([], name="filing", body="b", session="a1",
+                         today="2026-08-01")
+        entries = upsert(entries, name="filing", body="b", session="b2",
+                         matches="filing", today="2026-08-19")
+        reparsed = parse(render_memory(entries))[0]
+        self.assertEqual(reparsed.first_seen, "2026-08-01")
+        self.assertEqual(reparsed.last_seen, "2026-08-19")
+
+    def test_an_entry_does_not_swallow_the_next_section(self):
+        # The last entry of a group ends at the heading that follows it, not
+        # at the next `###` — otherwise its body absorbs "## Made into skills".
+        entries = promote(self.doc(("open-one", ["a1"]), ("done-one", ["b2"])),
+                          "done-one", skill_path="/s/x")
+        reparsed = parse(render_memory(entries))
+        for entry in reparsed:
+            self.assertNotIn("##", entry.body)
 
     def test_an_empty_document_parses_to_nothing(self):
         self.assertEqual(parse(""), [])

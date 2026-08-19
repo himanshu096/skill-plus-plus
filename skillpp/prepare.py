@@ -4,10 +4,27 @@ Resolving the transcript, working out which conversation it belongs to, finding
 what is new since last time, and compressing that down. All of it has exactly
 one right answer, and all of it fails *silently* when a model improvises it
 instead -- a slightly different slice re-counts work already recorded, a
-slightly different id opens a second memory file for the same conversation.
+slightly different id reads a conversation from its beginning again.
 
 So it lives here, and the skill that calls this is left with the one job that
 genuinely needs judgement: deciding what in the session is worth keeping.
+
+Two files, and only two. ``PATTERNS.md`` is the store: every candidate ever
+proposed, counted and ordered, shared by every conversation. Each review also
+leaves ``reviews/<session-id>.md``, holding what that session proposed *and*
+how far it read.
+
+There is deliberately no per-conversation document. An earlier design had one,
+which meant a candidate's count could only rise when a single conversation
+repeated a whole procedure -- and 82% of conversations here are a single
+session, so counts sat at 1 and the ordering they were meant to drive did
+nothing. Pooling every session into one store is what makes recurrence visible.
+
+The conversation id survives that simplification, but only as a bookmark. A
+resumed session's transcript contains the entire earlier history again --
+measured here, 117 transcript files for 77 conversations -- so a watermark keyed
+on the session would read those messages as new every time and record the same
+work twice.
 
 The output is written to be read by a model, not parsed: it goes straight into
 a prompt via a `` !`command` `` substitution, so "there is nothing to do" has to
@@ -23,15 +40,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Config
-from .lifecycle import parse_frontmatter
 from .extract import extract
 from .identity import conversation_id
+from .lifecycle import parse_frontmatter
 from .transcript import Message, read
 
 PROJECTS = Path.home() / ".claude" / "projects"
 
 # Below this many new messages a run is not worth its fixed cost: loading the
-# context dominates, and the messages are not lost -- the watermark does not
+# context dominates, and the messages are not lost -- the bookmark does not
 # advance, so they arrive in the next run instead.
 MIN_NEW_MESSAGES = 25
 
@@ -47,16 +64,19 @@ class Prepared:
     transcript: Path
     conversation: str
     config: Config
-    memory_path: Path
-    memory: str  # the document as it stands, empty on a first run
+    patterns: str  # the store as it stands, empty before anything is recorded
     new_messages: list[Message]
     material: str  # the extracted new work
-    watermark: tuple[str, str] | None  # (uuid, timestamp) to commit afterwards
+    watermark: tuple[str, str] | None  # (uuid, timestamp) to record afterwards
     total_messages: int
 
     @property
-    def is_first_run(self) -> bool:
-        return not self.memory
+    def session(self) -> str:
+        return self.transcript.stem
+
+    @property
+    def review_path(self) -> Path:
+        return self.config.reviews_dir / f"{self.session}.md"
 
     @property
     def has_enough(self) -> bool:
@@ -102,11 +122,39 @@ def resolve(target: str | None = None, cwd: str | Path | None = None) -> Path:
     raise TranscriptNotFound(f"no transcript for '{session}' in {directory}")
 
 
-def _watermark(memory: str) -> tuple[str, str] | None:
-    front = parse_frontmatter(memory)
-    uuid = str(front.get("last_message") or "")
-    stamp = str(front.get("last_timestamp") or "")
-    return (uuid, stamp) if uuid or stamp else None
+# --------------------------------------------------------------------------
+# the bookmark: how far a conversation has been read
+# --------------------------------------------------------------------------
+
+def reviews_for(config: Config, conversation: str) -> list[dict]:
+    """Frontmatter of every review belonging to one conversation."""
+    if not config.reviews_dir.exists():
+        return []
+    out = []
+    for path in sorted(config.reviews_dir.glob("*.md")):
+        try:
+            front = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        if str(front.get("conversation") or "") == conversation:
+            out.append(front)
+    return out
+
+
+def watermark_for(config: Config, conversation: str) -> tuple[str, str] | None:
+    """The furthest point this conversation has been read to.
+
+    Taken from the reviews rather than a store of its own: a review already
+    records which conversation it belongs to, so two more fields make it the
+    bookmark and remove a third place for state to live and disagree.
+    """
+    marks = [(str(f.get("last_message") or ""), str(f.get("last_timestamp") or ""))
+             for f in reviews_for(config, conversation)]
+    marks = [m for m in marks if m[0] or m[1]]
+    if not marks:
+        return None
+    # Furthest, not most recently written: reviews can be run out of order.
+    return max(marks, key=lambda m: m[1])
 
 
 def _slice(messages: list[Message], mark: tuple[str, str] | None) -> list[Message]:
@@ -156,18 +204,17 @@ def prepare(target: str | None = None, config: Config | None = None,
         raise TranscriptNotFound(f"{path} holds no conversation messages")
 
     conversation = conversation_id(messages)
-    memory_path = config.conversations_dir / f"{conversation}.md"
-    memory = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
+    store = config.patterns_file
+    patterns = store.read_text(encoding="utf-8") if store.exists() else ""
 
-    new = _slice(messages, _watermark(memory))
+    new = _slice(messages, watermark_for(config, conversation))
     mark = (new[-1].uuid, new[-1].timestamp) if new else None
 
     return Prepared(
         transcript=path,
         conversation=conversation,
         config=config,
-        memory_path=memory_path,
-        memory=memory,
+        patterns=patterns,
         new_messages=new,
         material=extract(new) if new else "",
         watermark=mark,
@@ -185,7 +232,7 @@ def render(prepared: Prepared) -> str:
     head = [
         f"conversation   {prepared.conversation}",
         f"transcript     {prepared.transcript.name}",
-        f"memory file    {prepared.memory_path}",
+        f"store          {prepared.config.patterns_file}",
         f"new messages   {len(prepared.new_messages)} of {prepared.total_messages}",
     ]
 
@@ -201,110 +248,99 @@ def render(prepared: Prepared) -> str:
             f"write nothing — they stay unread and will arrive with the next "
             f"batch."])
 
-    parts = ["\n".join(head), ""]
-    if prepared.is_first_run:
-        parts += ["# The conversation's memory so far",
-                  "", "This conversation has not been reviewed before.", ""]
-    else:
-        parts += ["# The conversation's memory so far",
-                  "", prepared.memory.strip(), ""]
-    parts += ["# New since the last review", "", prepared.material]
+    parts = ["\n".join(head), "", "# Candidates recorded so far", ""]
+    parts += [prepared.patterns.strip() or "Nothing has been recorded yet.", ""]
+    parts += ["# New in this session", "", prepared.material]
     return "\n".join(parts)
 
 
-def _write(prepared: Prepared, body: str, mark: tuple[str, str] | None,
-           now: datetime | None = None) -> Path:
-    """Rewrite the memory document atomically."""
-    front = ["---", f"conversation: {prepared.conversation}"]
+# --------------------------------------------------------------------------
+# writing
+# --------------------------------------------------------------------------
+
+def _write_atomic(path: Path, body: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".md.tmp")
+    temporary.write_text(body, encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
+def _write_review(prepared: Prepared, proposals: str, *,
+                  mark: tuple[str, str] | None,
+                  now: datetime | None = None) -> Path:
+    """Record what this session proposed, and how far it read.
+
+    Written even when a session proposes nothing. A barren session still has to
+    leave a bookmark or its messages are read again forever -- and "reviewed,
+    found nothing" is worth knowing on its own, being the only evidence of
+    whether the filter is too strict.
+    """
+    front = [
+        "---",
+        f"session: {prepared.session}",
+        f"conversation: {prepared.conversation}",
+    ]
     if mark:
         front += [f"last_message: {mark[0]}", f"last_timestamp: {mark[1]}"]
     front += [f"reviewed: {(now or datetime.now(timezone.utc)).date().isoformat()}",
               "---", ""]
-
-    prepared.memory_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = prepared.memory_path.with_suffix(".md.tmp")
-    temporary.write_text("\n".join(front) + body.strip() + "\n", encoding="utf-8")
-    temporary.replace(prepared.memory_path)
-    return prepared.memory_path
+    body = proposals.strip() or "_No candidate found in this session._"
+    return _write_atomic(prepared.review_path, "\n".join(front) + body + "\n")
 
 
-def _existing_mark(memory: str) -> tuple[str, str] | None:
-    return _watermark(memory)
+def _proposals_in(review: Path) -> str:
+    """The body of an existing review, so a second candidate does not lose it."""
+    if not review.exists():
+        return ""
+    text = review.read_text(encoding="utf-8")
+    match = re.search(r"\n---\n", text)
+    body = text[match.end():] if text.startswith("---") and match else text
+    return "" if body.strip().startswith("_No candidate") else body.strip()
 
 
-def _append_review(prepared: Prepared, config: Config, *, name: str, body: str,
-                   matches: str | None, now: datetime | None = None) -> Path:
-    """Record what this review proposed, in the words it proposed it.
-
-    The conversation memory keeps only the current best description of each
-    procedure, because that is what it is for. This keeps the deliveries: what
-    each session actually said, before it was merged into anything.
-
-    Worth the duplication for two reasons. The prompt producing these is still
-    changing, and a revised one can be re-merged from proposals already judged
-    rather than by re-reading transcripts. And when an entry in the memory
-    looks wrong, this says which session introduced it and what it claimed at
-    the time.
-    """
-    session = prepared.transcript.stem
-    path = config.reviews_dir / f"{session}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not path.exists():
-        stamped = (now or datetime.now(timezone.utc)).date().isoformat()
-        path.write_text("\n".join([
-            "---",
-            f"session: {session}",
-            f"conversation: {prepared.conversation}",
-            f"reviewed: {stamped}",
-            "---",
-            "",
-        ]), encoding="utf-8")
-
-    verdict = f"merged into: {matches}" if matches else "new"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"\n## {name}\n{verdict}\n\n{body.strip()}\n")
-    return path
+def _existing_mark(prepared: Prepared) -> tuple[str, str] | None:
+    front = parse_frontmatter(prepared.review_path.read_text(encoding="utf-8")) \
+        if prepared.review_path.exists() else {}
+    uuid = str(front.get("last_message") or "")
+    stamp = str(front.get("last_timestamp") or "")
+    return (uuid, stamp) if uuid or stamp else None
 
 
 def record(prepared: Prepared, *, name: str, body: str,
            matches: str | None = None, now: datetime | None = None) -> Path:
-    """Fold one proposed skill into the memory. Leaves the watermark alone.
+    """Fold one proposed skill into the store. Leaves the bookmark alone.
 
     Recording a candidate and declaring the session reviewed are separate acts:
-    a session may yield three candidates or none, and the watermark should move
+    a session may yield three candidates or none, and the bookmark should move
     exactly once either way.
     """
     from .memory import parse, render as render_memory, upsert
 
-    # The full stem, never a prefix of it. An earlier version truncated to
-    # eight characters to keep the provenance line short, which silently
-    # merged any two transcripts sharing an opening -- the second was read as
-    # already present, so the count stopped rising and the evidence for a
-    # candidate quietly stalled. Brevity is not worth a wrong count.
-    session = prepared.transcript.stem
-    updated = upsert(parse(prepared.memory), name=name, body=body,
-                     session=session, matches=matches)
-    written = _write(prepared, render_memory(updated),
-                     _existing_mark(prepared.memory), now)
-    prepared.memory = written.read_text(encoding="utf-8")
-    _append_review(prepared, prepared.config, name=name, body=body,
-                   matches=matches, now=now)
+    updated = upsert(parse(prepared.patterns), name=name, body=body,
+                     session=prepared.session, matches=matches)
+    written = _write_atomic(prepared.config.patterns_file,
+                            render_memory(updated).strip() + "\n")
+    prepared.patterns = written.read_text(encoding="utf-8")
+
+    verdict = f"merged into: {matches}" if matches else "new"
+    existing = _proposals_in(prepared.review_path)
+    proposals = f"{existing}\n\n## {name}\n{verdict}\n\n{body.strip()}".strip()
+    # Carries forward whatever mark is already there rather than writing one:
+    # recording is not reviewing, and a mark set now would survive a later
+    # failure as a claim that these messages had been read.
+    _write_review(prepared, proposals, mark=_existing_mark(prepared), now=now)
     return written
 
 
 def commit(prepared: Prepared, *, now: datetime | None = None) -> Path:
-    """Declare the session reviewed by advancing the watermark.
+    """Declare the session reviewed by writing the bookmark.
 
-    Called after any candidates are recorded, never before: a watermark moved
+    Called after any candidates are recorded, never before: a bookmark moved
     ahead of a failed review buries those messages permanently, behind a mark
     saying they have already been read.
     """
     if not prepared.watermark:
         raise ValueError("nothing was prepared, so there is nothing to commit")
-    body = prepared.memory
-    match = re.search(r"\n---\n", body)
-    if body.startswith("---") and match:
-        body = body[match.end():]
-    return _write(prepared, body or "## Skill candidates\n\n_None yet._\n",
-                  prepared.watermark, now)
+    return _write_review(prepared, _proposals_in(prepared.review_path),
+                         mark=prepared.watermark, now=now)

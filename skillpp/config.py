@@ -58,25 +58,35 @@ class Config:
     def sessions_dir(self) -> Path:
         """Per-session capture state, written by the hooks as JSON.
 
-        Not to be confused with :attr:`conversations_dir`, which holds the
-        reviewed memory documents. This one is a working buffer keyed by
-        session id; that one is the durable record keyed by conversation.
+        Not to be confused with :attr:`reviews_dir`. This is a working buffer
+        the hooks write while a session runs; that is what a review concluded
+        about a session afterwards.
         """
         return self.root / "sessions"
 
     @property
-    def conversations_dir(self) -> Path:
-        """One memory document per conversation, surviving every resume."""
-        return self.root / "conversations"
+    def patterns_file(self) -> Path:
+        """The store: every candidate ever proposed, from every session.
+
+        One file rather than one per conversation. Counts only mean anything
+        when every session pools into the same place -- most conversations are
+        a single session, so a per-conversation store leaves everything at one
+        occurrence and the ordering it drives does nothing.
+        """
+        return self.root / "PATTERNS.md"
 
     @property
     def reviews_dir(self) -> Path:
         """What each individual review proposed, as it proposed it.
 
-        The conversation memory is the store; these are the deliveries into it.
-        Kept because the prompt that produces them keeps changing: with these,
-        a revised prompt can be re-merged from what was already judged, and a
-        surprising entry can be traced to the session that introduced it.
+        :attr:`patterns_file` is the store; these are the deliveries into it,
+        and they double as the bookmark -- each records how far its session
+        read, which is what stops a resumed conversation being re-read.
+
+        Kept in their own right because the prompt that produces them keeps
+        changing: a revised prompt can be re-merged from proposals already
+        judged, and a surprising entry can be traced back to the session that
+        introduced it and what it claimed at the time.
         """
         return self.root / "reviews"
 

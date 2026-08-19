@@ -107,6 +107,106 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_promote_candidate(args: argparse.Namespace) -> int:
+    """Turn a candidate into a skill on disk, and record that it happened.
+
+    Writes the SKILL.md, then moves the entry. In that order: a store claiming
+    a skill exists when the file was never written is worse than a file with no
+    record, because nothing will ever propose the procedure again.
+    """
+    from .memory import find, parse, promote, render as render_store
+
+    config = Config(args.root)
+    store = config.patterns_file
+    entries = parse(store.read_text(encoding="utf-8")) if store.exists() else []
+    entry = find(entries, args.name)
+    if entry is None:
+        print(f"No candidate named '{args.name}'. See: skillpp candidates",
+              file=sys.stderr)
+        return 1
+
+    skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir \
+        else default_skills_dir()
+    path = skills_dir / entry.name / "SKILL.md"
+    if path.exists() and not args.force:
+        print(f"{path} already exists; pass --force to overwrite", file=sys.stderr)
+        return 1
+
+    # The description decides whether the skill is ever found: it is what
+    # Claude reads when choosing among many. Derived from the body only as a
+    # starting point, and said out loud so a poor one gets noticed.
+    description = args.description or entry.body.strip().split("\n")[0][:200]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    front = [
+        "---",
+        f"name: {entry.name}",
+        f"description: {json.dumps(description, ensure_ascii=False)}",
+    ]
+    # A dedicated field that is appended to the description in the skill
+    # listing, so trigger phrasing reaches the one place that decides whether
+    # the skill fires -- before the body has loaded at all.
+    if args.when_to_use:
+        front.append(f"when_to_use: {json.dumps(args.when_to_use, ensure_ascii=False)}")
+    path.write_text("\n".join(front + [
+        "metadata:",
+        '  source: "skill-plus-plus"',
+        f'  seen: {entry.count}',
+        f'  sessions: {json.dumps(entry.sessions)}',
+        "---",
+        "",
+        entry.body.strip(),
+        "",
+    ]), encoding="utf-8")
+
+    updated = promote(entries, entry.name, skill_path=str(path))
+    tmp = store.with_suffix(".md.tmp")
+    tmp.write_text(render_store(updated).strip() + "\n", encoding="utf-8")
+    tmp.replace(store)
+
+    print(f"wrote {path}")
+    print(f"description: {description}")
+    print("Review that description — it is what decides when the skill fires.")
+    return 0
+
+
+def cmd_candidates(args: argparse.Namespace) -> int:
+    """List what has been proposed, most-seen first."""
+    from .memory import parse
+
+    config = Config(args.root)
+    store = config.patterns_file
+    entries = parse(store.read_text(encoding="utf-8")) if store.exists() else []
+    if not entries:
+        print(f"Nothing recorded yet. Review a session with /log-session.\n"
+              f"Store: {store}")
+        return 0
+
+    if args.open_only:
+        entries = [e for e in entries if e.status == "candidate"]
+    if args.json:
+        print(json.dumps([{
+            "name": e.name, "status": e.status, "count": e.count,
+            "sessions": e.sessions, "aliases": e.aliases,
+            "first_seen": e.first_seen, "last_seen": e.last_seen,
+            "skill_path": e.skill_path, "body": e.body,
+        } for e in entries], indent=2))
+        return 0
+
+    open_ = [e for e in entries if e.status == "candidate"]
+    done = [e for e in entries if e.status == "promoted"]
+    print(f"{len(open_)} candidate(s), {len(done)} promoted — {store}\n")
+    for entry in entries:
+        mark = "  " if entry.status == "candidate" else "✓ "
+        print(f"{mark}x{entry.count}  {entry.name}")
+        if entry.skill_path:
+            print(f"        {entry.skill_path}")
+        if entry.aliases:
+            print(f"        also seen as {', '.join(entry.aliases)}")
+        print(f"        {', '.join(s[:8] for s in entry.sessions)}")
+    print("\nRead one in full:  less " + str(store))
+    return 0
+
+
 def cmd_commit_session(args: argparse.Namespace) -> int:
     """Declare the session reviewed, advancing the watermark.
 
@@ -607,6 +707,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
     p.set_defaults(func=cmd_prepare_session)
+
+    p = sub.add_parser("candidates", help="list what has been proposed so far")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--open-only", action="store_true",
+                   help="only those not yet made into skills")
+    p.set_defaults(func=cmd_candidates)
+
+    p = sub.add_parser("promote-candidate",
+                       help="write a candidate out as a skill and record it")
+    p.add_argument("name")
+    p.add_argument("--description", help="what it does and when to use it")
+    p.add_argument("--when-to-use",
+                   help="trigger phrases or example requests, appended to the "
+                        "description in the skill listing")
+    p.add_argument("--skills-dir")
+    p.add_argument("--force", action="store_true",
+                   help="overwrite an existing SKILL.md")
+    p.set_defaults(func=cmd_promote_candidate)
 
     p = sub.add_parser("record-candidate",
                        help="fold one proposed skill into the memory (body on stdin)")

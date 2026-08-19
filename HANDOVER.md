@@ -1,149 +1,76 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`. **157 tests pass:** `python3 -m unittest discover -s tests -q`.
-No `pyproject.toml` and no `pytest` installed; use `uv run --with pytest pytest tests/`
-if you want pytest specifically. Invoke the CLI as `python3 bin/skillpp`.
+Branch: `feat/pattern-detection`, one commit ahead at `9e8e907` plus uncommitted
+work described below. **168 tests pass:** `python3 -m unittest discover -s tests -q`.
+No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
+Invoke the CLI as `python3 bin/skillpp`.
 
 Numbers marked *measured* come from the transcripts on this machine: ~117 files,
-~324 MB, six projects, about 60 days. Re-run them elsewhere before trusting them.
+~324 MB, six projects, about 60 days.
 
-**Level 1 is built and tested end to end.** What follows is what it does, what
-it cost to get right, and what is deliberately not done.
+**Detection is built and live-tested end to end.** The current task is testing
+it further — what to try, and what already passed, is under *Testing* below.
 
 ---
 
 ## What this does
 
-`/log-session` reviews a session and proposes skills.
-
 ```
-transcript ──▶ prepare-session ──▶ the model judges ──▶ record-candidate ──▶ commit-session
-               (deterministic)      (the only              (deterministic)     (watermark)
-                                     judgement)
+/log-session          review a session, propose skills          ─┐
+                                                                 │  PATTERNS.md
+/review-candidates    decide on one, write it out as a skill    ─┘
 ```
 
-Output is a **SKILL.md body**: imperative instructions a future agent can follow,
-not an account of what happened. That distinction took most of the session to
-arrive at and is the thing most easily lost — see *How the goal moved*.
-
-Storage, all under `~/.claude/skillpp/`, never in a repo:
+Two documents, and only two:
 
 | path | what |
 | --- | --- |
-| `conversations/<conversation-id>.md` | the store: current best description of each candidate, counted and ordered |
-| `reviews/<session-id>.md` | the deliveries: what each session proposed, in its own words |
-| `sessions/<session-id>.json` | unrelated — hook capture state, written by `capture.py` |
+| `~/.claude/skillpp/PATTERNS.md` | the store — every candidate, counted, ordered, in two sections |
+| `~/.claude/skillpp/reviews/<session-id>.md` | what a session proposed **and how far it read** |
+| `<repo>/.claude/skills/<name>/SKILL.md` | a promoted skill — the only thing that lands in a repo |
 
-Only a *promoted* skill lands in a repo, at `.claude/skills/<name>/SKILL.md`.
-Memories are personal; skills are the team artifact.
+Memories are personal. Skills are the team artifact.
 
----
+### The flow
 
-## Division of labour (agreed, don't cross it)
+```
+transcript ─▶ prepare-session ─▶ the model judges ─▶ record-candidate ─▶ commit-session
+              (deterministic)     (the only            (deterministic)     (bookmark)
+                                   judgement)
+                                        │
+                                        ▼
+                              /review-candidates ─▶ promote-candidate
+                              (asks the developer)   (writes the SKILL.md)
+```
 
-**Their layer — categorization and lifecycle.** `ledger.py` / `cli.py` own
-`candidate` → `promoted` → `ignored`, occurrence counting, `find_match`,
-`reconcile`. Treat as status quo.
+The model decides **three things and nothing else**: is there a completed
+procedure worth a skill, is it new or the same as one already recorded, and what
+the instructions say. Counting, provenance, dates, ordering, status, atomic
+writes — all code.
 
-**Our layer — review.** Deciding what in a session is worth proposing.
-
-⚠️ **Live conflict.** Their layer gates on recurrence reaching a threshold. Ours
-does not: judgement decides whether a candidate is recorded at all, and the
-count only *orders* what is already in. Nothing bridges the two yet. Raise it
-before either side builds further.
-
----
-
-## How the goal moved, and why
-
-Three reversals, each forced by something that did not work. Knowing them stops
-the old shapes being reintroduced.
-
-**Counting recurring workflows → judging skill-worthiness.** A count ranks the
-wrong things: "run the test suite" recurs twenty times and deserves no skill,
-"file a ticket the team's way" recurs four times and clearly does. What makes
-the second valuable is that it encodes a convention, not that it repeats.
-
-**Then: judging → extracting a SKILL.md.** The first working prompt produced a
-retrospective report — *Intent / Steps / Worked / Did not work*. Real findings,
-wrong shape. A skill is forward-facing instruction; that was documentation of an
-event. Anthropic's own guidance is explicit that a SKILL.md is imperative and
-that specificity should match a step's fragility.
-
-**And: the count came back, as ordering.** Gate on judgement, order by count.
-The gate decides whether an entry belongs; the count decides what a person reads
-first. That kills the original inversion — "run the test suite" never enters, so
-it cannot outrank anything.
-
-**What that leaves out, accepted:** slow-burn patterns that only look
-significant in aggregate. Something mildly annoying twenty times, which no single
-session flags as skill-worthy, never surfaces.
+It hands over **one candidate at a time** and never rewrites the store, so an
+existing entry cannot be lost by being forgotten. An earlier design had it
+rewrite the whole document and needed a guard against dropped entries; the guard
+is gone because the failure is now impossible.
 
 ---
 
-## The modules, and what each cost to get right
+## Uncommitted since `9e8e907`
 
-`skillpp/` is flat; these sit alongside `ledger.py` and the rest.
+The commit describes a per-conversation store. **That was replaced.** Working
+tree holds:
 
-| module | job |
-| --- | --- |
-| `transcript.py` | JSONL → `Message`/`Block`. The only module touching undocumented internals |
-| `identity.py` | messages → conversation id |
-| `extract.py` | messages → compressed text |
-| `memory.py` | the memory document: parse, upsert, render |
-| `prepare.py` | resolve, slice against the watermark, floor, record, commit |
-
-### Decisions measurement forced
-
-**Conversation id is the first message's uuid, in full.** Not a hash of several:
-measured, a prefix of 3+ splits a real conversation whose assistant turn was
-regenerated at message index 2, producing two memory files with counts split
-across both. One message is the shortest possible prefix and the only one an
-early divergence cannot break. Not hashed either — a greppable id is worth more
-than an opaque one.
-
-**Turn regeneration is routine.** Interrupt a tool call and the turn re-runs, so
-a transcript is **not append-only**. Hence the watermark stores `last_message`
-*and* `last_timestamp`: the marked message can cease to exist. Look up by uuid,
-fall back to timestamp, and **fail loudly if neither resolves** — the natural
-guess ("treat it all as new") silently re-folds a conversation and doubles
-everything in it.
-
-**Tool results are kept when they cannot be recovered later.** Not "did it change
-something": a local `Read` returns a file still in the repo, while a Confluence
-page or tracker query returns state from outside it. Getting this wrong was
-measured — with MCP results dropped, a ticket-filing session extracted with the
-entire procedure missing.
-
-**Arguments are kept when the argument *is* the step.** `Bash` and MCP calls get
-room (1500 / 1200 chars); `Edit` and `Write` get a path and little else, because
-their argument is the *product*. Keeping the product cost 4 MB corpus-wide and
-pushed 13 more sessions over budget while answering none of intent, steps or
-outcome.
-
-**The dialogue is kept, not just the actions.** An earlier version preserved
-assistant prose only before a short reply — 1.7% of it. Two of the three target
-skill shapes (grounded planning, execution checking) live *entirely* in that
-prose and were undetectable in principle. `AskUserQuestion` and `ExitPlanMode`
-render their content in full for the same reason.
-
-**Long prompts are trimmed at both ends.** Developers paste stack traces; in one
-transcript four prompts carried 28 KB of traceback, 70% of that extract. The ask
-sits at one end or the other, so both are kept and the elision left visible.
-
-Extraction now: **324 MB → 12.3 MB, 26×.**
-
-### The bug worth remembering
-
-`record()` used `prepared.transcript.stem[:8]` — truncating a session id for a
-tidier provenance line. Real uuids diverge within eight characters, so it never
-showed up in 157 unit tests or on real sessions. Two fixtures named
-`recurrence-a` and `recurrence-b` collided instantly: the second was read as
-already present, so the count **stopped rising with no error**.
-
-Precisely the failure this design exists to prevent, sitting in the code that
-prevents it. Now the full stem, with a regression test verified to fail against
-the old line.
+- **`PATTERNS.md` replaces `conversations/<id>.md`.** A per-conversation store
+  meant a count could only rise when one conversation repeated a whole procedure
+  — and 82% of conversations are a single session, so counts sat at 1 and the
+  ordering they were meant to drive did nothing. One store makes recurrence
+  visible.
+- **The bookmark moved into `reviews/`.** Each review records `last_message` and
+  `last_timestamp`, so there is no third place for state to live and disagree.
+  A session that proposes nothing still writes one, or its messages are read
+  again forever.
+- **Status:** `candidate → promoted`, with `skill_path` and dates.
+- **New commands:** `candidates`, `promote-candidate`, and `/review-candidates`.
 
 ---
 
@@ -152,133 +79,191 @@ the old line.
 The rule throughout: **code for anything with one right answer that fails
 silently; the model for anything needing judgement.**
 
-The model decides three things and nothing else:
+Two axes are kept deliberately separate in `memory.py`:
 
-1. is there a completed procedure worth a skill
-2. is this proposal new, or the same procedure as one already recorded
-3. what the instructions say
+- **status** decides which section an entry sits in, and only ever changes
+  because a person decided something
+- **evidence** (the count) orders entries within a section and promotes nothing
+  on its own
 
-Everything downstream — count, provenance, `also seen as:` on a rename, ordering,
-atomic rewriting — happens in `memory.py`. The model hands over **one candidate
-at a time** and never rewrites the document, so an existing entry cannot be lost
-by being forgotten. An earlier design had it rewrite the whole document and
-needed a guard against dropped entries; the guard is gone because the failure is
-now structurally impossible.
+Conflating them is what made an earlier design rank "run the test suite" above
+"file a ticket the team's way". The count is derived from the provenance list
+rather than stored beside it, so the two cannot drift.
 
 `record` and `commit` are separate: a session yields three candidates or none,
-and the watermark moves exactly once either way — **after** the recording, never
+and the bookmark moves exactly once either way — **after** the recording, never
 before. A mark advanced ahead of a failed review buries those messages behind a
 claim that they were already read.
 
 ---
 
-## Tested
+## The modules
 
-Unit: 157 tests, stdlib `unittest`.
+`skillpp/` is flat; these sit alongside `ledger.py` and the rest.
 
-End to end in the CLI, on real and controlled sessions:
+| module | job |
+| --- | --- |
+| `transcript.py` | JSONL → `Message`/`Block`. The only module touching undocumented internals |
+| `identity.py` | messages → conversation id |
+| `extract.py` | messages → compressed text (**324 MB → 12.3 MB, 26×**) |
+| `memory.py` | the store: parse, upsert, promote, render |
+| `prepare.py` | resolve, slice against the bookmark, floor, record, commit |
 
-| | result |
+### Decisions measurement forced
+
+**Conversation id is the first message's uuid, in full.** A prefix of 3+ splits
+a real conversation whose assistant turn was regenerated at message index 2. One
+message is the shortest possible prefix and the only one an early divergence
+cannot break. Not hashed — a greppable id is worth more than an opaque one.
+
+**Turn regeneration is routine**, so a transcript is **not append-only**. The
+bookmark stores `last_message` *and* `last_timestamp`: the marked message can
+cease to exist. Look up by uuid, fall back to timestamp, and **fail loudly if
+neither resolves** — the natural guess ("treat it all as new") silently re-folds
+a conversation and doubles everything in it.
+
+**Tool results are kept when they cannot be recovered later.** Not "did it
+change something": a local `Read` returns a file still in the repo, a Confluence
+page returns state from outside it. Getting this wrong was measured — with MCP
+results dropped, a ticket-filing session extracted with the whole procedure
+missing.
+
+**Arguments are kept when the argument *is* the step.** `Bash` and MCP get room;
+`Edit`/`Write` get a path, because their argument is the *product*.
+
+**The dialogue is kept, not just the actions.** An earlier version preserved
+1.7% of assistant prose. Two of the three target skill shapes — grounded
+planning, execution checking — live *entirely* in that prose and were
+undetectable in principle.
+
+### Bugs that only live testing found
+
+Four, all silent, none caught by the suite:
+
+- `${CLAUDE_PROJECT_DIR}` **is not substituted** in a `.claude/commands/` file —
+  the permission checker sees a live shell expansion and refuses. Use a relative
+  path; the command runs from the project root.
+- `allowed-tools` globs are **literal about spaces**: `Bash(python3 * skillpp *)`
+  does not match `python3 bin/skillpp …`.
+- A wrong absolute path was globbed as a session id and crashed in `pathlib`.
+- **`transcript.stem[:8]`** — truncating a session id for a tidier provenance
+  line. Real uuids diverge within eight characters, so it never showed up until
+  two fixtures named `recurrence-a`/`recurrence-b` collided: the second read as
+  already present, so **the count stopped rising with no error**. Now the full
+  stem, with a regression test verified to fail against the old line.
+
+---
+
+## Testing
+
+### Passed live, on real data
+
+| | |
 | --- | --- |
 | extract candidates from a real session | imperative, instance-noise stripped |
-| memory + review documents written | frontmatter, provenance, both files |
-| idempotence — same session twice | "nothing new", nothing written |
-| accumulation across sessions | two candidates in one memory |
-| correct *non*-match | declined with a reason: setup vs iteration |
-| a session with nothing generalisable | zero proposals, watermark still advanced |
-| count merge | `seen 2×` with both sessions listed |
+| store + review written | frontmatter, provenance, both files |
+| idempotence | "nothing new", nothing written |
+| cross-conversation accumulation | two conversations, one `PATTERNS.md` |
+| correct rejection of mundane work | *"standard git merge… Mundane git. Skip recording."* |
+| barren session | `_No candidate found_`, bookmark still advanced |
+| count merge | `seen 2×`, both sessions listed |
 | body merge | every rule from both occurrences present |
+| `/review-candidates` | showed it, asked, promoted with a written description |
 
 `tests/fixtures/seed_recurrence.py` builds two snapshots of one conversation
 doing the same procedure twice, the second hitting an obstacle the first did
 not. It tests what unit tests cannot — whether the model *reaches for*
-`--matches`, and whether a merge combines bodies rather than replacing. Its
-`.jsonl` output is gitignored; regenerate it.
+`--matches`, and whether a merge combines bodies rather than replacing.
+Regenerate its `.jsonl` output; it is gitignored.
 
-**Four bugs were found by CLI testing that 157 unit tests did not catch:**
-`${CLAUDE_PROJECT_DIR}` not substituted in a command file, an `allowed-tools`
-glob missing a space, a wrong absolute path globbed as a session id, and the
-truncated session id above. All silent. Worth remembering before trusting a
-green suite as proof a wiring change works.
+### Not yet tested — start here
+
+**Does a promoted skill stop being re-proposed?** `prepare-session` does put the
+`## Made into skills` section in the prompt, so the model can see it. Whether it
+*uses* it is unverified. Needs a session doing work already promoted. **This is
+the difference between a tool that learns and one that nags.**
+
+**Body quality across several candidates.** The one promoted skill so far says
+*don't regenerate, edit the pixels* but omits the venv bootstrap, the grid
+overlay and the luminance-only transfer that the original review captured. A
+skill you cannot follow is a note. One instance is not a pattern — watch the
+next few before changing the prompt.
+
+**`when_to_use` in practice.** Now written when supplied. Unverified whether
+richer trigger phrasing actually improves firing.
 
 ---
 
 ## Open
 
-**The division-of-labour conflict** above. Blocking anything at level 2.
+**No rejection.** Decided: reject means delete, and the procedure gets a fresh
+chance if it recurs. Not built. Consequence, accepted: nothing records the
+rejection, so the same thing can be proposed again immediately — at `1×` it
+sorts to the bottom, and `reviews/<session>.md` still holds the original.
 
-**Merging is unproven on messy input.** Three real runs across related work
-produced no match — correctly, the procedures differed — so every observed merge
-has been on controlled fixtures. If a merge ever does lose something,
-`reviews/<session>.md` still holds what each session originally proposed.
+**No `reconcile`.** Nothing notices when a promoted skill's file is deleted, so
+the store keeps claiming it exists and the procedure is never re-proposed.
 
-**Level 2 does not exist:** the roll-up across conversations, `PATTERNS.md`, and
-promote/reject. Level 1 ends at one correct document per conversation.
+**No `expire`.** Candidates never decay. Dates are recorded, so this is
+buildable whenever volume warrants.
+
+**Re-promotion is blocked.** `promote()` refuses to promote twice, which is right
+in general but means a description cannot be fixed by re-running
+`promote-candidate --force`. Small rough edge.
 
 **Automatic triggering is deferred, not rejected.** The `SessionEnd` hook still
-enqueues to `ended-sessions.jsonl`; nothing drains it. The queue it accumulates
-is the evidence for whether manual triggering is enough. `claude -p` works, with
-a ~$0.16 context floor per invocation, and **`--no-session-persistence` is
-mandatory** or a drain creates a session, which fires the hook, which enqueues,
-which the next drain processes.
+enqueues to `ended-sessions.jsonl` and nothing drains it — deliberately, since
+that queue is the evidence for whether manual triggering suffices. `claude -p`
+works, ~$0.16 context floor, and **`--no-session-persistence` is mandatory** or
+a drain creates a session, which fires the hook, which enqueues.
 
-**Unattended mode is a prompt problem, not plumbing.** Every escape hatch in
-`/log-session` currently addresses a human.
+**The ledger is untouched and unused by this flow.** Adapting it was designed in
+detail and rejected: `find_match` scores **0.00 on prose**, and its one-file-per-
+entry shape is wrong for a model that must read every candidate at once to judge
+a match. `skillpp review` / `promote` / `ignore` still operate on the old capture
+path.
 
 ---
 
 ## Reference — Claude Code facts verified here
 
-- **`` !`command` `` in a command file runs *before* the content reaches the
-  model**, and its output replaces the placeholder. No exit-code branching, so
-  "nothing to do, stop" must be in the output text.
-- **`${CLAUDE_PROJECT_DIR}` is not substituted in a `.claude/commands/` file** —
-  the permission checker sees a live shell expansion and refuses. Use a relative
-  path; the command runs from the project root.
-- **`allowed-tools` globs are literal about spaces.** `Bash(python3 * skillpp *)`
-  does not match `python3 bin/skillpp …`.
+- **`` !`command` `` runs *before* the content reaches the model**, and its
+  output replaces the placeholder. No exit-code branching, so "nothing to do"
+  must be a sentence in the output.
 - **The transcript JSONL structure is documented nowhere.** Only
-  `transcript_path` is specified. Hence `transcript.py` as a blast-radius
-  boundary: it raises rather than returning `[]` when a file has records but no
-  recognisable messages, which is the signature of the format having moved.
-- **Transcripts are written asynchronously and may lag** — documented. Harmless
-  with a watermark, except on a conversation's final run.
-- **Custom commands are now skills**; `.claude/commands/*.md` still works.
+  `transcript_path` is specified — hence `transcript.py` as a blast-radius
+  boundary that raises rather than returning `[]` when a file has records but no
+  recognisable messages.
+- **`description` is what decides whether a skill fires**; `when_to_use` is
+  appended to it in the listing, both read before the body loads.
+- **A model will report a tool call it did not make.** Asked to write a file
+  with `Write` unavailable, it printed "Wrote SKILL.md" and wrote nothing.
+  Constrain with `--allowed-tools ""` rather than trusting the narration.
 
 ---
 
 ## Dead ends — do not retry
 
-- **`agent`-type hooks on `SessionEnd`.** Structurally impossible: `KP`'s
-  signature accepts no `toolUseContext` while the agent branch throws without
-  one, and it fails silently. `command` hooks work fine.
-- **Code-based segmentation and fingerprint matching** (`segment.py`,
-  `recurrence.py`, parked on `segmentation-fixture`). Against 79 transcripts:
-  completion markers ended 10% of episodes, and the matcher rated
-  `edit:.md | bash:cd` a **178-occurrence workflow**.
-- **`similarity()` on prose.** It splits on ` | ` and scores **0.00 on every
-  pair** of prose names, including obvious matches. Structurally inapplicable,
-  not merely inaccurate. Nothing calls it now.
-- **Lineage key + "last analysed UUID" cursor.** Both halves fail: the key groups
-  divergent branches, the pointer breaks when a resume rewrites its tail.
-- **Per-pattern files + INDEX.md + a name→id mapping for level 2.** Designed in
-  detail, then scrapped. Level 2 should be one document merged the way level 1 is.
-- **Skipping the extractor.** The median *increment* — one session end, not a
-  whole transcript — is **443 KB raw**, and 72% of increments exceed a ~30k-token
-  budget. Without extraction the model reads a prefix and summarises it without
-  saying so.
+- **`similarity()` on prose** — splits on ` | `, scores **0.00 on every pair**
+  including obvious matches. Structurally inapplicable.
+- **`agent`-type hooks on `SessionEnd`** — `KP`'s signature accepts no
+  `toolUseContext`; fails silently. `command` hooks work.
+- **Code-based segmentation / fingerprint matching** — rated
+  `edit:.md | bash:cd` a 178-occurrence workflow.
+- **Lineage key + "last analysed UUID" cursor** — the key groups divergent
+  branches, the pointer breaks when a resume rewrites its tail.
+- **Per-conversation stores** — the reason counts could not accumulate.
+- **Skipping the extractor** — the median *increment* is 443 KB raw, and 72% of
+  increments exceed a ~30k-token budget.
 
 ---
 
 ## Prompt-design lessons already paid for
 
-- **"Dead ends omitted" was wrong** (`4099010`). A task's failures *were* the
-  reasoning. Same distinction the extractor's outcome tails preserve.
-- **A sharpening clause can become a loophole.** *"Would they only discover it by
-  failing?"* was added to make "not derivable" concrete, and let general shell
-  trivia through instead. When adding a test to a prompt, check what it now
-  admits, not only what it now excludes.
-- **A model will report a tool call it did not make.** Asked to write a file with
-  `Write` unavailable, it printed "Wrote SKILL.md — needs your approval" and
-  wrote nothing. Constrain with `--allowed-tools ""` rather than trusting the
-  narration.
+- **"Dead ends omitted" was wrong.** A task's failures *were* the reasoning.
+- **A sharpening clause can become a loophole.** *"Would they only discover it
+  by failing?"* let general shell trivia through. When adding a test to a
+  prompt, check what it now admits, not only what it excludes.
+- **Asking for a report gets a report.** The first working prompt produced
+  *Intent / Steps / Worked / Did not work* — real findings, wrong shape. A skill
+  is forward-facing instruction; ask for a SKILL.md, not a summary.

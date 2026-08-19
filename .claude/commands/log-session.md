@@ -57,10 +57,11 @@ Name it in the gerund, lowercase and hyphenated — `reconciling-deck-against-ar
 
 ## Then record each one
 
-The memory shown above already holds every candidate from earlier reviews. Your
-only decision per proposal is whether it describes **a procedure already in
-there** — judged on what the procedure *does*, not what it is called, because
-the same work gets named differently every time.
+The store shown above holds every candidate from every session ever reviewed —
+not just this conversation's. Your only decision per proposal is whether it
+describes **a procedure already in there**, judged on what the procedure *does*
+rather than what it is called, because the same work gets named differently
+every time.
 
 **A match.** The body you send **replaces** the one already stored, so write the
 two combined rather than only today's. The existing body is printed above —
@@ -98,13 +99,18 @@ belongs; your judgement already did that. It decides what a person reads first.
 python3 bin/skillpp commit-session $ARGUMENTS
 ```
 
-Once, after the recording, whether there were three proposals or none. This
-advances the watermark, so these messages are not read again. Run it last: a
-mark moved ahead of a failed review buries those messages behind a claim that
-they have already been seen.
+Once, after the recording, whether there were three proposals or none — a
+session that found nothing still has to record how far it read, or its messages
+are reviewed again forever. Run it last: a bookmark moved ahead of a failed
+review buries those messages behind a claim that they have already been seen.
 
 ## Report
 
 One line: the path written, and the name of each proposed skill. If you judged
 something borderline — a procedure that might not have finished, or might not
 be general enough — say which call you made and why.
+
+If you recorded anything, add one line pointing at `/review-candidates`, which
+is where a candidate is actually decided on. Do not ask about promotion here:
+this command reviews a session, and a session that yields three proposals
+should not turn into three questions.
