@@ -76,6 +76,13 @@ python3 bin/skillpp record-candidate $ARGUMENTS \
 SKILL
 ```
 
+**A match against something under `## Made into skills`.** Treat it exactly the
+same way — `--matches` that entry. It stays promoted and its count rises; the
+command will not put a promoted skill back in the review queue. Doing the work
+again is evidence the skill earns its place, so this is the wanted outcome, not
+a reason to skip recording or to file it as new. Filing it fresh instead is the
+one mistake here that leaves a duplicate the store cannot reconcile.
+
 **Something new:**
 
 ```bash
