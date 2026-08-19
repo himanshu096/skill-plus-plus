@@ -299,29 +299,33 @@ def _limit_rules(entries: list[dict]) -> str | None:
                     ("tenant", "per-tenant", "scope", "global"))
 
 
-def _folded_but_not_counted(root: Path, said: str,
-                            entries: list[dict]) -> str | None:
-    """Two runs in one session: one entry, two sightings, count still 1.
+def _generalised_across_both_runs(entries: list[dict]) -> str | None:
+    """Two runs of one procedure become one entry, written for neither.
 
-    The count is `len(sessions)` and sessions are deduplicated, so repeating a
-    procedure in one sitting does not advance the threshold -- three separate
-    sessions do. That is the intended reading of "recurring" and it is why this
-    asserts on the occurrence log rather than on the count: what is being
-    tested is that the second run was recognised as the *same* procedure, which
-    is the step the capture branch never reached.
+    Third version of this check, and the first that asserts something the
+    fixture can actually show. It demanded ``count == 2`` (unreachable -- count
+    is distinct sessions), then two lines in ``occurrences.jsonl`` (which the
+    model produces or not, run to run, and which change nothing either way
+    because sessions are deduplicated on read). Both were chasing a number
+    rather than the property.
+
+    The property is generalisation. Two rollouts differing only in service name
+    and image tag should yield one entry whose body names neither, because a
+    body hardcoding ``api`` was written from one run and did not recognise the
+    other. That is the step the capture branch never reached -- it banked three
+    separate entries.
     """
     if len(entries) != 1:
         return (f"expected the two rollouts folded into 1 entry, got "
                 f"{len(entries)}: {[(e['name'], e['count']) for e in entries]}")
-    log = root / "occurrences.jsonl"
-    sightings = [l for l in log.read_text().splitlines()
-                 if entries[0]["name"] in l] if log.exists() else []
-    if len(sightings) != 2:
-        return (f"the second run was not recorded as a sighting: "
-                f"{len(sightings)} in occurrences.jsonl")
-    if entries[0]["count"] != 1:
-        return (f"count is {entries[0]['count']} — two runs in one session "
-                f"should not advance the threshold")
+    body = entries[0]["body"]
+    hardcoded = [s for s in ("deploy/api", "deploy/worker", "charts/api",
+                             "charts/worker", "1.9.3", "2.2.1") if s in body]
+    if hardcoded:
+        return (f"the body was written from one run rather than both: "
+                f"{hardcoded}")
+    if "<" not in body:
+        return f"nothing parameterised — not a reusable body: {body[:200]!r}"
     return None
 
 
@@ -584,7 +588,7 @@ CASES = [
                 "recurrence, so no threshold is ever reached",
          transcripts=lambda out: [_their("recurs", out)],
          min_messages=1,
-         check_run=_folded_but_not_counted),
+         check=_generalised_across_both_runs),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "

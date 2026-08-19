@@ -147,6 +147,42 @@ this is the same failure this branch measured on fingerprint matching before
 abandoning it: `edit:.md | bash:cd` at 178 occurrences, `similarity()` at 0.00
 on every real pair.
 
+## This branch on the same six
+
+| Scenario | This branch | That branch |
+| --- | --- | --- |
+| `refine` | 1 entry, whole across both requests, rules kept | 2 — fragmented |
+| `retry` | 1 entry, lock failure kept as the rule | 2, one a false ×2 |
+| `distinct-tasks` | 1 — recorded the release tag, skipped the CI bump as generic | 3 |
+| `explore-then-fix` | **1 — recorded it. A miss.** | **1 of 2 steps, greps trimmed ✓** |
+| `mid-investigation` | nothing ✓ | nothing ✓ |
+| `recurs` | 1 entry, body parameterised, neither run named | 3 at ×1 |
+
+**Five of six against two of six** — and the one this branch lost is worth more
+than the margin suggests.
+
+### The loss: `explore-then-fix`
+
+Eight greps, an edit, a commit. That branch trimmed the leading exploration and
+banked the two real steps. This branch recorded the whole thing as
+`sweeping-a-subsystem-with-parallel-greps` — a debugging session filed as a
+reusable technique, which is exactly the `barren` failure this branch's own
+rules exist to prevent.
+
+Trimming a leading run of read-only commands is mechanical, and code does
+mechanical work more reliably than judgement does. This is the one place the
+span logic is straightforwardly better, and it is not a tuning artefact.
+
+### What `recurs` actually showed
+
+Both runs of the fixture produced one entry with a fully parameterised body —
+`<name>`, `<chart-path>`, `<version>`, no service named — and one of them added
+a rule only visible from seeing both: "for multiple deployments in the same
+release, repeat the full sequence per deployment rather than batching."
+
+That is recognition working. What it is *not* is a count: see the correction
+below.
+
 ## Verdict
 
 **This branch has the better detector.** The deciding results, in order:
@@ -166,8 +202,14 @@ on every real pair.
 2. **`big`.** Budgets on banks nothing from a long session; budgets off banks
    one 440-step blob. No setting between them, and a long session is where a
    recurring procedure hides.
-3. **Fragmentation on its own scenarios.** Two of six, with the cause structural
-   rather than tuned — folding at each passed gate is what `Stop` is for.
+3. **Fragmentation on its own scenarios.** Two of six against five of six, with
+   the cause structural rather than tuned — folding at each passed gate is what
+   `Stop` is for.
+
+**Against the verdict, and unresolved:** `explore-then-fix`. That branch trims
+leading exploration correctly and this one recorded a grep sweep as a
+procedure. One mechanical job the span logic does better, and no amount of
+prompt work makes a model reliably decline work it has just seen finish.
 
 **What that branch wins, and it is not small:** no model call, no latency, no
 API key, it runs unattended, and it will look at a session of any length. This
