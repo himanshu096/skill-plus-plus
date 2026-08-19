@@ -96,12 +96,80 @@ any mutation exists to recognise, so no closing-step vocabulary could have
 saved it. The narrow regex is a real limit for MCP-terminated work; it is not
 what these results are about.
 
+## The symmetric round: its own scenarios, its own turf
+
+The fair objection to everything above is that the fixtures were written for
+this branch's detector, so they decided the outcome. `tests/evals/their_scenarios.py`
+removes it: six sessions built from the scenario table in that branch's own
+`docs/detection.md`, deliberately on its terms — Bash rather than MCP, closing
+steps its regexes actually match (`npm test`, `pytest`, `ruff`, `git commit`,
+`helm upgrade`), every span inside its budgets, and `lgtm` where a task
+boundary is wanted.
+
+| Scenario | Its table expects | Banked |
+| --- | --- | --- |
+| `refine` — one procedure across two requests | 1 recipe, all steps | **2** — fragmented; `ruff check` + `git commit` became a recipe of its own |
+| `retry` — failed on a lock, then passed | 1 recipe, folded after the pass | **2**, one of them at ×2 — a *false* match merging unrelated fragments |
+| `distinct-tasks` — two tasks split by `lgtm` | 2 recipes | **3** |
+| `explore-then-fix` — 8 greps then the fix | 1 recipe of 2 steps, greps trimmed | **1 of 2 steps** ✓ |
+| `mid-investigation` — six reads, no conclusion | nothing banked | **0** ✓ |
+| `recurs` — the same rollout twice | 1 recipe at ×2 | **3, all at ×1** |
+
+Two of six, on its own examples. The fixtures were not the reason.
+
+### Every banked recipe is two steps
+
+That is the cause, and it is visible in the shape of the output. `Stop` runs
+`fold_pending(require_success=True)` after every assistant turn, and
+`looks_successful` is satisfied by two substantive steps ending in a closing
+step. `npm test`, `ruff`, `git commit` and `helm upgrade` are all closing steps.
+A real procedure passes several of those in a row, so it is folded at the first
+one and the rest start a new span — the procedure is chopped at every gate it
+passes.
+
+Its own `docs/detection.md` names this exact risk while narrowing a different
+regex: "reading `kubectl` alone as completion splits recipes exactly as
+`git status` did." The narrowing was applied to `MUTATING`; the gates were left
+in, and they split recipes the same way.
+
+### Recurrence never worked
+
+`recurs` is two runs of one procedure differing only in the service name and
+image tag. Lexical dedup should be at its strongest here, and it banked three
+separate entries at ×1. Meanwhile `retry` produced a ×2 by merging two
+*unrelated* two-step fragments.
+
+So the matching is simultaneously too weak to catch an identical procedure and
+strong enough to merge things that have nothing to do with each other. A design
+whose entire promotion gate is a recurrence count cannot reach that count, and
+this is the same failure this branch measured on fingerprint matching before
+abandoning it: `edit:.md | bash:cd` at 178 occurrences, `similarity()` at 0.00
+on every real pair.
+
+## Verdict
+
+**This branch has the better detector.** The deciding results, in order:
+
+1. **`recurs`.** A count-based promotion gate that cannot count an identical
+   repeated procedure has no path to promoting anything.
+2. **`big`.** Budgets on banks nothing from a long session; budgets off banks
+   one 440-step blob. No setting between them, and a long session is where a
+   recurring procedure hides.
+3. **Fragmentation on its own scenarios.** Two of six, with the cause structural
+   rather than tuned — folding at each passed gate is what `Stop` is for.
+
+**What that branch wins, and it is not small:** no model call, no latency, no
+API key, and it runs unattended. This branch costs one frontier call per
+session and only runs when a person types `/log-session`. The end state that
+follows from both columns is that branch's trigger with this branch's judgement
+— not a merge of two detectors.
+
 ## Two caveats, before quoting any of this
 
-**The fixtures were written for this branch's detector, and tuned against it.**
-A miss can be fixture bias as easily as a design limit. The control above is
-what separates them for the MCP question; nothing similar has been run for
-`two` or `barren`.
+**~~The fixtures were written for this branch's detector.~~** Answered by the
+symmetric round above: on six sessions built from that branch's own scenario
+table, in its own vocabulary, it scored two of six. The bias was real and it
+was not what decided the outcome.
 
 **Only half of that branch has been measured.** Its design puts judgement at
 review time: `/skillpp-review` reads the repo, resolves what it can, and asks
@@ -114,7 +182,11 @@ review has nothing to look at. That failure is final.
 
 - The paid half: `/skillpp-review` against the candidates banked above, to see
   how much of a bad span a review recovers.
-- This branch's own 13 cases as one sweep. Six were verified after the last
-  prompt change; the other seven are older than the current command file.
-- Recurrence on that branch. Every fixture banked ×1, so its 3× threshold was
-  never reached by anything, and its matching was never exercised.
+- **This branch against the same six symmetric fixtures.** Added to
+  `tests/evals/run.py` as `their-refine`, `their-retry`, `their-distinct`,
+  `their-explore`, `their-mid`, `their-recurs`. This is the other half of the
+  symmetric round and the only thing that could still overturn the verdict: if
+  this branch also fragments `refine` or misses the recurrence in `recurs`, the
+  gap is smaller than stated. Needs model calls.
+- This branch's original 13 cases as one sweep. Six were verified after the
+  last prompt change; the other seven are older than the current command file.

@@ -349,6 +349,28 @@ def _seed_queue(config: Config) -> None:
             add_occurrence(config, name=name, session=f"{name}-{n}")
 
 
+def _their(which: str, out: Path) -> Path:
+    import their_scenarios
+    return their_scenarios.ALL[which](out)
+
+
+def _kept_the_lock_rule(entries: list[dict]) -> str | None:
+    """One entry, and the failure survives as the rule that prevents it.
+
+    The discriminator between the two designs on the same session. That branch
+    keeps the failed `alembic upgrade` as a step; this one is instructed to keep
+    it only as the rule -- scale the app to zero before migrating -- because a
+    body that recounts the failure tells a future agent to reproduce it.
+    """
+    if len(entries) != 1:
+        return (f"expected 1 entry, got {len(entries)}: "
+                f"{[e['name'] for e in entries]}")
+    body = entries[0]["body"].lower()
+    if not any(w in body for w in ("scale", "replicas", "zero", "0")):
+        return f"the lock rule is missing: {entries[0]['body'][:200]!r}"
+    return None
+
+
 def _mundane(out: Path) -> Path:
     from mundane import transcript
     return transcript(out)
@@ -440,6 +462,48 @@ CASES = [
          command="/review-candidates",
          denials_expected=True, bookmarks=False,
          check_run=_offered_all_of_them),
+    # ---- the capture branch's own scenarios, on its home turf ----
+    # docs/bakeoff.md measured that branch against fixtures written for this
+    # one, and the fair objection was that the fixtures decided it. These are
+    # built from its own scenario table with its own closing vocabulary. Its
+    # score on them is in that document; these are the other column.
+    Case("their-refine",
+         asks="one procedure refined across two requests, its way",
+         breaks="a procedure that took two requests is recorded as two",
+         transcripts=lambda out: [_their("refine", out)],
+         check=_records_something),
+    Case("their-retry",
+         asks="a migration that failed on a lock, then passed",
+         breaks="the failure is recorded as something that happened rather "
+                "than as the rule that stops it happening again",
+         transcripts=lambda out: [_their("retry", out)],
+         check=_kept_the_lock_rule),
+    Case("their-distinct",
+         asks="two tasks back to back, separated by 'lgtm'",
+         breaks="given every boundary signal there is, they still merge or "
+                "fragment",
+         transcripts=lambda out: [_their("distinct-tasks", out)],
+         check=_two_procedures),
+    Case("their-explore",
+         asks="eight greps then a one-line fix, committed",
+         breaks="ordinary debugging is recorded as a procedure, which is how "
+                "the store fills with things nobody reads",
+         # Scored against this branch's definition, not head-to-head: that
+         # branch is right to bank a finished mutation here, and this one is
+         # right to record nothing. See their_scenarios.explore_then_fix.
+         transcripts=lambda out: [_their("explore-then-fix", out)],
+         check=_recorded_nothing),
+    Case("their-mid",
+         asks="six reads and no conclusion — the one both designs agree on",
+         breaks="an abandoned investigation becomes a candidate",
+         transcripts=lambda out: [_their("mid-investigation", out)],
+         check=_recorded_nothing),
+    Case("their-recurs",
+         asks="the same rollout run twice in one session, two services",
+         breaks="an identical procedure repeated does not count as a "
+                "recurrence, so no threshold is ever reached",
+         transcripts=lambda out: [_their("recurs", out)],
+         check=_matched_itself),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
