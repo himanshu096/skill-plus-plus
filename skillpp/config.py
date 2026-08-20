@@ -24,6 +24,10 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _str_env(name: str, default: str) -> str:
+    return os.environ.get(name) or default
+
+
 def _float_env(name: str, default: float) -> float:
     try:
         return float(os.environ[name])
@@ -53,6 +57,29 @@ class Config:
         self.max_field_chars = _int_env("SKILLPP_MAX_FIELD", 2000)
         # Never ask the developer more than this many questions (README 4).
         self.max_questions = _int_env("SKILLPP_MAX_QUESTIONS", 3)
+        # How to invoke the developer's own agent when draining a queue of
+        # ended sessions. A template rather than a binary name, because the
+        # flags are as host-specific as the command: --no-session-persistence
+        # is mandatory for Claude Code or the drain re-queues itself, and
+        # --allowed-tools has no equivalent elsewhere. `{prompt}` is replaced
+        # with the slash command and its argument.
+        #
+        # Note what this is *not* for. The skill body is written by whatever
+        # agent runs `/log-session`, which is a prompt in a markdown file rather
+        # than an API call — a Cursor user's model writes it in Cursor. This
+        # only matters for the unattended path, where something has to start an
+        # agent that would otherwise be started by a person.
+        self.agent_command = _str_env(
+            "SKILLPP_AGENT",
+            'claude -p {prompt} --no-session-persistence '
+            '--allowed-tools "Bash(python3 bin/skillpp *)"')
+        # Where a local model is served, and which ones to ask. Overridable for
+        # the same reason as everything else here, and because a developer may
+        # have neither of these installed under these names.
+        self.ollama_url = _str_env("SKILLPP_OLLAMA",
+                                   "http://127.0.0.1:11434")
+        self.local_model = _str_env("SKILLPP_LOCAL_MODEL", "qwen2.5:7b")
+        self.embed_model = _str_env("SKILLPP_EMBED_MODEL", "nomic-embed-text")
         # Below this many new messages a review is not worth its fixed cost.
         # Overridable because it is a cost guard rather than a judgement: an
         # eval deliberately pays that cost on a small session, and until this

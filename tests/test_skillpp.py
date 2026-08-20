@@ -2940,3 +2940,67 @@ class TestSessionExemplars(TempRoot):
         with self.config.exemplars_file.open("a", encoding="utf-8") as handle:
             handle.write("not json\n\n")
         self.assertEqual(len(similar.exemplars(self.config)), 1)
+
+
+class TestHostPortability(TempRoot):
+    """Nothing about which agent or model a developer uses is hardcoded.
+
+    The distinction that matters, and it is not obvious: the skill body is
+    written by whatever agent runs `/log-session`, which is a prompt in a
+    markdown file rather than an API call. A Cursor user's model writes it in
+    Cursor and skillpp never knows. There is nothing to configure there and
+    hardcoding a model would be strictly worse.
+
+    What *is* hardcoded-shaped is the unattended path — draining a queue means
+    starting an agent that nobody asked for, and both the binary and its flags
+    are host-specific.
+    """
+
+    def test_the_default_agent_carries_the_flag_that_stops_a_loop(self):
+        # A spawned session ends, the hook enqueues it, the next drain picks it
+        # up. Losing this flag from the default makes the queue refill itself.
+        self.assertIn("--no-session-persistence",
+                      Config(self.root / "a").agent_command)
+
+    def test_the_agent_command_is_overridable(self):
+        with unittest.mock.patch.dict(
+                os.environ, {"SKILLPP_AGENT": "cursor-agent -q {prompt}"}):
+            self.assertEqual(Config(self.root / "b").agent_command,
+                             "cursor-agent -q {prompt}")
+
+    def test_the_local_model_names_and_host_are_overridable(self):
+        with unittest.mock.patch.dict(os.environ, {
+                "SKILLPP_OLLAMA": "http://gpu-box:11434",
+                "SKILLPP_LOCAL_MODEL": "llama3.1:8b",
+                "SKILLPP_EMBED_MODEL": "mxbai-embed-large"}):
+            config = Config(self.root / "c")
+            self.assertEqual(config.ollama_url, "http://gpu-box:11434")
+            self.assertEqual(config.local_model, "llama3.1:8b")
+            self.assertEqual(config.embed_model, "mxbai-embed-large")
+
+    def test_a_configured_host_reaches_both_endpoints(self):
+        from skillpp import local, similar
+        with unittest.mock.patch.dict(
+                os.environ, {"SKILLPP_OLLAMA": "http://gpu-box:11434/"}):
+            config = Config(self.root / "d")
+        self.assertEqual(local.endpoint_for(config),
+                         "http://gpu-box:11434/api/generate")
+        self.assertEqual(similar.endpoint_for(config),
+                         "http://gpu-box:11434/api/embed")
+
+    def test_no_module_names_a_vendor_binary(self):
+        """The guard on the thing this class exists for.
+
+        `claude` may appear as a *default* in config, where a developer can
+        override it. It must not appear in the modules that do the work, or the
+        override is a lie.
+        """
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent / "skillpp"
+        for module in sorted(root.glob("*.py")):
+            if module.name == "config.py":
+                continue
+            text = module.read_text()
+            with self.subTest(module.name):
+                self.assertNotIn('"claude"', text)
+                self.assertNotIn("'claude'", text)

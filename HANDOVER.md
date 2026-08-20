@@ -401,6 +401,27 @@ here tests it — only future sessions can.
 `locate` and `window.py` remain unwired: both were built to feed a local writer,
 and a 7B cannot write a body.
 
+**Nothing names a vendor outside `config.py`.** The distinction worth
+understanding before changing any of this:
+
+The **skill body is written by whatever agent runs `/log-session`**, which is a
+prompt in a markdown file rather than an API call. A Cursor user's model writes
+it in Cursor and skillpp never knows which model it was. There is nothing to
+configure and hardcoding one would be strictly worse.
+
+What did need configuring is the **unattended** path. Draining a queue means
+starting an agent nobody asked for, and both the binary and its flags are
+host-specific — `--no-session-persistence` is mandatory for Claude Code or the
+drain re-queues itself, and `--allowed-tools` has no equivalent elsewhere. So
+`SKILLPP_AGENT` is a command template with a `{prompt}` placeholder, defaulting
+to the Claude Code invocation. A missing binary reports what to set rather than
+raising.
+
+Also overridable now, per this module's own promise: `SKILLPP_OLLAMA`,
+`SKILLPP_LOCAL_MODEL`, `SKILLPP_EMBED_MODEL`. A test asserts no module outside
+`config.py` contains the string `claude`, because otherwise the override is a
+lie.
+
 **No framework.** `skillpp/` is stdlib-only with no dependency manifest, which
 is the point: it runs as a hook inside someone else's session and must never
 break it. The Ollama call is one urllib POST. Google ADK was considered and is

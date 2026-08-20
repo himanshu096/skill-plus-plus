@@ -61,7 +61,15 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
-ENDPOINT = "http://127.0.0.1:11434/api/embed"
+# Defaults; `Config` overrides both from the environment, since a developer
+# may serve Ollama elsewhere or have these models under other names.
+_DEFAULT_HOST = "http://127.0.0.1:11434"
+ENDPOINT = _DEFAULT_HOST + "/api/embed"
+
+
+def endpoint_for(config=None) -> str:
+    host = getattr(config, "ollama_url", None) or _DEFAULT_HOST
+    return host.rstrip("/") + "/api/embed"
 MODEL = "nomic-embed-text"
 # Body against body. Midpoint of the measured gap: 0.776 highest
 # different-procedure pair, 0.873 lowest same-procedure pair.

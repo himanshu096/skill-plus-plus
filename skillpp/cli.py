@@ -538,22 +538,39 @@ def cmd_drain(args: argparse.Namespace) -> int:
         return 0
 
     if not args.apply:
-        print("\nDry run. Each of these is one model call:\n")
+        import shlex
+        print("\nDry run. Each of these is one model call, via "
+              f"{shlex.split(config.agent_command)[0]!r}:\n")
         for session, path in todo:
-            print(f"  claude -p '/log-session {path}' "
-                  f"--no-session-persistence")
-        print("\nRun again with --apply to spend them.")
+            argv = [part.replace("{prompt}", f"/log-session {path}")
+                    for part in shlex.split(config.agent_command)]
+            print("  " + " ".join(shlex.quote(a) for a in argv))
+        print("\nRun again with --apply to spend them."
+              "\nSet SKILLPP_AGENT to change how your agent is invoked.")
         return 0
 
     for n, (session, path) in enumerate(todo, 1):
         print(f"\n[{n}/{len(todo)}] {session[:8]} {path.name}")
-        done_proc = subprocess.run(
-            ["claude", "-p", f"/log-session {path}",
-             # Mandatory: without it this session ends, the hook enqueues it,
-             # and the queue refills itself.
-             "--no-session-persistence",
-             "--allowed-tools", "Bash(python3 bin/skillpp *)"],
-            capture_output=True, text=True, timeout=900)
+        # The developer's own agent, from config.agent_command. Not hardcoded,
+        # because the binary and its flags are both host-specific — and note the
+        # default carries --no-session-persistence for a reason: without it the
+        # spawned session ends, the hook enqueues it, and the queue refills
+        # itself faster than it empties.
+        import shlex
+        argv = [part.replace("{prompt}", f"/log-session {path}")
+                for part in shlex.split(config.agent_command)]
+        if not any("{prompt}" in part or "/log-session" in part
+                   for part in argv):
+            print(f"    SKILLPP_AGENT has no {{prompt}} placeholder; "
+                  f"nothing to run", file=sys.stderr)
+            continue
+        try:
+            done_proc = subprocess.run(argv, capture_output=True, text=True,
+                                       timeout=900)
+        except FileNotFoundError:
+            print(f"    agent not found: {argv[0]!r}. Set SKILLPP_AGENT to how "
+                  f"your agent is invoked.", file=sys.stderr)
+            return 1
         out = (done_proc.stdout or done_proc.stderr).strip()
         print("".join(f"    {ln}\n" for ln in out.splitlines()[-6:]))
     return 0

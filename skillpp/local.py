@@ -30,7 +30,15 @@ from pathlib import Path
 
 from .window import Segment
 
-ENDPOINT = "http://127.0.0.1:11434/api/generate"
+# Defaults; `Config` overrides both from the environment, since a developer
+# may serve Ollama elsewhere or have these models under other names.
+_DEFAULT_HOST = "http://127.0.0.1:11434"
+ENDPOINT = _DEFAULT_HOST + "/api/generate"
+
+
+def endpoint_for(config=None) -> str:
+    host = getattr(config, "ollama_url", None) or _DEFAULT_HOST
+    return host.rstrip("/") + "/api/generate"
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 # Room for a model that reasons before it answers. At 128 a thinking model
 # spends the whole budget and returns an empty string, which reads as a wrong
