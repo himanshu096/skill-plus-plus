@@ -287,6 +287,30 @@ Verified since the last full sweep: `near`, `promoted`, `secrets`, `stop`,
 universal bookmark check, the streamed output and `SKILLPP_SKILLS_DIR` landed,
 and have not been re-run against them.
 
+### The three that matter
+
+Everything else in the eval suite is secondary to these, and it is worth knowing
+which case covers which before adding a thirty-eighth.
+
+| the claim | covered by |
+| --- | --- |
+| the model notices a procedure in a session | eval `new` |
+| it recognises one already recorded and the count rises | eval `match`, guarded by `distinct`, `near`, `promoted` |
+| a candidate past the threshold, once accepted, becomes a skill on disk | `TestTheWholeLoop` |
+
+The third had nothing until it was written. `review-lists-all` stops at the
+question a person answers and the accept-path tests call `promote-candidate` on
+a seeded store, so both ends were covered and the join was not.
+`TestTheWholeLoop` walks the whole chain through the real CLI with nothing
+seeded: three distinct sessions record it, the count reaches three, the queue
+offers that name, promotion writes the SKILL.md, and a fourth sighting afterwards
+raises the count without filing a duplicate. The only thing left out is pressing
+the button, which `claude -p` cannot do.
+
+Worth keeping in proportion: 24 of the 37 eval cases are `locate-*`, `their-*`
+and `cold-*` — the local-inference track and the cross-branch comparison. Those
+serve components that are not in the pipeline. The three above are the product.
+
 ### Not yet tested
 
 **Anything local.** `window.py`, `reconcile.py` and `/locate` exist to put the

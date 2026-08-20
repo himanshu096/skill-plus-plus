@@ -2450,3 +2450,134 @@ class TestPrepareSessionWindows(TempRoot):
         # This output goes into a prompt, where an exit code cannot be seen.
         self.assertIn("Stop here and write nothing",
                       self.run_it("--window", "99"))
+
+
+class TestTheWholeLoop(TempRoot):
+    """Record, record, record, cross the threshold, accept, get a skill.
+
+    The three things this product has to do are: notice a procedure, recognise
+    it again and count it, and turn an accepted one into a skill on disk. The
+    first two have eval cases (`new`, `match`). The third had none — the review
+    eval stops at the question a person answers, and the accept-path tests call
+    `promote-candidate` on a store that was seeded rather than accumulated. Both
+    ends were covered and the join between them was not.
+
+    Everything here goes through the real CLI, with nothing seeded: the count
+    reaches three because three sessions recorded it, and the promotion names
+    the candidate the queue actually offered. The one thing left out is pressing
+    the button, which `claude -p` cannot do.
+    """
+
+    BODY = ("Read the intake spec first — the required fields change.\n\n"
+            "## Search by signature, not by title\n\n"
+            "Titles get worded differently every time.\n\n"
+            "## Link, do not duplicate\n\n"
+            "Attach the thread to the existing issue.")
+
+    def cli(self, *args: str, stdin: str | None = None) -> str:
+        """Run the real command, capturing what it prints."""
+        import contextlib
+        import io
+        from skillpp.cli import main
+        buf = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(contextlib.redirect_stdout(buf))
+            if stdin is not None:
+                stack.enter_context(unittest.mock.patch("sys.stdin",
+                                                        io.StringIO(stdin)))
+            code = main(["--root", str(self.config.root), *args])
+        self.assertEqual(code, 0, buf.getvalue())
+        return buf.getvalue()
+
+    def transcript(self, tag: str) -> Path:
+        """A distinct session that did the procedure.
+
+        Distinct matters: the count is distinct sessions, so three recordings
+        against one transcript would stay at one however many times they ran.
+        """
+        return write_transcript(
+            self.root,
+            rec(f"{tag}u1", content=f"a customer reported something ({tag})"),
+            rec(f"{tag}a1", "assistant",
+                [tool_use("Bash", command=f"gh issue list --search {tag}")]),
+            rec(f"{tag}r1", "user", [tool_result("no match", tid="tu_Bash")]),
+            rec(f"{tag}a2", "assistant",
+                [tool_use("Bash", command=f"gh issue create --title {tag}")]),
+            rec(f"{tag}r2", "user", [tool_result("created #1", tid="tu_Bash")]),
+            name=f"{tag}.jsonl")
+
+    def record(self, tag: str, *, name: str, matches: str | None = None):
+        args = ["record-candidate", str(self.transcript(tag)), "--name", name]
+        if matches:
+            args += ["--matches", matches]
+        return self.cli(*args, stdin=self.BODY)
+
+    def test_three_sessions_reach_the_threshold_and_promote_to_a_skill(self):
+        from skillpp import memory
+        NAME = "filing-a-bug-from-a-support-report"
+
+        # 1. First sighting. A procedure nobody has seen before.
+        self.record("s1", name=NAME)
+        entry = memory.find(memory.load(self.config), NAME)
+        self.assertEqual(entry.count, 1)
+        self.assertEqual(memory.reviewable(memory.load(self.config)), [],
+                         "one sighting must not reach the review queue")
+
+        # 2. Seen again, in a different session, matched against the first.
+        self.record("s2", name="filing-a-bug", matches=NAME)
+        self.assertEqual(memory.find(memory.load(self.config), NAME).count, 2)
+        self.assertEqual(memory.reviewable(memory.load(self.config)), [],
+                         "two sightings is still below the threshold")
+
+        # 3. Third distinct session crosses it.
+        self.record("s3", name="filing-a-bug", matches=NAME)
+        store = memory.load(self.config)
+        entry = memory.find(store, NAME)
+        self.assertEqual(entry.count, 3)
+        self.assertEqual([e.name for e in memory.reviewable(store)],
+                         [NAME],
+                         "three sightings must reach the review queue")
+
+        # The body is still the one the first sighting taught, untouched by two
+        # later recordings.
+        self.assertEqual(entry.body, self.BODY)
+
+        # 4. What the queue offers is what a person is asked about.
+        listed = self.cli("candidates")
+        self.assertIn(NAME, listed)
+        self.assertIn("x3", listed)
+
+        # 5. Accepted. This is the step that had no test joining it to the rest.
+        skills = self.root / "skills"
+        self.cli("promote-candidate", NAME,
+                 "--skills-dir", str(skills),
+                 "--description", "File a bug from a support report.",
+                 "--when-to-use", "a customer reports a bug")
+
+        skill = skills / NAME / "SKILL.md"
+        self.assertTrue(skill.is_file(), "accepting produced no skill file")
+        text = skill.read_text()
+        # Everything discovery reads before loading the body.
+        self.assertIn(f"name: {NAME}", text)
+        self.assertIn("File a bug from a support report.", text)
+        self.assertIn("a customer reports a bug", text)
+        # And the procedure itself, whole.
+        self.assertIn("## Search by signature, not by title", text)
+        self.assertIn("## Link, do not duplicate", text)
+        self.assertIn("seen: 3", text)
+
+        # 6. It leaves the queue and does not come back.
+        store = memory.load(self.config)
+        self.assertEqual(memory.reviewable(store), [])
+        promoted = memory.find(store, NAME)
+        self.assertEqual(promoted.status, memory.PROMOTED)
+        self.assertEqual(promoted.count, 3, "promotion must not reset the count")
+
+        # 7. Doing the work again keeps it promoted and raises the count,
+        #    rather than filing a duplicate candidate.
+        self.record("s4", name="filing-a-bug", matches=NAME)
+        again = memory.find(memory.load(self.config), NAME)
+        self.assertEqual(again.count, 4)
+        self.assertEqual(again.status, memory.PROMOTED)
+        self.assertEqual(len(list(self.config.patterns_dir.glob("*.md"))), 1,
+                         "a recurrence after promotion filed a second entry")
