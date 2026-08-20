@@ -2313,3 +2313,62 @@ class TestTheTwoLocatePrompts(unittest.TestCase):
         one = (self.ROOT / ".claude" / "commands" / "locate-one.md").read_text()
         self.assertNotRegex(one, r"^\s*\d+\s+(landed|open)\s*$")
         self.assertIn("One word, and nothing else", one)
+
+
+class TestLocalSpans(unittest.TestCase):
+    """Turning per-request verdicts into stretches a judge should read.
+
+    No model involved: this is the part that combines answers, and it is the
+    part that decides what an expensive read costs. Tested here because it is
+    deterministic, unlike anything that produced the verdicts.
+    """
+
+    def verdicts(self, *landed: bool | None):
+        from skillpp.local import Verdict
+        return [Verdict(index=i, landed=v, why="") for i, v in enumerate(landed)]
+
+    def test_a_span_runs_from_after_the_last_landing_to_this_one(self):
+        from skillpp.local import spans
+        # open, open, landed  ->  one span covering all three: the procedure
+        # began when the work began, not at the request that finished it.
+        self.assertEqual(spans(self.verdicts(False, False, True)), [(0, 2)])
+
+    def test_two_landings_are_two_spans(self):
+        from skillpp.local import spans
+        self.assertEqual(spans(self.verdicts(True, False, True)),
+                         [(0, 0), (1, 2)])
+
+    def test_trailing_unresolved_work_is_not_a_span(self):
+        # Work still open when the session ended is not a procedure to read.
+        from skillpp.local import spans
+        self.assertEqual(spans(self.verdicts(True, False, False)), [(0, 0)])
+
+    def test_nothing_landing_means_nothing_to_read(self):
+        from skillpp.local import spans
+        self.assertEqual(spans(self.verdicts(False, False, False)), [])
+
+    def test_an_escalated_request_never_ends_a_span(self):
+        """Uncertainty shows a judge more, never less.
+
+        A request the models disagreed about is exactly the one a judge should
+        see in context. Treating it as a landing would cut the span there and
+        hand over the half before it.
+        """
+        from skillpp.local import spans
+        self.assertEqual(spans(self.verdicts(False, None, True)), [(0, 2)])
+
+    def test_disagreement_escalates_rather_than_picking_a_side(self):
+        from skillpp.local import Verdict
+        v = Verdict(index=0, landed=None, why="qwen: no vs granite: yes")
+        self.assertTrue(v.escalates)
+        self.assertFalse(Verdict(index=0, landed=True, why="").escalates)
+
+    def test_a_missing_model_raises_rather_than_reporting_an_empty_session(self):
+        # A silent fallback would report "nothing landed" for a session the
+        # models never saw, which is indistinguishable from a quiet session.
+        from skillpp.local import LocalModelUnavailable, verdicts
+        from skillpp.window import Segment
+        with unittest.mock.patch("skillpp.local._ask",
+                                 side_effect=LocalModelUnavailable("no daemon")):
+            with self.assertRaises(LocalModelUnavailable):
+                verdicts([Segment(messages=[], text="> x", index=0)])

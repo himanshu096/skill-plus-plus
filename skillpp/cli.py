@@ -251,6 +251,62 @@ def cmd_segments(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_locate(args: argparse.Namespace) -> int:
+    """Print which requests in a session landed, and the spans between them.
+
+    The cheap half of detection, run locally. What it produces is a shortlist of
+    stretches worth an expensive read — not a verdict about any skill.
+
+    Deliberately prints its own uncertainty: a request the models disagreed
+    about is marked, and stays inside a span rather than ending one.
+    """
+    from .local import LocalModelUnavailable, LENIENT, STRICT, spans, verdicts
+    from .prepare import TranscriptNotFound, resolve
+    from .transcript import read
+    from .window import DEFAULT_ASPECTS, keep_aspects, segments
+
+    try:
+        path = resolve(args.target)
+        segs = segments(read(path))
+    except (TranscriptNotFound, ValueError, OSError) as exc:
+        print(f"Could not read this session: {exc}", file=sys.stderr)
+        return 1
+    if not segs:
+        print("No requests in this session.")
+        return 0
+
+    models = tuple(args.model) if args.model else (
+        (STRICT, LENIENT) if args.pair else (STRICT,))
+    chosen = tuple(args.aspect) if args.aspect else DEFAULT_ASPECTS
+    render = (lambda seg: keep_aspects(seg.text, chosen)
+              if chosen != DEFAULT_ASPECTS else seg.text)
+
+    try:
+        found = verdicts(segs, models=models, render=render)
+    except LocalModelUnavailable as exc:
+        print(f"{exc}\n\nInstall the model with: ollama pull {models[0]}",
+              file=sys.stderr)
+        return 1
+
+    print(f"{path.name}: {len(segs)} requests, {', '.join(models)}\n")
+    by_index = {s.index: s for s in segs}
+    for verdict in found:
+        mark = "landed" if verdict.landed else (
+            "?" if verdict.escalates else "open")
+        print(f"  {verdict.index:>3}  {mark:<7} {verdict.why:<34} "
+              f"{by_index[verdict.index].ask[:44]!r}")
+
+    found_spans = spans(found)
+    unsure = [v.index for v in found if v.escalates]
+    print(f"\n{len(found_spans)} span(s) for a judge to read: {found_spans}")
+    if unsure:
+        print(f"{len(unsure)} request(s) the models disagreed on: {unsure} — "
+              f"kept inside their spans, not treated as endings")
+    if not found_spans:
+        print("Nothing landed, so nothing to read. Most sessions are like this.")
+    return 0
+
+
 def cmd_candidates(args: argparse.Namespace) -> int:
     """List what has been recorded, most-seen first."""
     from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
@@ -814,6 +870,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="print just segment N, for asking one question about "
                         "one request")
     p.set_defaults(func=cmd_segments)
+
+    p = sub.add_parser("locate",
+                       help="run the local cheap pass: which requests landed")
+    p.add_argument("target", nargs="?",
+                   help="transcript path or session id (default: this session)")
+    p.add_argument("--pair", action="store_true",
+                   help="run a strict and a lenient model and escalate where "
+                        "they disagree")
+    p.add_argument("--model", action="append", help="override the models used")
+    p.add_argument("--aspect", action="append",
+                   help="show the models only these parts of each request")
+    p.set_defaults(func=cmd_locate)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")
     p.add_argument("--json", action="store_true")
