@@ -321,6 +321,48 @@ escalate that segment and nothing more. `reconcile.py` already resolves exactly
 this shape of disagreement over spans, so the same machinery extends to aspects
 without a confidence model.
 
+## First local attempt, and why it failed
+
+`tests/evals/local.py` asks a local model the same question over the same
+fixtures, reconstructing the prompt *from the command file* — frontmatter
+stripped, the `` !`command` `` line replaced with what that command actually
+prints — because a hand-copied prompt would test the copy.
+
+`qwen2.5:7b-ctx16k`, full content, four fixtures: **3 of 8 segments**, and the
+reason is not judgement. Three of the four replies were byte-identical:
+
+    0 landed
+    1 open
+    2 open
+
+That is the example in the prompt's answer-format block, returned verbatim,
+including three segments for a fixture that has one. The model recited the shape
+instead of reading the session.
+
+Two things worth keeping from that.
+
+**A scorer that only checks labelled segments cannot see this.** `cold-bespoke`
+has one segment labelled `landed`, so the recited answer's first line matched and
+it scored 1/1 — a pass. The local scorer now returns zero for any answer naming a
+segment that does not exist. `run.py`'s checker already did; this one did not, and
+the first local run looked better than it was.
+
+**The failure is the shape of the request, not the size of the model.** The
+locator asks one question per *segment* and then asks for all the answers in a
+single call. That is much closer to the five-questions-in-one-schema shape the
+capture branch measured returning `task_count=40` than to the one-question-per-
+call shape it measured getting three out of three in under three seconds. The
+next thing to try is one call per segment: more calls, each roughly 200 tokens,
+which is also the only version a 7B model was ever shown to handle.
+
+Changing the prompt to fix this is not free, because the frontier arm is at 18 of
+18 on it and would need re-verifying. Asking per segment instead leaves the
+prompt alone.
+
+**Memory, since it is a real constraint here.** Each model stays resident after
+answering; two of these at once took an 18 GB machine to 16.5 GB. `local.py`
+runs one model per invocation and unloads it when its sweep ends.
+
 ## Still to measure
 
 **Whether windowing loses procedures the un-windowed judge finds.** Take ten
