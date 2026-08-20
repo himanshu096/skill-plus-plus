@@ -96,18 +96,31 @@ def ask_claude(prompt: str, *, timeout: int = 300) -> tuple[str, float]:
     return done.stdout, time.monotonic() - start
 
 
-def ask(model: str, prompt: str, *, timeout: int = 300) -> tuple[str, float]:
+# How many tokens a reply may use. Not a detail: at 128 a model that reasons
+# before answering spends the whole budget thinking and returns an empty string,
+# which scored gemma4:12b at 0 of 21 segments and looked like 21 wrong answers.
+# Truncation is now reported as truncation -- see `ask`.
+PREDICT = 768
+
+
+def ask(model: str, prompt: str, *, timeout: int = 300,
+        predict: int = PREDICT) -> tuple[str, float]:
     body = json.dumps({
         "model": model, "prompt": prompt, "stream": False,
         # Deterministic: this is a classification, and a sampled one cannot be
         # compared against a frontier run or across models.
-        "options": {"temperature": 0, "num_predict": 128},
+        "options": {"temperature": 0, "num_predict": predict},
     }).encode()
     request = urllib.request.Request(
         OLLAMA, data=body, headers={"Content-Type": "application/json"})
     start = time.monotonic()
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        answer = json.load(response).get("response", "")
+        payload = json.load(response)
+    answer = payload.get("response", "")
+    # A reply cut off mid-thought is not an answer and must not be counted as a
+    # wrong one. Said out loud so the failure names itself.
+    if payload.get("done_reason") == "length":
+        answer += f"\n[truncated at {predict} tokens before answering]"
     return answer, time.monotonic() - start
 
 
@@ -145,11 +158,21 @@ def segment_text(transcript: Path, index: int,
 
 
 def yes_no(said: str) -> bool | None:
-    """Strict: a reply containing both words has not answered."""
-    found = {m.group(1).lower() for m in _YES_NO.finditer(said)}
-    if len(found) != 1:
+    """The verdict, or None if the reply did not give exactly one.
+
+    Strict on the whole reply for a short answer, but a model that reasons
+    aloud will name both words on its way to a conclusion. For those the last
+    one wins, which is the conclusion. Applied only when the reply is long
+    enough to be reasoning rather than a hedge in a one-line answer.
+    """
+    hits = [m.group(1).lower() for m in _YES_NO.finditer(said)]
+    if not hits:
         return None
-    return found.pop() == "yes"
+    if len(set(hits)) == 1:
+        return hits[0] == "yes"
+    if len(said.split()) > 40:
+        return hits[-1] == "yes"
+    return None
 
 
 def decompose(model: str, transcript: Path, index: int,
@@ -231,6 +254,9 @@ def main() -> int:
     ap.add_argument("--aspect", action="append",
                     help="withhold everything else, as the cheap pass does")
     ap.add_argument("--show", action="store_true", help="print each reply")
+    ap.add_argument("--predict", type=int, default=PREDICT,
+                    help=f"token budget per reply (default {PREDICT}); a model "
+                         f"that reasons before answering needs room for it")
     ap.add_argument("--decompose", action="store_true",
                     help="two visible-fact questions per request, combined in "
                          "code — the local variant")
