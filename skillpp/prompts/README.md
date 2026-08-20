@@ -179,3 +179,35 @@ measured and wired, and matching is semantic similarity, which is an embedding
 model's job rather than a generative one. The body needs a frontier model, or
 hardware that holds something much larger than 12B. This is kept in the tree
 rather than deleted so the next person does not spend the day rediscovering it.
+
+
+## Matching: an embedding model separates procedures cleanly
+
+The other half of detection — given a proposal, is this a procedure already in
+the store? — is similarity rather than generation, which is why it is worth
+trying locally when writing a body is not. A lexical `similarity()` was measured
+on this exact problem and returned 0.00 on every real pair, because the same work
+is named and worded differently every time.
+
+`nomic-embed-text` through Ollama, cosine over the recorded proposal bodies, with
+ground truth taken from what the frontier judge decided:
+
+| | pairs | min | mean | max |
+| --- | --- | --- | --- | --- |
+| same procedure | 4 | **0.873** | 0.923 | 0.990 |
+| different procedure | 24 | 0.569 | 0.661 | **0.776** |
+
+Separable with a gap of about a tenth. Any threshold in (0.776, 0.873) is right
+on all 28 pairs; the midpoint is **0.824**. Synthetic fixtures were dropped from
+those figures — `recurrence-a` against `recurrence-b` scores 1.000 by
+construction and flatters the top end.
+
+Two things this does not do. **It does not make the pipeline local**, because
+what it compares are bodies, and a 7B cannot write one — matching good bodies is
+useful, matching bad ones is not. And n=4 on the positive side is thin, though
+it grows on its own: every future match the pipeline records adds a pair.
+
+What it does do is replace a frontier judgement that scales with the store. Today
+matching means pasting every recorded candidate into the prompt and asking the
+model to compare; at 0.824 it is a dot product per candidate, and the store can
+grow without the prompt growing with it.
