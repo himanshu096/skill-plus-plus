@@ -527,6 +527,44 @@ from the former, so a fix applied only to the latter ships the old prompt. It
 also asserts the single-segment prompt contains no numbered example, since that
 is what was recited.
 
+## The first real session: 0% reduction
+
+Run end to end on a real 40-request session, 60,180 tokens, after the context
+bug above was fixed.
+
+    22 spans, covering all 40 requests, 60,180 tokens
+    reduction in what a judge must read: 0%
+    contiguous partition of the whole session: True
+    13 of 22 spans are a single request
+
+**The cheap pass filters nothing.** The spans tile the session end to end, so
+every token still reaches a judge — split across 22 calls instead of one, which
+is worse than not doing it: more calls, and the judge cannot see across a
+boundary.
+
+The verdicts are not the problem. It marked `commit as-is`, `push it` and
+`commit + push as-is` as landed, and each of those did land work. The problem is
+`spans()`, which treats every landing as a procedure boundary. A developer
+saying "commit as-is" lands work belonging to the *previous* procedure, so the
+real procedure gets cut across four consecutive spans.
+
+That is the failure `docs/bakeoff.md` measures the capture branch having — a
+recipe chopped at every gate it passes — reproduced here at a different gate.
+Being right about "did work land" turns out not to answer "where does a
+procedure end", and the whole design assumed those were the same question.
+
+Two things this says about the work above. The locator scores are not wrong but
+they are answering a question that does not compose into the thing it was built
+for. And the toy fixtures could not have shown this: each holds one procedure
+with no follow-up "commit it" request after it, so a landing and a boundary
+always coincided.
+
+What would fix it is not another verdict. A boundary needs a landing *and* the
+next request starting a new subject — which is the peek that
+`skillpp segments --only N` already prints and the frontier prompt already uses.
+Unmeasured, and not built, because the last five things built here were built
+before the measurement that would have shaped them.
+
 ## Still to measure
 
 **Whether windowing loses procedures the un-windowed judge finds.** Take ten
