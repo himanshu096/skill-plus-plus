@@ -451,10 +451,47 @@ Faster despite twice the calls, because each prompt is a few hundred tokens
 instead of nine hundred.
 
 So the cheap pass runs locally at 95% of the labelled segments, free, in half a
-minute — against a frontier judge at 21 of 21. The remaining local miss is
-stable and diagnosed: `their-explore` is an edit and a successful commit with no
-test, the frontier definition counts a commit as confirmation, and this model
-will not. Left alone as a floor rather than tuned further.
+minute — against a frontier judge at 21 of 21.
+
+### Which local model, measured
+
+| model | segments | time | note |
+| --- | --- | --- | --- |
+| **qwen2.5:7b** | **20 of 21** | 31s | strict — refuses a change nothing confirmed |
+| granite3.3:8b | 19 of 21 | 43s | lenient — accepts absence of failure |
+| mistral:7b | 18 of 21 | 39s | lenient, shares granite's failures |
+| llama3.1:8b | 16 of 21 | 37s | |
+| llama3.2:3b | 15 of 21 | 15s | 3B is not enough |
+| qwen3:4b | 2 of 5 | 99s | reasons past the budget; with thinking off it writes prose instead of one word |
+| gemma4:12b | 0 of 21 | 228s | same, and 5x slower |
+
+Size is not the constraint — whether the model will answer in one word is.
+`qwen3:4b` is newer and larger than `llama3.2:3b` and does far worse, purely on
+format. Anything reasoning-tuned is the wrong tool for this step.
+
+### Combining two models beats fixing one
+
+`qwen2.5:7b` and `granite3.3:8b` fail on *different* segments, because one is
+strict about confirmation and the other is not.
+
+| combiner | agreed and right | agreed and **wrong** | escalated |
+| --- | --- | --- | --- |
+| **qwen2.5 + granite3.3, unanimous or escalate** | **18** | **0** | 3 (14%) |
+| qwen2.5 + mistral | 17 | 0 | 4 (19%) |
+| granite3.3 + mistral | 20 | **2** | 1 (5%) |
+| all three | 17 | 0 | 4 (19%) |
+| all three, majority vote | 19 of 21 | — | — |
+
+Two things worth keeping. **Majority voting is worse than the best single
+model** — two of the three agree wrongly on the marginal segments and outvote
+the one that had them right. And **`granite3.3 + mistral` looks best on
+escalation rate and is the worst option available**: they share two failure
+modes, so they agree confidently and wrongly twice, which is silent.
+
+The pair to use is the strict model with a lenient one. Their disagreement is
+computed in code, needs no calibration, and lands exactly on the segments where
+the judgement is genuinely marginal — which is what a confidence score was
+supposed to provide and does not.
 
 ### Keeping the two prompts honest
 

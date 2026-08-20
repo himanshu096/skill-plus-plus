@@ -53,9 +53,31 @@ every segment the model accepted had a test or a health check in it, and it
 refused a change that was only committed, which is a stricter rule than the
 prompt asked for.
 
-`their-explore` is the remaining miss and it resists both wordings, stably
-across three runs: eight greps, an edit, a successful commit, nothing failing.
-The frontier definition counts a commit as confirmation; this model will not.
-That is a floor rather than a bug, and it is left alone — the same fixture is
-also the one the frontier judge over-records as a skill, so it is an awkward
-segment by nature.
+`their-explore` is the remaining miss. Located exactly, by ablation: the model
+answers `changed` correctly and `settled` wrongly, and what it wants is an
+**affirmative** signal that the change worked. Rewording the agent's narration
+to say "Fixed it" flips it to correct; adding a passing test flips it. Deleting
+the narration does not, and neither does cutting the greps from eight to two —
+so it is not misled by anything present, it is missing something absent.
+
+Three attempts to close it, none of which worked:
+
+1. The prompt says outright "do not require a test… still gets `yes` if nothing
+   says it failed". Ignored.
+2. A fully deterministic rule — changed, and nothing failed, and nothing
+   reverted — scores **17 of 21** against the labels, worse than the model. It
+   reads `kubectl logs` as a write and cannot tell
+   `mcp__confluence__get_page` from `mcp__tracker__update_issue`, which is the
+   same wall `docs/bakeoff.md` measures the other branch hitting. It also calls
+   `their-retry` unfinished, because a failure *inside* finished work looks the
+   same to a regex as one that ended it.
+3. Injecting only what code knows exactly — how many steps failed, whether
+   anything was reverted — as a line beneath the segment. Byte-identical
+   answers with and without.
+
+So it is a floor. The fix is not in this prompt: `granite3.3:8b` gets this
+segment right *because* it accepts absence of failure, and is correspondingly
+looser where qwen is correctly strict. Running both and escalating where they
+disagree left zero wrong answers on the segments they agreed about, at three
+escalations in twenty-one — and the disagreement is computed in code, which is
+the deterministic part that actually works.
