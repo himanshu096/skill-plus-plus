@@ -100,3 +100,44 @@ looser where qwen is correctly strict. Running both and escalating where they
 disagree left zero wrong answers on the segments they agreed about, at three
 escalations in twenty-one — and the disagreement is computed in code, which is
 the deterministic part that actually works.
+
+
+## Triage: which sessions are worth a frontier call
+
+`triage.md` asks one question about a whole session — did it carry out a
+procedure worth following again — and it exists because the span pass answered a
+harder question correctly and saved nothing. Of the last ten sessions drained,
+five stopped free at the message floor and five spent a frontier call to find
+nothing. A session-level decision would have saved all five.
+
+The input is the developer's **requests only**, which is 7.4% of an extract.
+That matters for one reason: the largest reviewed session is 127,485 tokens and
+its requests are 4,764, so triage can read a session no judge-sized prompt would
+fit. For the other eleven the whole session fits anyway.
+
+Scored on `tests/evals/truth.py` — twelve sessions the pipeline has already
+reviewed, labelled by what the frontier judge proposed. Real sessions, real
+labels.
+
+| | `qwen2.5:7b`, requests only |
+| --- | --- |
+| decided free in code (no request to read) | 3 |
+| asked the model | 9 |
+| sessions with a procedure, sent on | **6 of 6** |
+| sessions without, correctly skipped | **1 of 3** |
+| **procedures lost** | **0** |
+| frontier calls avoided | 4 of 6 |
+| time | 29s, free |
+
+**Read the 1-of-3 rather than the 10-of-12.** The headline counts three
+sessions that rendered to zero request tokens and were therefore answered
+correctly without the model discriminating anything; those are now gated in code
+by `worth_reading` and reported separately. What the model actually did was
+separate one empty session from three, and lose nothing. That is the right error
+direction and thin evidence — n=3 on the side that matters.
+
+One revision was needed, and it was the same mistake as everywhere else in this
+file. The prompt said "when you are unsure, answer `yes`", meaning to bias
+toward recall. The model answered `yes` to all twelve sessions, which is the
+same as not answering. Replaced with a statement that most sessions are `no` and
+that answering `yes` to everything is not an answer.

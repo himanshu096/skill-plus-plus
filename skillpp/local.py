@@ -153,6 +153,24 @@ def verdicts(segments: list[Segment], *, models: tuple[str, ...] = (STRICT,),
     return out
 
 
+# Below this many tokens of developer requests there is nothing for a model to
+# read. Measured: 3 of 12 reviewed sessions rendered to zero request tokens,
+# each of them a session whose only prompts were slash commands or injected
+# content. Asking a model about an empty page spends a call to be told nothing
+# is there, and scores as a correct answer while proving nothing.
+MIN_REQUEST_TOKENS = 20
+
+
+def worth_reading(text: str) -> bool:
+    """Whether a session has enough of a request in it to ask about.
+
+    Free, and it has to run before triage rather than after: the three empty
+    sessions in the labelled set were all answered correctly, which flattered
+    the score by three without the model discriminating anything.
+    """
+    return len(text) // 4 >= MIN_REQUEST_TOKENS
+
+
 def spans(verdicts: list[Verdict]) -> list[tuple[int, int]]:
     """Segment ranges a judge should read: everything up to each landing.
 
