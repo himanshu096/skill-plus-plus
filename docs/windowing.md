@@ -427,11 +427,34 @@ pattern is sharper than "hints get promoted": **the hints a frontier model needs
 are the ones a 7B over-applies.** Every revision that raised the frontier score
 added nuance, and nuance is what the small model cannot weigh.
 
-Which points at two prompts rather than one — a rich one for the judge and a
-minimal one for the cheap pass — with the same drift guard the two `locate`
-files already have. Not built: whether the peek actually fixes the frontier miss
-it was written for is unmeasured, and building a second prompt before knowing
-that would be guessing twice.
+### The peek fixed the frontier arm, so there are two prompts
+
+The frontier control with the peek came back **21 of 21** — `recurrence-a`
+segment 2 flipped to `landed`, which is what the peek was written for. So the
+same addition takes the judge from 20/21 to 21/21 and the 7B from 18/21 to
+16/21. That settles the question: **two prompts, measured rather than assumed.**
+
+`skillpp/prompts/` holds the local pair. They ask one visible fact at a time and
+`landed` is `changed && worked`, combined in code rather than by the model —
+which is the shape the capture branch measured a 7B handling three for three in
+under three seconds, against the same model returning `task_count=40` when asked
+five things at once.
+
+| asking a 7B | right | time |
+| --- | --- | --- |
+| every verdict in one call | 3 of 8 — recited the example | 10s |
+| one verdict per call | 18 of 21 | 49s |
+| one per call, plus the next request | 16 of 21 | 61s |
+| **two questions per request, combined in code** | **20 of 21** | **31s** |
+
+Faster despite twice the calls, because each prompt is a few hundred tokens
+instead of nine hundred.
+
+So the cheap pass runs locally at 95% of the labelled segments, free, in half a
+minute — against a frontier judge at 21 of 21. The remaining local miss is
+stable and diagnosed: `their-explore` is an edit and a successful commit with no
+test, the frontier definition counts a commit as confirmation, and this model
+will not. Left alone as a floor rather than tuned further.
 
 ### Keeping the two prompts honest
 

@@ -47,6 +47,7 @@ import locator   # noqa: E402
 OLLAMA = "http://127.0.0.1:11434/api/generate"
 ALL_AT_ONCE = REPO / ".claude" / "commands" / "locate.md"
 ONE_AT_A_TIME = REPO / ".claude" / "commands" / "locate-one.md"
+PROMPTS = REPO / "skillpp" / "prompts"
 _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 _BANG = re.compile(r"!`([^`]+)`")
 
@@ -128,6 +129,66 @@ def fixtures(out: Path) -> dict[str, tuple[Path, list[tuple[str, str]]]]:
     return built
 
 
+_YES_NO = re.compile(r"\b(yes|no)\b", re.I)
+
+
+def segment_text(transcript: Path, index: int,
+                 aspects: tuple[str, ...] = ()) -> str:
+    """One rendered request, without the surrounding instructions."""
+    args = ["--only", str(index)]
+    for aspect in aspects:
+        args += ["--aspect", aspect]
+    done = subprocess.run([sys.executable, "bin/skillpp", "segments",
+                           str(transcript), *args],
+                          cwd=REPO, capture_output=True, text=True)
+    return done.stdout
+
+
+def yes_no(said: str) -> bool | None:
+    """Strict: a reply containing both words has not answered."""
+    found = {m.group(1).lower() for m in _YES_NO.finditer(said)}
+    if len(found) != 1:
+        return None
+    return found.pop() == "yes"
+
+
+def decompose(model: str, transcript: Path, index: int,
+              aspects: tuple[str, ...] = (),
+              backend: str = "ollama") -> tuple[str | None, float, str]:
+    """Two visible-fact questions, combined in code rather than by the model.
+
+    `landed` is `changed && worked`. Asking both halves at once is what the
+    one-call prompt does, and a 7B answered it by latching onto whichever
+    corroborating signal the prompt had mentioned. One question at a time about
+    a visible fact is the shape that model was measured handling well.
+
+    The second question is skipped when nothing changed: it presupposes a
+    change, and asking it anyway invites an answer about something else.
+    """
+    segment = segment_text(transcript, index, aspects)
+    spent = 0.0
+    ask_one = (lambda text: ask_claude(text)) if backend == "claude" \
+        else (lambda text: ask(model, text))
+
+    template = (PROMPTS / "changed.md").read_text(encoding="utf-8")
+    reply, took = ask_one(template.replace("{SEGMENT}", segment))
+    spent += took
+    changed = yes_no(reply)
+    if changed is None:
+        return None, spent, "changed: no answer"
+    if not changed:
+        return "open", spent, "nothing changed"
+
+    template = (PROMPTS / "settled.md").read_text(encoding="utf-8")
+    reply, took = ask_one(template.replace("{SEGMENT}", segment))
+    spent += took
+    worked = yes_no(reply)
+    if worked is None:
+        return None, spent, "changed, worked: no answer"
+    return ("landed" if worked else "open"), spent, (
+        "changed and worked" if worked else "changed, did not work")
+
+
 _WORD = re.compile(r"\b(landed|open)\b", re.I)
 
 
@@ -170,6 +231,9 @@ def main() -> int:
     ap.add_argument("--aspect", action="append",
                     help="withhold everything else, as the cheap pass does")
     ap.add_argument("--show", action="store_true", help="print each reply")
+    ap.add_argument("--decompose", action="store_true",
+                    help="two visible-fact questions per request, combined in "
+                         "code — the local variant")
     ap.add_argument("--per-segment", action="store_true",
                     help="one call per request via /locate-one, instead of "
                          "every verdict in one call")
@@ -196,7 +260,19 @@ def main() -> int:
         print(f"\n=== {model}{label} ===")
         for name, (path, labels) in picked.items():
             try:
-                if args.per_segment:
+                if args.decompose:
+                    said, took, replies = "", 0.0, []
+                    for index, _ in enumerate(labels):
+                        verdict, spent, why_ = decompose(
+                            model, path, index, aspects, args.backend)
+                        took += spent
+                        replies.append(f"{index} {verdict or '(no answer)'}"
+                                       f"   [{why_}]")
+                        if verdict:
+                            said += f"{index} {verdict}\n"
+                    text = f"{len(labels)}x2 calls"
+                    said_show = "\n".join(replies)
+                elif args.per_segment:
                     said, took, replies = "", 0.0, []
                     for index, _ in enumerate(labels):
                         text = prompt_for(path, aspects, segment=index)
