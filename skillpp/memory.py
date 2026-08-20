@@ -220,9 +220,11 @@ def reviewable(candidates: list[Candidate],
     apart is the same separation as status and evidence: what a thing is, and
     how much of it there is, are not the same fact.
     """
-    resolved = (threshold if threshold is not None else
-                getattr(config, "recurrence_threshold", None)
-                or THRESHOLD)
+    resolved = threshold
+    if resolved is None and config is not None:
+        resolved = config.recurrence_threshold
+    if resolved is None:
+        resolved = THRESHOLD
     return [c for c in candidates
             if c.status == CANDIDATE and c.count >= resolved]
 

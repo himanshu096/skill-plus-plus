@@ -1,5 +1,10 @@
 """Turning per-window findings back into one answer about the session.
 
+Not to be confused with ``lifecycle.reconcile``, which is an unrelated function
+on the older ledger path that matches promoted entries against the skill files
+actually on disk. Nothing imports this module yet -- it was built to join up what
+a local writer would report per window, and there is no local writer.
+
 Windowing buys a prompt a local model can read and creates three problems, all
 of which land here rather than in `window.py`:
 

@@ -37,8 +37,11 @@ ENDPOINT = _DEFAULT_HOST + "/api/generate"
 
 
 def endpoint_for(config=None) -> str:
-    host = getattr(config, "ollama_url", None) or _DEFAULT_HOST
-    return host.rstrip("/") + "/api/generate"
+    # Written out rather than fetched with getattr: a string lookup hides the
+    # dependency from a reader and from any check that greps for it, which is
+    # how four config values ended up documented and unread.
+    host = config.ollama_url if config is not None else _DEFAULT_HOST
+    return (host or _DEFAULT_HOST).rstrip("/") + "/api/generate"
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 # Room for a model that reasons before it answers. At 128 a thinking model
 # spends the whole budget and returns an empty string, which reads as a wrong

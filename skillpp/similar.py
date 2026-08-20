@@ -68,8 +68,11 @@ ENDPOINT = _DEFAULT_HOST + "/api/embed"
 
 
 def endpoint_for(config=None) -> str:
-    host = getattr(config, "ollama_url", None) or _DEFAULT_HOST
-    return host.rstrip("/") + "/api/embed"
+    # Written out rather than fetched with getattr: a string lookup hides the
+    # dependency from a reader and from any check that greps for it, which is
+    # how four config values ended up documented and unread.
+    host = config.ollama_url if config is not None else _DEFAULT_HOST
+    return (host or _DEFAULT_HOST).rstrip("/") + "/api/embed"
 MODEL = "nomic-embed-text"
 # Body against body. Midpoint of the measured gap: 0.776 highest
 # different-procedure pair, 0.873 lowest same-procedure pair.
@@ -172,7 +175,7 @@ def closest(body: str, candidates: dict[str, str], *,
     """
     if not candidates:
         return None
-    model = getattr(config, "embed_model", None) or model
+    model = (config.embed_model or model) if config is not None else model
     where = endpoint_for(config)
     target = embed(body, model=model, endpoint=where)
     scored = [(cosine(target, embed(text, model=model, endpoint=where)), name)
@@ -190,8 +193,8 @@ def add_exemplar(config, *, name: str, session: str, text: str,
     them, so a procedure seen three times is easier to recognise than one seen
     once — which is the same reason the count exists.
     """
-    vector = embed(text, model=getattr(config, "embed_model", None) or model,
-                   endpoint=endpoint_for(config))
+    chosen = (config.embed_model or model) if config is not None else model
+    vector = embed(text, model=chosen, endpoint=endpoint_for(config))
     line = json.dumps({"name": name, "session": session, "vector": vector},
                       ensure_ascii=False)
     config.exemplars_file.parent.mkdir(parents=True, exist_ok=True)
@@ -227,8 +230,8 @@ def nearest_session(config, text: str, *, model: str = MODEL) -> Nearest | None:
     stored = exemplars(config)
     if not stored:
         return None
-    target = embed(text, model=getattr(config, "embed_model", None) or model,
-                   endpoint=endpoint_for(config))
+    chosen = (config.embed_model or model) if config is not None else model
+    target = embed(text, model=chosen, endpoint=endpoint_for(config))
     best: dict[str, float] = {}
     seen: dict[str, int] = {}
     for item in stored:
