@@ -527,7 +527,43 @@ from the former, so a fix applied only to the latter ships the old prompt. It
 also asserts the single-segment prompt contains no numbered example, since that
 is what was recited.
 
-## The first real session: 0% reduction
+## Three real sessions: the cheap pass cannot filter
+
+| session | requests | tokens | spans | reduction | single-request spans |
+| --- | --- | --- | --- | --- | --- |
+| concept-buddy, small | 13 | 23,967 | 7 | 4% | 5 of 7 |
+| concept-buddy, medium | 40 | 60,180 | 22 | 0% | 13 of 22 |
+| skill-plus, large | 173 | 83,699 | 32 | 0% | 12 of 32 |
+
+**The 0% is arithmetic, not tuning.** `spans()` partitions the session: every
+stretch between two landings is emitted, and a partition cannot reduce anything.
+The only reduction that appears anywhere is trailing work still open when the
+session ended — that is the 4%.
+
+So the error is deeper than where the boundaries fall. For a cheap pass to
+filter it has to be able to **discard**, and this one cannot: every commit is a
+landing, every landing makes a span, so it can never output nothing. Yet the
+premise of the whole project is that most sessions contain nothing worth
+keeping.
+
+**The decomposition into visible facts cannot produce the filter, because the
+filter needs the judgement the decomposition exists to avoid.** "Did work land"
+is mechanical and a 7B answers it at 20 of 21 on short inputs. "Is there a
+procedure here worth capturing" is the judgement, and that is the thing this was
+meant to make cheap.
+
+Two directions that would not have this defect, neither measured:
+
+- **Rank instead of filter.** Hand the judge spans in order of promise and let
+  it read until a token budget runs out. A cheap pass that cannot discard can
+  still order, and ordering is worth something when the budget binds.
+- **Filter on a different visible fact.** Whether a span touched anything
+  outside the machine — a ticket, a deployment, a message, a published package —
+  is mechanical, and it is closer to "procedure worth repeating" than "work
+  landed" is. It would discard the `commit as-is` spans, which is most of the
+  noise here.
+
+### The first of the three, in detail
 
 Run end to end on a real 40-request session, 60,180 tokens, after the context
 bug above was fixed.
