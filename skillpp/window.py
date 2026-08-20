@@ -19,11 +19,32 @@ p90 and 6.7k at p95. ``BUDGET`` is 8,000 because it clears that with headroom
 while leaving room for the instructions and the store beside it in a 16k
 context, and because only 3 of 1,758 real segments exceed it alone.
 
-**Windows overlap, and the overlap is the point.** Without it a procedure lying
-across a boundary is in no window whole. ``OVERLAP`` of two segments means any
-procedure of three or fewer is intact in at least one window. Four or more can
-still straddle; that is a real limit, and closing it needs a merge step over
-what the windows report rather than a bigger overlap.
+**Windows overlap, and the overlap is measured in tokens, not segments.**
+Without any overlap a procedure lying across a boundary is in no window whole.
+Carrying back a *count* of segments was the obvious way to fix that and is the
+wrong one: two segments out of an average nine duplicated 48% of all content
+across eight real sessions, because the segments at the end of a full window
+are the large ones.
+
+Carrying back a token budget instead costs 12% for the same job, and covers
+*more* segments while doing it -- 11.5 per window against 9.6 -- because it
+picks up a run of small segments rather than two big ones. ``OVERLAP`` is 1,500
+tokens, which is p90 of a single segment, so the earlier part of a straddling
+procedure is carried in nine cases out of ten.
+
+    segment count 2   163 windows   48.1% duplicated
+    token cap 2,500   155 windows   27.1%
+    token cap 1,500   134 windows   12.0%   <- OVERLAP
+    token cap 800     125 windows    4.0%
+
+What no overlap can fix, and all three want a merge over what the windows
+report rather than a larger carry:
+
+- A procedure longer than the carry is intact in no window.
+- A window can hold a procedure's tail without its method.
+- The carry has to stay contiguous with the boundary, so a boundary whose last
+  segment is larger than the carry carries nothing at all. That is the p90
+  segment, so roughly one boundary in ten has no overlap protection.
 """
 
 from __future__ import annotations
@@ -36,7 +57,7 @@ from .transcript import Message
 # Tokens, approximated as chars/4 -- exact enough to size a window, and it
 # avoids a tokeniser dependency in a module that may run beside a local model.
 BUDGET = 8_000
-OVERLAP = 2
+OVERLAP = 1_500  # tokens carried into the next window, not a segment count
 CHARS_PER_TOKEN = 4
 
 
@@ -65,8 +86,10 @@ class Window:
     """A run of whole segments, small enough to be read in one call."""
 
     segments: list[Segment] = field(default_factory=list)
-    # Which segments this shares with the window before it. Kept so a caller
-    # can tell a genuinely new finding from one already reported next door.
+    # How many leading segments this shares with the window before it. Kept so
+    # a caller can tell a genuinely new finding from one already reported next
+    # door -- which it must do, since the same procedure is deliberately shown
+    # to more than one window.
     overlapping: int = 0
 
     @property
@@ -123,11 +146,33 @@ def segments(messages: list[Message]) -> list[Segment]:
     return out
 
 
+def _carry(done: list[Segment], overlap: int) -> list[Segment]:
+    """The tail of a finished window, up to ``overlap`` tokens of it.
+
+    Taken from the end backwards and never partially: half a segment carried
+    forward is half a request, which is the thing this module exists to avoid.
+    """
+    if overlap <= 0:
+        return []
+    carried: list[Segment] = []
+    total = 0
+    for seg in reversed(done):
+        if total + seg.tokens > overlap:
+            break
+        carried.insert(0, seg)
+        total += seg.tokens
+    return carried
+
+
 def windows(messages: list[Message], *, budget: int = BUDGET,
             overlap: int = OVERLAP) -> list[Window]:
     """Fill windows to ``budget`` without ever splitting a segment.
 
-    A segment larger than the budget gets a window to itself rather than being
+    ``overlap`` is a token budget carried into the next window, not a number of
+    segments -- see the module docstring for why that distinction is worth 36
+    percentage points of duplicated input.
+
+    A segment larger than ``budget`` gets a window to itself rather than being
     cut: 3 of 1,758 measured segments were, the largest 11,940 tokens, and
     cutting one would split the request it represents from its own work.
     """
@@ -139,7 +184,7 @@ def windows(messages: list[Message], *, budget: int = BUDGET,
     for seg in segs:
         if current.segments and current.tokens + seg.tokens > budget:
             out.append(current)
-            carried = current.segments[-overlap:] if overlap else []
+            carried = _carry(current.segments, overlap)
             current = Window(segments=list(carried), overlapping=len(carried))
         current.segments.append(seg)
     if current.segments and current.segments != (out[-1].segments if out else None):

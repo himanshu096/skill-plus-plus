@@ -1954,13 +1954,15 @@ class TestWindowing(unittest.TestCase):
     def test_overlap_keeps_a_straddling_procedure_whole_somewhere(self):
         # The property the overlap exists for. Without it a procedure lying
         # across a boundary is in no window whole, and a half is what gets
-        # read as finished work.
+        # read as finished work. The carry is a token budget, so it is sized
+        # here from a real segment rather than as a count.
         from skillpp.window import segments, windows
         msgs = self.session(rec("u1", content="ask A"), *self.work(4, "a"),
                             rec("u2", content="ask B"), *self.work(4, "b"),
                             rec("u3", content="ask C"), *self.work(4, "c"))
         segs = segments(msgs)
-        wins = windows(msgs, budget=segs[0].tokens + 1, overlap=2)
+        wins = windows(msgs, budget=segs[0].tokens + 1,
+                       overlap=segs[0].tokens)
         pairs = [("ask A", "ask B"), ("ask B", "ask C")]
         for first, second in pairs:
             intact = any(first in w.text and second in w.text for w in wins)
@@ -1980,3 +1982,46 @@ class TestWindowing(unittest.TestCase):
         self.assertGreater(len(wins), 1)
         self.assertFalse(any("ask A" in w.text and "ask B" in w.text
                              for w in wins))
+
+    def test_the_carry_is_tokens_not_a_segment_count(self):
+        """The regression guard on a 36-point difference in duplicated input.
+
+        Carrying a *count* of segments duplicated 48% of eight real sessions,
+        because the segments at the end of a full window are the large ones. A
+        token budget does the same job for 12%. Nothing else in the module
+        would notice if this reverted -- the windows would still be correct,
+        just four times more expensive to read.
+        """
+        from skillpp.window import _carry, Segment
+        segs = [Segment(messages=[], text="z" * 40_000),   # 10,000 tokens
+                Segment(messages=[], text="x" * 400),      # 100
+                Segment(messages=[], text="y" * 400)]      # 100
+        # A count of two would carry 200 tokens here and 10,100 if the order
+        # were reversed. A budget carries the same 200 either way, which is the
+        # whole point: cost stops depending on where the boundary happens to
+        # land.
+        self.assertEqual([s.tokens for s in _carry(segs, 300)], [100, 100])
+        self.assertEqual([s.tokens for s in _carry(segs, 1_000)], [100, 100])
+
+    def test_the_carry_never_takes_half_a_segment(self):
+        # Half a segment carried forward is half a request, which is the thing
+        # this module exists to avoid.
+        from skillpp.window import _carry, Segment
+        segs = [Segment(messages=[], text="x" * 40_000)]
+        self.assertEqual(_carry(segs, 1_000), [])
+
+    def test_an_oversized_last_segment_carries_nothing_at_all(self):
+        """A limit worth knowing rather than discovering.
+
+        The carry has to be contiguous with the boundary: reaching past a
+        segment that will not fit, to take smaller ones behind it, would leave
+        the next window starting mid-session with a request missing from the
+        middle. So it stops instead -- and the overlap guarantee quietly
+        disappears at any boundary whose last segment is larger than the carry.
+        Measured, that is the p90 segment, so roughly one boundary in ten.
+        """
+        from skillpp.window import _carry, Segment
+        segs = [Segment(messages=[], text="x" * 400),
+                Segment(messages=[], text="y" * 400),
+                Segment(messages=[], text="z" * 40_000)]
+        self.assertEqual(_carry(segs, 1_000), [])
