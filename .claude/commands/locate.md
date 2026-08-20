@@ -23,11 +23,20 @@ resolved state?**
 
 - `landed` — the work finished. Something was changed and then confirmed: a
   gate passed, a change committed, a deployment reported healthy, or the
-  developer accepted it and moved on.
-- `open` — work happened and was left hanging. Changed but unverified, still
-  being investigated, or the agent's own account says it is unresolved.
-- `none` — nothing happened here. A bare acknowledgement, a question answered
-  in prose, reading without changing anything.
+  developer moved on to *different* work.
+- `open` — anything else. Changed but unverified, still being investigated, the
+  agent's own account says it is unresolved, or nothing was attempted at all.
+
+Two verdicts, not three. An earlier version separated "nothing happened here"
+from "unresolved", and every disagreement it produced was between those two —
+because reading that is the first half of a procedure is both. Downstream they
+mean the same thing, which is *do not start a span here*, so the distinction was
+costing accuracy and buying nothing.
+
+"Moved on to different work" is the phrase to weigh carefully. A developer who
+extends the same change — "now also cap it per tenant" — has not accepted it as
+finished, they have asked for more of it. That segment is `open`. Acceptance
+looks like a new subject.
 
 That is the whole question. **Do not decide whether anything is worth keeping**,
 do not name it, do not judge which of its steps matter, and do not write a
@@ -38,8 +47,7 @@ here. A segment can be `landed` and completely mundane — most are.
 
 The block may say it is showing only some aspects of each request. That is
 deliberate, and it is not a reason to refuse or to hedge: answer from what is
-shown. Say `none` only when the shown aspects contain nothing, not when you
-suspect the withheld ones would have changed your mind.
+shown. Answer `open` when the shown aspects contain nothing, rather than refusing.
 
 If the agent's account is withheld, you are judging from the commands alone.
 Prefer `open` where you would have wanted the account to decide — a command list
@@ -68,7 +76,7 @@ One line per segment, nothing else — no preamble, no explanation, no summary:
 ```
 0 landed
 1 open
-2 none
+2 open
 ```
 
 Every segment in the block gets exactly one line, in order. If you are torn

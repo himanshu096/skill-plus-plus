@@ -251,10 +251,44 @@ instructions over the same labelled segments, once with everything and once with
 account should matter most — a change that was edited but never verified, an
 investigation that concluded nothing, and two long segments of pure reading.
 
-If tools-only holds up, the first pass is 40% of the content at 96.9% recall. If
-it collapses, the first pass has to include narration, which is 79% of the
-content at 90.3% — most of the gain gone, and the honest conclusion is that this
-axis mainly saves frontier cost rather than enabling a local model.
+### What the first run said
+
+Run on a frontier model, seven full-content cases and three paired against
+`--aspect tools`.
+
+| fixture | full content | tools only |
+| --- | --- | --- |
+| `refine` | wrong on segment 0 — and passed on a rerun, so flaky | ok |
+| `mid-investigation` | ok | ok |
+| `recurrence-a` | wrong on segment 1 | wrong on segments 0 and 1 |
+| `retry`, `distinct`, `explore`, `recurs` | ok | not run |
+
+**Tools-only cost exactly one extra segment, and both its errors ran in the
+conservative direction** — a segment called unresolved when it was empty. Nothing
+was called finished that was not, so no procedure was dropped. For a cheap first
+pass whose job is to decide what to escalate, over-flagging is the error to
+have.
+
+Two things the run exposed were faults in the question, not the answers.
+
+**The three-verdict version could not be answered consistently.** Every
+disagreement was `none` against `open` and none involved `landed`. Segment 1 of
+`recurrence-a` — read the intake spec, search the tracker twice — is "nothing
+happened" and "unresolved" simultaneously, because it is the first half of the
+procedure that finishes in segment 2. Downstream both mean *do not start a span
+here*, so the distinction was costing accuracy and buying nothing. Collapsed to
+`landed` / `open`, which also fixed the label balance: it was 8/5/2, gameable by
+never saying `open`, and is now 8/7.
+
+**"The developer accepted it and moved on" was ambiguous.** In `refine`, the
+developer's next message extends the same change — "now also cap it per tenant".
+That is asking for more of it, not accepting it as done, and the flip between
+runs was the model sitting on that fence. The rule now says acceptance looks like
+a new subject.
+
+Rescored under the collapsed labels, the answers already given would pass on
+`recurrence-a` in both arms — tools-only matching full content exactly. That is a
+rescoring rather than a result: the prompt changed, so it needs re-running.
 
 ### Confidence should come from agreement, not from asking
 

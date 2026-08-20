@@ -21,10 +21,14 @@ whole reason the locator does not ask about worth -- if `landed` quietly meant
 "worth capturing", the layer would be reintroducing the mistake it is meant to
 isolate.
 
-``recurrence-a`` segments 0 and 1 are ``none`` despite being long and busy. Both
-are reading -- greps, a spec page, two tracker searches -- and nothing was
-changed. A locator that scores those as work will nominate every investigation
-in every session.
+``recurrence-a`` segments 0 and 1 are ``open``, and they were labelled ``none``
+until a run said otherwise three times out of three. Both are reading -- greps,
+a spec page, two tracker searches -- and segment 1 is also the first half of the
+procedure that finishes in segment 2, which makes it "nothing happened" and
+"unresolved" at the same time. Every disagreement the three-verdict version
+produced was between those two labels and none involved ``landed``, so the
+distinction was costing accuracy and buying nothing: downstream both mean *do
+not start a span here*.
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ TRUTH: dict[str, list[tuple[str, str]]] = {
     ],
     "their-distinct": [
         ("landed", "CI file edited, suite green, committed"),
-        ("none", "a bare confirmation, no work in it at all"),
+        ("open", "a bare confirmation, no work in it at all"),
         ("landed", "ancestry checked, tag signed, pushed with the commit"),
     ],
     "their-explore": [
@@ -59,13 +63,13 @@ TRUTH: dict[str, list[tuple[str, str]]] = {
     ],
     "their-recurs": [
         ("landed", "helm upgrade then rollout status reported success"),
-        ("none", "a bare confirmation"),
+        ("open", "a bare confirmation"),
         ("landed", "the same, on the second service"),
-        ("none", "a bare confirmation"),
+        ("open", "a bare confirmation"),
     ],
     "recurrence-a": [
-        ("none", "four greps. Reading, nothing changed"),
-        ("none", "a spec page and two tracker searches. Still reading"),
+        ("open", "four greps that changed nothing and resolved nothing"),
+        ("open", "a spec page and two tracker searches — the first half of the procedure that finishes in segment 2"),
         ("landed", "the issue was updated and the thread posted back, then the "
                    "developer moved on"),
     ],
@@ -75,8 +79,8 @@ FIXTURES = {
     "recurrence-a": REPO / "tests" / "fixtures" / "recurrence-a.jsonl",
 }
 
-VALID = ("landed", "open", "none")
-_LINE = re.compile(r"^\s*(\d+)\s+(landed|open|none)\s*$", re.M | re.I)
+VALID = ("landed", "open")
+_LINE = re.compile(r"^\s*(\d+)\s+(landed|open)\s*$", re.M | re.I)
 
 
 def parse(said: str) -> dict[int, str]:
