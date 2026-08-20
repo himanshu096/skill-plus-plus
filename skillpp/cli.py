@@ -420,9 +420,41 @@ def cmd_drain(args: argparse.Namespace) -> int:
     print(f"ended          {len(seen)} sessions")
     print(f"reviewed       {done}")
     print(f"transcript gone {gone}")
+    # The local pre-filter. Off unless asked for, because it is a saving with a
+    # risk attached: it skips sessions a frontier read would have found nothing
+    # in, and a wrong skip is never revisited. Measured at 4 of 6 empty sessions
+    # skipped with none of 6 real procedures lost, on twelve real sessions.
+    skipped = []
+    if args.triage and todo:
+        from .local import triage, worth_reading
+        from .window import keep_aspects, segments as split
+        for session, path in list(todo):
+            try:
+                # The same slice the judge would read: new since the bookmark,
+                # not the whole transcript. Triaging on more than the judge sees
+                # can skip a session for work that was already reviewed.
+                fresh = prepare(str(path), config=config).new_messages
+                segs = split(fresh)
+            except Exception:  # noqa: BLE001
+                continue  # unreadable is not "not worth reading"
+            asks = "\n".join(keep_aspects(s.text, ("prompts",)) for s in segs)
+            # Few developer prompts does not mean nothing happened — one long
+            # request, or prompts that were slash-command expansions, both look
+            # empty here. Fall back to the whole slice, which fits a local
+            # context for all but the largest sessions.
+            text = asks if worth_reading(asks) else "\n".join(
+                s.text for s in segs)
+            worth, why = triage(text, model=args.triage_model)
+            if not worth:
+                skipped.append((session, why))
+                todo.remove((session, path))
     if thin:
         print(f"below the floor {len(thin)}   (skipped free, no model call: "
               f"{', '.join(str(n) for _s, _p, n in thin)} new messages)")
+    if skipped:
+        print(f"triaged out    {len(skipped)}   (local model, no frontier call)")
+        for session, why in skipped:
+            print(f"                 {session[:8]}  {why}")
     print(f"to review      {len(todo)}")
     if args.prune and gone:
         kept = []
@@ -1054,6 +1086,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="actually run the reviews; each is a model call")
     p.add_argument("--limit", type=int, help="review at most this many")
     p.add_argument("--queue", help="path to ended-sessions.jsonl")
+    p.add_argument("--triage", action="store_true",
+                   help="ask a local model which sessions are worth a frontier "
+                        "call, and skip the rest. Needs Ollama running")
+    p.add_argument("--triage-model", default="qwen2.5:7b",
+                   help="the local model to triage with (default qwen2.5:7b)")
     p.add_argument("--prune", action="store_true",
                    help="drop entries whose transcript no longer exists; a "
                         "`claude -p` run leaves one every time")

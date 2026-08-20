@@ -346,6 +346,30 @@ sessions that were skillpp fixture-testing, skillpp dogfooding, or themselves a
 `/log-session` run. Correct answers, but those sessions are unusually meta — a
 fairer test needs sessions doing ordinary work.
 
+**Where the local model sits, exactly.** Detection is Claude. The loop that
+closed — a procedure reaching x3 and becoming a live skill — was Claude at every
+step that needed judgement. `qwen2.5:7b` does one job: `skillpp drain --triage`
+asks it whether a session is worth a frontier call at all, and skips the ones
+that are not. Measured on twelve sessions the pipeline had already reviewed: 6 of
+6 with a real procedure sent on, 0 lost, 4 of 6 empty ones skipped, 29s, free.
+
+Opt-in, and it fails toward spending. An unreachable Ollama, a missing model, or
+an unclear answer all return "send it on", so a machine without a local model
+behaves exactly as it does today. A saving that loses work is not a saving, and a
+skipped session is never revisited.
+
+Two bugs found by running it rather than reading it, both in the first real
+invocation: it triaged the whole transcript instead of the new-since-bookmark
+slice the judge reads, and it treated "few developer prompts" as "nothing
+happened", which skipped a session with 73 new messages. It now reads the judge's
+slice and falls back to the whole slice when the requests alone are too thin.
+
+**No framework.** `skillpp/` is stdlib-only with no dependency manifest, which
+is the point: it runs as a hook inside someone else's session and must never
+break it. The Ollama call is one urllib POST. Google ADK was considered and is
+the wrong trade here — agent orchestration, tool calling and session state for a
+yes/no classification. Revisit only if the local side grows into multi-step work.
+
 **Anything local.** `window.py`, `reconcile.py` and `/locate` exist to put the
 cheap pass on a local model and none of it has met one. `qwen2.5:7b-ctx16k` and
 `gemma4:12b-ctx16k` are installed. The standing instruction is not to try until

@@ -189,3 +189,33 @@ def spans(verdicts: list[Verdict]) -> list[tuple[int, int]]:
             out.append((start, verdict.index))
             start = None
     return out
+
+
+def triage(transcript_text: str, *, model: str = STRICT) -> tuple[bool, str]:
+    """Is this session worth a frontier call at all?
+
+    The one local job that pays. Measured on twelve sessions the pipeline had
+    already reviewed: every session containing a procedure was sent on, none was
+    lost, and four of the six empty ones were skipped — which on the last drain
+    would have been every call it spent.
+
+    Errs toward sending on, and that asymmetry is the whole design. A session
+    wrongly sent on costs one reading, which is what happens without this. A
+    session wrongly skipped is never looked at again.
+
+    Returns ``(worth_it, why)``. Anything unclear — no answer, model
+    unreachable — is ``True``: this is a saving, and a saving that loses work is
+    not one.
+    """
+    if not worth_reading(transcript_text):
+        return False, "no developer request in it to read"
+    prompt = (PROMPTS / "triage.md").read_text(encoding="utf-8").replace(
+        "{SESSION}", transcript_text)
+    try:
+        answer = _yes_no(_ask(model, prompt))
+    except LocalModelUnavailable as exc:
+        return True, f"local model unavailable ({exc}); sending on"
+    if answer is None:
+        return True, "no clear answer; sending on"
+    return answer, ("looks like a procedure was carried out" if answer
+                    else "looks like talk, reading, or a one-line change")

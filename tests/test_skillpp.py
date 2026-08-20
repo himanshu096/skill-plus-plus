@@ -2716,3 +2716,43 @@ class TestDrain(TempRoot):
         queue = self.queue({"session_id": "a",
                             "transcript_path": str(self.transcript("a"))})
         self.assertNotIn("pruned", self.drain(queue, "--prune"))
+
+    def test_triage_is_off_unless_asked_for(self):
+        # It is a saving with a risk attached: a session it skips is never
+        # revisited. Opt-in, so a drain never silently loses work.
+        out = self.drain(self.queue(
+            {"session_id": "a", "transcript_path": str(self.transcript("a"))}))
+        self.assertNotIn("triaged out", out)
+        self.assertIn("to review      1", out)
+
+    def test_an_unreachable_local_model_sends_the_session_on(self):
+        """A saving that loses work is not a saving.
+
+        Ollama not running, not installed, or the model absent must degrade to
+        today's behaviour — every session read by the judge — rather than to
+        every session skipped.
+        """
+        from skillpp.local import LocalModelUnavailable, triage
+        with unittest.mock.patch("skillpp.local._ask",
+                                 side_effect=LocalModelUnavailable("down")):
+            worth, why = triage("> do the thing\n  $ Bash make release\n"
+                                "    = ok\n" * 4)
+        self.assertTrue(worth)
+        self.assertIn("unavailable", why)
+
+    def test_an_unclear_answer_sends_the_session_on(self):
+        from skillpp.local import triage
+        with unittest.mock.patch("skillpp.local._ask",
+                                 return_value="well, yes and no"):
+            worth, why = triage("> do the thing\n  $ Bash make release\n"
+                                "    = ok\n" * 4)
+        self.assertTrue(worth)
+        self.assertIn("no clear answer", why)
+
+    def test_a_session_with_no_request_text_is_decided_without_a_call(self):
+        from skillpp.local import triage
+        with unittest.mock.patch("skillpp.local._ask") as asked:
+            worth, why = triage("")
+        asked.assert_not_called()
+        self.assertFalse(worth)
+        self.assertIn("no developer request", why)
