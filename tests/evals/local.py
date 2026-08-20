@@ -45,20 +45,31 @@ import cold      # noqa: E402
 import locator   # noqa: E402
 
 OLLAMA = "http://127.0.0.1:11434/api/generate"
-COMMAND = REPO / ".claude" / "commands" / "locate.md"
+ALL_AT_ONCE = REPO / ".claude" / "commands" / "locate.md"
+ONE_AT_A_TIME = REPO / ".claude" / "commands" / "locate-one.md"
 _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 _BANG = re.compile(r"!`([^`]+)`")
 
 
-def prompt_for(transcript: Path, aspects: tuple[str, ...] = ()) -> str:
+def prompt_for(transcript: Path, aspects: tuple[str, ...] = (),
+               segment: int | None = None) -> str:
     """The real command file, with its embedded command actually run.
 
     Mirrors what Claude Code does with `` !`…` ``: the substitution happens
     before the model sees anything, so what comes back here is the same text a
     frontier run would have been given.
+
+    ``segment`` picks the one-at-a-time prompt, which asks about a single
+    request and answers in one word. That shape exists because a 7B model given
+    the all-at-once prompt returned its numbered example verbatim for three
+    different fixtures — there is no numbering to copy when the question is
+    about one segment.
     """
-    text = _FRONTMATTER.sub("", COMMAND.read_text(encoding="utf-8"))
+    command = ONE_AT_A_TIME if segment is not None else ALL_AT_ONCE
+    text = _FRONTMATTER.sub("", command.read_text(encoding="utf-8"))
     args = [str(transcript)]
+    if segment is not None:
+        args += ["--only", str(segment)]
     for aspect in aspects:
         args += ["--aspect", aspect]
 
@@ -68,6 +79,20 @@ def prompt_for(transcript: Path, aspects: tuple[str, ...] = ()) -> str:
                               capture_output=True, text=True)
         return done.stdout
     return _BANG.sub(substitute, text)
+
+
+def ask_claude(prompt: str, *, timeout: int = 300) -> tuple[str, float]:
+    """The frontier control, on the identical prompt.
+
+    Without it a local failure is unattributable: a wrong answer could be the
+    model or could be a prompt that nobody can answer. No tools — the segment is
+    already in the text.
+    """
+    start = time.monotonic()
+    done = subprocess.run(["claude", "-p", prompt, "--no-session-persistence"],
+                          cwd=REPO, capture_output=True, text=True,
+                          timeout=timeout)
+    return done.stdout, time.monotonic() - start
 
 
 def ask(model: str, prompt: str, *, timeout: int = 300) -> tuple[str, float]:
@@ -103,6 +128,19 @@ def fixtures(out: Path) -> dict[str, tuple[Path, list[tuple[str, str]]]]:
     return built
 
 
+_WORD = re.compile(r"\b(landed|open)\b", re.I)
+
+
+def one_word(said: str) -> str | None:
+    """The verdict in a one-word reply, or None if it gave two answers.
+
+    Strict on purpose. A reply naming both verdicts has not answered, and
+    treating the first as the answer would score a hedge as a decision.
+    """
+    found = {m.group(1).lower() for m in _WORD.finditer(said)}
+    return found.pop() if len(found) == 1 else None
+
+
 def score(labels: list[tuple[str, str]], said: str) -> tuple[int, int, str]:
     """Segments right, segments asked, and what went wrong.
 
@@ -132,9 +170,16 @@ def main() -> int:
     ap.add_argument("--aspect", action="append",
                     help="withhold everything else, as the cheap pass does")
     ap.add_argument("--show", action="store_true", help="print each reply")
+    ap.add_argument("--per-segment", action="store_true",
+                    help="one call per request via /locate-one, instead of "
+                         "every verdict in one call")
+    ap.add_argument("--backend", choices=("ollama", "claude"), default="ollama",
+                    help="claude runs the frontier control on the identical "
+                         "prompt, so a local failure is attributable")
     args = ap.parse_args()
 
-    models = args.model or ["qwen2.5:7b-ctx16k"]
+    models = ["frontier"] if args.backend == "claude" else (
+        args.model or ["qwen2.5:7b-ctx16k"])
     aspects = tuple(args.aspect or ())
     out = REPO / "tests" / "evals" / "_local"
     out.mkdir(exist_ok=True)
@@ -150,25 +195,47 @@ def main() -> int:
         seconds = 0.0
         print(f"\n=== {model}{label} ===")
         for name, (path, labels) in picked.items():
-            text = prompt_for(path, aspects)
             try:
-                said, took = ask(model, text)
+                if args.per_segment:
+                    said, took, replies = "", 0.0, []
+                    for index, _ in enumerate(labels):
+                        text = prompt_for(path, aspects, segment=index)
+                        reply, spent = (ask_claude(text)
+                                        if args.backend == "claude"
+                                        else ask(model, text))
+                        took += spent
+                        verdict = one_word(reply)
+                        replies.append(f"{index} {verdict or '(no answer)'}")
+                        # Reassembled into the all-at-once shape so one scorer
+                        # covers both variants.
+                        said += f"{index} {verdict}\n" if verdict else ""
+                    text = f"{len(labels)} calls"
+                    said_show = "\n".join(replies)
+                else:
+                    text = prompt_for(path, aspects)
+                    said, took = (ask_claude(text) if args.backend == "claude"
+                                  else ask(model, text))
+                    said_show = said
             except (urllib.error.URLError, TimeoutError) as exc:
-                print(f"  {name:<26} ollama unreachable: {exc}")
+                print(f"  {name:<26} backend unreachable: {exc}")
                 return 1
             ok, n, why = score(labels, said)
             right += ok; total += n; seconds += took
             mark = "ok" if ok == n else f"{n - ok} wrong"
+            size = text if isinstance(text, str) and text.endswith("calls") \
+                else f"{len(text)//4} tok"
             print(f"  {name:<26} {ok}/{n} {mark:<10} "
-                  f"{len(text)//4:>5} tok in  {took:>5.1f}s"
+                  f"{size:>10} in  {took:>5.1f}s"
                   + (f"   {why}" if why else ""))
             if args.show:
-                print("".join(f"      {ln}\n" for ln in said.strip().splitlines()))
+                print("".join(f"      {ln}\n"
+                              for ln in said_show.strip().splitlines()))
         print(f"  total {right}/{total} segments"
               f"   {seconds:.0f}s for {len(picked)} calls")
         # Unloaded between models rather than after the last one, so a sweep
         # over two never holds both.
-        subprocess.run(["ollama", "stop", model], capture_output=True)
+        if args.backend == "ollama":
+            subprocess.run(["ollama", "stop", model], capture_output=True)
     return 0
 
 

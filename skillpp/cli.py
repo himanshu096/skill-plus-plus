@@ -195,6 +195,19 @@ def cmd_segments(args: argparse.Namespace) -> int:
         print("This session has no requests in it. Stop here and write nothing.")
         return 0
 
+    if args.only is not None:
+        # One segment, for a caller asking one question about it. The index is
+        # the same one every other reader uses, so an answer about segment 4 is
+        # about segment 4 wherever it came from.
+        wanted = [s for s in segs if s.index == args.only]
+        if not wanted:
+            print(f"This session has no segment {args.only} — it has "
+                  f"{len(segs)} ({0}-{len(segs) - 1}).\n\n"
+                  f"Stop here and write nothing.")
+            return 0
+        only_of = len(segs)
+        segs = wanted
+
     chosen = tuple(args.aspect) if args.aspect else DEFAULT_ASPECTS
     unknown = [a for a in chosen if a not in ASPECTS.values()]
     if unknown:
@@ -203,7 +216,12 @@ def cmd_segments(args: argparse.Namespace) -> int:
         return 0
 
     print(f"transcript     {path.name}")
-    print(f"segments       {len(segs)}")
+    if args.only is not None:
+        # Not "segments 1": a caller reading that would think the session has
+        # one request, and this output goes straight into a prompt.
+        print(f"segment        {args.only} of {only_of}")
+    else:
+        print(f"segments       {len(segs)}")
     if chosen != DEFAULT_ASPECTS:
         print(f"showing        {', '.join(chosen)} only — the rest of each "
               f"request is deliberately withheld")
@@ -778,6 +796,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="show only these parts of each request: tools, "
                         "prompts, narration, results, failures. Repeatable. "
                         "Default shows all.")
+    p.add_argument("--only", type=int, metavar="N",
+                   help="print just segment N, for asking one question about "
+                        "one request")
     p.set_defaults(func=cmd_segments)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")

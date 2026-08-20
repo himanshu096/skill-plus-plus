@@ -363,6 +363,64 @@ prompt alone.
 answering; two of these at once took an 18 GB machine to 16.5 GB. `local.py`
 runs one model per invocation and unloads it when its sweep ends.
 
+## One call per segment
+
+The all-at-once prompt asks one question per segment and then wants every answer
+in a single reply. That is nearer the five-questions-in-one-schema shape the
+capture branch measured returning `task_count=40` than the one-question-per-call
+shape it measured getting three of three in under three seconds.
+
+`/locate-one` asks about one request and answers in one word. There is no
+numbering in the answer, which removes the thing that was being copied.
+`skillpp segments --only N` renders the single request; the prompt is 677 tokens
+of instructions plus the segment, about 911 tokens on a typical one.
+
+`qwen2.5:7b-ctx16k`, per segment, every fixture, full content:
+
+| | all at once | one per segment |
+| --- | --- | --- |
+| segments right | 3 of 8 | **18 of 21** |
+| distinct answers | no — three replies identical | yes |
+| phantom segments | yes | none |
+| time | 10s / 4 calls | 49s / 21 calls |
+
+**The three misses are one miss, three times.** `their-refine` segment 0,
+`recurrence-a` segment 0 and `cold-mixed` segment 0 all came back `landed`
+against a label of `open`. Two of them contain a change that was never confirmed
+— an edit with no gate, an edit benchmarked and reverted — and the third contains
+no change at all, four greps. So the model is reading activity as completion:
+under-applying the half of the `landed` rule that requires confirmation, and in
+`recurrence-a`'s case the half that requires a change.
+
+### What that does not yet tell us
+
+Whether the prompt or the model is the limit. `--backend claude --per-segment`
+runs the frontier control on the identical text, and the answer decides what to
+do next:
+
+- **Frontier 21/21** — the prompt is answerable and 86% is this model's ceiling
+  on it. Then the options are a larger local model, or accepting that the cheap
+  pass errs toward `landed` and putting the correction downstream, where a
+  wrongly-escalated segment costs a judgement that finds nothing.
+- **Frontier also missing segment 0s** — the per-segment prompt lost something
+  the all-at-once one has, and the obvious candidate is the neighbouring
+  requests. Whether a request resolved is partly answered by what the developer
+  said next, and one segment in isolation cannot see it.
+
+The second would be the more interesting result, and it has a cheap fix worth
+measuring: show the *next* request's first line as context without asking about
+it.
+
+### Keeping the two prompts honest
+
+`landed` is defined identically in both command files, because a command file
+cannot include another. `TestTheTwoLocatePrompts` asserts the block is the same
+text, that both still require both halves, and that the distributable copies in
+`commands/` match the active ones in `.claude/commands/` — `install.py` copies
+from the former, so a fix applied only to the latter ships the old prompt. It
+also asserts the single-segment prompt contains no numbered example, since that
+is what was recited.
+
 ## Still to measure
 
 **Whether windowing loses procedures the un-windowed judge finds.** Take ten

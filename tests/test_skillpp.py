@@ -2255,3 +2255,61 @@ class TestAspectFilter(unittest.TestCase):
         self.assertEqual(self.keep("failures").strip(), "! 3 failing")
         self.assertEqual(self.keep("narration").strip(),
                          ". Fixed the ordering; suite green now.")
+
+
+class TestTheTwoLocatePrompts(unittest.TestCase):
+    """`/locate` and `/locate-one` must define the verdicts identically.
+
+    They ask the same question at different granularity — every segment in one
+    call, or one segment per call — and the definition of `landed` is duplicated
+    because a command file cannot include another. Duplicated text drifts, and
+    the drift here would be invisible: both prompts keep working, their answers
+    stop being comparable, and the whole point of running one against the other
+    is that they are.
+
+    `landed` in this block has already been rewritten twice. Both times the
+    frontier arm had to be re-verified against 18 cases, which is exactly the
+    cost that makes silent divergence expensive.
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def block(self, name: str) -> str:
+        text = (self.ROOT / ".claude" / "commands" / name).read_text()
+        start = text.index("- `landed` —")
+        end = text.index("without one they mean nothing.")
+        return text[start:end]
+
+    def test_the_verdict_definition_is_the_same_text(self):
+        self.assertEqual(self.block("locate.md"), self.block("locate-one.md"))
+
+    def test_both_still_define_landed_as_two_halves(self):
+        # A guard on the substance, not just on equality: editing both files
+        # identically in the wrong direction would pass the test above.
+        for name in ("locate.md", "locate-one.md"):
+            with self.subTest(name):
+                self.assertIn("carried out, and then confirmed",
+                              self.block(name))
+                self.assertIn("Both halves are", self.block(name))
+
+    def test_the_distributable_copies_match_the_active_ones(self):
+        # install.py copies from commands/, so a fix applied only to
+        # .claude/commands/ ships the old prompt.
+        for name in ("locate.md", "locate-one.md", "log-session.md",
+                     "review-candidates.md"):
+            with self.subTest(name):
+                self.assertEqual(
+                    (self.ROOT / ".claude" / "commands" / name).read_text(),
+                    (self.ROOT / "commands" / name).read_text())
+
+    def test_only_the_all_at_once_prompt_shows_a_numbered_example(self):
+        """The single-segment prompt must not give a copyable answer shape.
+
+        A 7B model returned `0 landed / 1 open / 2 open` — the example from
+        `locate.md` — for three different fixtures, including one with a single
+        segment. Asking about one segment removes the numbering, and the answer
+        format has to stay unnumbered or the same failure returns.
+        """
+        one = (self.ROOT / ".claude" / "commands" / "locate-one.md").read_text()
+        self.assertNotRegex(one, r"^\s*\d+\s+(landed|open)\s*$")
+        self.assertIn("One word, and nothing else", one)
