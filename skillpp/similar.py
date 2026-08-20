@@ -12,10 +12,28 @@ It also removes the only judgement in this pipeline that scales with the store:
 today the model is handed every recorded candidate to compare against, so the
 prompt grows forever, while a dot product per candidate does not.
 
-**What it cannot do.** It compares bodies to bodies. Raw session text scored 0.62
-to 0.67 against its *own* procedure's body -- inside the different-procedure band
--- so there is no version of this that matches a session before a body has been
-written for it. That is measured, not assumed.
+**What it cannot do: match a session before a body exists.** Three ways of
+trying, all measured on sessions whose answer the pipeline had already recorded:
+
+| compared | correct |
+| --- | --- |
+| whole session text against the stored body | 0 of 4 |
+| the session's commands against the body's commands | 1 of 4 |
+| the *landed segment's* commands against the body's commands | 1 of 7 |
+
+Every score in the second and third sat between 0.48 and 0.58, inside the band
+where different procedures live. Staging the comparison -- show the commands
+first, escalate only on a suspected match -- needs the cheap stage to separate
+something, and it separates nothing, so there is no threshold to escalate at.
+
+The reason is visible in the inputs. A stored body prescribes about twenty
+curated commands with placeholders; a session runs hundreds including every grep
+and read, and narrowing to the landed segment leaves one to ten. Two command
+lists for the same job -- `uv run --with pytest pytest tests/` against a body's
+`pytest <path to the tests>` -- share almost nothing as text.
+
+So matching runs after a body has been written, and the body needs a frontier
+model. That is measured, not assumed.
 
 A lexical similarity was tried on this problem first and returned 0.00 on every
 real pair, because the same work is named and worded differently every time.
