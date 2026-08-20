@@ -206,6 +206,14 @@ def cmd_segments(args: argparse.Namespace) -> int:
                   f"Stop here and write nothing.")
             return 0
         only_of = len(segs)
+        # What the developer said next, as context and nothing more. Whether a
+        # request resolved is partly answered by what followed it: a new subject
+        # says they moved on, more of the same says they did not. A frontier
+        # model reading one segment in isolation marked a finished procedure
+        # `open` for want of exactly this, while the all-at-once prompt — which
+        # sees the neighbours — got it right.
+        following = next((s for s in segs if s.index == args.only + 1), None)
+        next_ask = following.ask if following else ""
         segs = wanted
 
     chosen = tuple(args.aspect) if args.aspect else DEFAULT_ASPECTS
@@ -233,6 +241,12 @@ def cmd_segments(args: argparse.Namespace) -> int:
         # An empty segment is still numbered. Renumbering to close a gap would
         # break the correspondence the answers and `reconcile` both rely on.
         print(text if text.strip() else "(nothing of the shown aspects here)")
+        print()
+    if args.only is not None:
+        print("--- what the developer said next (context, not what you are "
+              "judging) ---")
+        print(f"> {next_ask}" if next_ask
+              else "(nothing — this was the last request in the session)")
         print()
     return 0
 

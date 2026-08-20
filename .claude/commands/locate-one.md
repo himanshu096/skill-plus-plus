@@ -44,8 +44,19 @@ of its steps matter, and do not write a skill. Those are separate questions
 asked later with more context than you have here. Most requests are `landed` and
 completely mundane.
 
-You are seeing one request out of several. Judge it on its own: work that
-continues into the next request has not resolved in this one.
+You are seeing one request out of several, and beneath it what the developer
+said next. **That line is context, never the thing you are judging.** Use it for
+one purpose: deciding whether they moved on.
+
+- A **new subject** means they accepted what happened and left it. That
+  corroborates `landed` — but only if something was actually carried out in the
+  request above. A new subject after a request that changed nothing is still
+  `open`.
+- **More of the same** — refining it, retrying it, asking why it did not work —
+  means it had not resolved. That is `open` however much happened.
+- **Nothing, because this was the last request**, is weak evidence either way. A
+  session can end on finished work or be abandoned mid-task. Decide on the
+  request itself: something carried out, and nothing showing it failed.
 
 ## When part of the request is withheld
 

@@ -392,24 +392,46 @@ no change at all, four greps. So the model is reading activity as completion:
 under-applying the half of the `landed` rule that requires confirmation, and in
 `recurrence-a`'s case the half that requires a change.
 
-### What that does not yet tell us
+### The frontier control: 20 of 21, and a different miss
 
-Whether the prompt or the model is the limit. `--backend claude --per-segment`
-runs the frontier control on the identical text, and the answer decides what to
-do next:
+Run on identical text. It missed `recurrence-a` **segment 2** — `open` against a
+label of `landed` — which the all-at-once prompt gets right. In isolation that
+segment is `yes, link it`, two MCP mutations, four unrelated greps. The mutations
+were carried out; nothing visible confirms them, because the confirmation in the
+label is *the developer moved on*, and one segment alone cannot see that there
+was a next request.
 
-- **Frontier 21/21** — the prompt is answerable and 86% is this model's ceiling
-  on it. Then the options are a larger local model, or accepting that the cheap
-  pass errs toward `landed` and putting the correction downstream, where a
-  wrongly-escalated segment costs a judgement that finds nothing.
-- **Frontier also missing segment 0s** — the per-segment prompt lost something
-  the all-at-once one has, and the obvious candidate is the neighbouring
-  requests. Whether a request resolved is partly answered by what the developer
-  said next, and one segment in isolation cannot see it.
+So the two arms fail differently, and both diagnoses are real:
 
-The second would be the more interesting result, and it has a cheap fix worth
-measuring: show the *next* request's first line as context without asking about
-it.
+| | miss | direction | cause |
+| --- | --- | --- | --- |
+| frontier | `recurrence-a` seg 2 | `landed` → `open` | the prompt cannot see what came next |
+| local 7B | segment 0 of three fixtures | `open` → `landed` | reads activity as completion |
+
+### Showing the next request made the local arm worse
+
+`--only N` now prints the following request's opening line beneath the segment,
+as context, with the prompt saying a new subject corroborates `landed` *only if
+something was carried out*, more of the same means `open`, and nothing following
+is weak evidence either way.
+
+Local went **18 of 21 to 16 of 21**. Three segments that had been right broke,
+each by taking the peek as sufficient: a bare `lgtm` followed by a new subject
+became `landed` though nothing happened in it, a finished request with nothing
+after it became `open`, and a request followed by more of the same became
+`landed`.
+
+That is the fifth time an auxiliary hint in this prompt has been read as a rule,
+and the first time it happened to a small model rather than a frontier one. The
+pattern is sharper than "hints get promoted": **the hints a frontier model needs
+are the ones a 7B over-applies.** Every revision that raised the frontier score
+added nuance, and nuance is what the small model cannot weigh.
+
+Which points at two prompts rather than one — a rich one for the judge and a
+minimal one for the cheap pass — with the same drift guard the two `locate`
+files already have. Not built: whether the peek actually fixes the frontier miss
+it was written for is unmeasured, and building a second prompt before knowing
+that would be guessing twice.
 
 ### Keeping the two prompts honest
 
