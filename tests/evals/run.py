@@ -434,6 +434,40 @@ def _seed_queue(config: Config) -> None:
             add_occurrence(config, name=name, session=f"{name}-{n}")
 
 
+def _cold(which: str, out: Path) -> Path:
+    import cold
+    return cold.ALL[which](out)
+
+
+def _cold_check(name: str):
+    """Score a /locate reply against a cold fixture's pre-committed labels.
+
+    Separate from `_locator_check` only in where the truth comes from. The
+    labels in `cold.py` were written before anything was run and are not to be
+    revised because an answer disagrees -- that is the whole point of having
+    them, since the tuned set's prompt was revised three times against it.
+    """
+    def check(root: Path, said: str, entries: list[dict]) -> str | None:
+        import cold
+        import locator
+        if entries:
+            return (f"wrote {len(entries)} candidate(s) — the locator answers "
+                    f"and stops: {[e['name'] for e in entries]}")
+        got = locator.parse(said)
+        truth = cold.TRUTH[name]
+        if not got:
+            return f"no verdicts in the reply: {said.strip()[:200]!r}"
+        missing = [i for i in range(len(truth)) if i not in got]
+        if missing:
+            return f"segments not answered: {missing}"
+        wrong = [f"{i}: said {got[i]}, is {want} ({why})"
+                 for i, (want, why) in enumerate(truth) if got[i] != want]
+        if wrong:
+            return f"{len(wrong)}/{len(truth)} wrong — " + "; ".join(wrong)
+        return None
+    return check
+
+
 def _locator_check(name: str):
     """Score a /locate reply against the labelled truth for one fixture.
 
@@ -708,6 +742,86 @@ CASES = [
          args="--aspect tools --aspect failures",
          bookmarks=False,
          check_run=_locator_check("recurrence-a")),
+    # ---- cold fixtures: shapes the prompt was never tuned against ----
+    # The tuned set is fifteen segments and the prompt was revised three times
+    # against it, so a clean sweep there shows mostly that it fits. Each of
+    # these is a shape the tuned set does not contain: a failure that ended the
+    # attempt rather than one inside finished work, work finished through a
+    # project's own script with no recognisable verb, a mutation that was
+    # refused so the cheap pass sees a failure present rather than absent, and
+    # three segments of genuinely interleaved work.
+    Case("cold-abandoned",
+         asks="full content, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-abandoned", out)],
+         command="/locate",
+         bookmarks=False,
+         check_run=_cold_check("cold-abandoned")),
+    Case("cold-abandoned-tools",
+         asks="commands and failures only, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-abandoned", out)],
+         command="/locate", args="--aspect tools --aspect failures",
+         bookmarks=False,
+         check_run=_cold_check("cold-abandoned")),
+    Case("cold-bespoke",
+         asks="full content, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-bespoke", out)],
+         command="/locate",
+         bookmarks=False,
+         check_run=_cold_check("cold-bespoke")),
+    Case("cold-bespoke-tools",
+         asks="commands and failures only, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-bespoke", out)],
+         command="/locate", args="--aspect tools --aspect failures",
+         bookmarks=False,
+         check_run=_cold_check("cold-bespoke")),
+    Case("cold-mutation-failed",
+         asks="full content, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-mutation-failed", out)],
+         command="/locate",
+         bookmarks=False,
+         check_run=_cold_check("cold-mutation-failed")),
+    Case("cold-mutation-failed-tools",
+         asks="commands and failures only, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-mutation-failed", out)],
+         command="/locate", args="--aspect tools --aspect failures",
+         bookmarks=False,
+         check_run=_cold_check("cold-mutation-failed")),
+    Case("cold-mixed",
+         asks="full content, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-mixed", out)],
+         command="/locate",
+         bookmarks=False,
+         check_run=_cold_check("cold-mixed")),
+    Case("cold-mixed-tools",
+         asks="commands and failures only, "
+              "on a fixture the prompt has not seen",
+         breaks="the prompt fits the fifteen segments it was tuned on and "
+                "nothing else",
+         transcripts=lambda out: [_cold("cold-mixed", out)],
+         command="/locate", args="--aspect tools --aspect failures",
+         bookmarks=False,
+         check_run=_cold_check("cold-mixed")),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
