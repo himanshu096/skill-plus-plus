@@ -138,15 +138,39 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
     if not body:
         print("nothing on stdin; a candidate needs a body", file=sys.stderr)
         return 1
+
+    matches = args.matches
+    decided_locally = ""
+    if matches is None and args.auto_match:
+        # Local, and an embedding rather than a judgement. This is the only
+        # decision here that scaled with the store: passing every candidate to
+        # a model to compare means the prompt grows forever. Falls through to
+        # "new" if the local model is unreachable, which is the safe direction —
+        # a duplicate entry can be merged later, a wrong merge discards a
+        # proposal with nothing recording that it happened.
+        from .memory import load
+        from .similar import EmbeddingUnavailable, closest
+        try:
+            stored = {e.name: e.body for e in load(config)}
+            best = closest(body, stored)
+        except EmbeddingUnavailable as exc:
+            print(f"local matching unavailable ({exc}); filing as new",
+                  file=sys.stderr)
+            best = None
+        if best is not None:
+            decided_locally = f" [{best.score:.3f} vs {best.name}]"
+            if best.confident:
+                matches = best.name
+
     try:
         prepared = prepare(args.target, config=config)
         written = record(prepared, name=args.name, body=body,
-                         matches=args.matches)
+                         matches=matches)
     except (TranscriptNotFound, ValueError, KeyError) as exc:
         print(str(exc).strip("'"), file=sys.stderr)
         return 1
-    verb = f"merged into '{args.matches}'" if args.matches else "recorded"
-    print(f"{verb}: {args.name} -> {written}")
+    verb = f"merged into '{matches}'" if matches else "recorded"
+    print(f"{verb}: {args.name} -> {written}{decided_locally}")
     return 0
 
 
@@ -1121,6 +1145,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--name", required=True, help="the skill's name")
     p.add_argument("--matches",
                    help="an existing candidate this is the same procedure as")
+    p.add_argument("--auto-match", action="store_true",
+                   help="decide --matches locally by embedding similarity "
+                        "instead of being told. Needs Ollama running")
     p.set_defaults(func=cmd_record_candidate)
 
     p = sub.add_parser("commit-session",

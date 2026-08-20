@@ -364,6 +364,29 @@ slice the judge reads, and it treated "few developer prompts" as "nothing
 happened", which skipped a session with 73 new messages. It now reads the judge's
 slice and falls back to the whole slice when the requests alone are too thin.
 
+**What runs locally, and what the measurement said could not.** Two of the
+three things detection does are local now; the third is the artifact itself.
+
+| step | who | evidence |
+| --- | --- | --- |
+| is this session worth reading | `qwen2.5:7b`, `drain --triage` | 6 of 6 real procedures sent on, 0 lost, 4 of 6 empty skipped |
+| detect the procedure and write the body | Claude | a 7B fails this one call or four; see `skillpp/prompts/README.md` |
+| is this body already in the store | `nomic-embed-text`, `record-candidate --auto-match` | same procedure 0.873-0.990, different 0.569-0.776, threshold 0.824 |
+
+`skillpp/similar.py` is the matching half. It removes the only judgement here
+that scaled with the store: the model used to be handed every recorded candidate
+to compare against, so the prompt grew forever, and a dot product per candidate
+does not. It falls through to "new" when Ollama is unreachable, which is the safe
+direction — a duplicate can be merged by a person later, while a wrong merge
+raises someone else's count and discards a proposal with nothing recording it.
+
+**The limit, measured rather than assumed.** Matching compares bodies to bodies.
+Raw session text scored 0.62 to 0.67 against its *own* procedure's body, inside
+the different-procedure band, on four real sessions — so nothing matches a
+session before a body exists for it, and the body needs Claude. That is why
+`locate` and `window.py` are not wired into anything: they were built to feed a
+local writer, and there is no local writer.
+
 **No framework.** `skillpp/` is stdlib-only with no dependency manifest, which
 is the point: it runs as a hook inside someone else's session and must never
 break it. The Ollama call is one urllib POST. Google ADK was considered and is

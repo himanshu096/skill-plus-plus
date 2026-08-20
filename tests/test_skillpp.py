@@ -2756,3 +2756,98 @@ class TestDrain(TempRoot):
         asked.assert_not_called()
         self.assertFalse(worth)
         self.assertIn("no developer request", why)
+
+
+class TestLocalMatching(TempRoot):
+    """Deciding a match by embedding rather than by asking a model.
+
+    Measured on the proposals the pipeline recorded across real sessions: two
+    bodies the judge called the same procedure score 0.873 to 0.990, two it
+    filed separately score 0.569 to 0.776. THRESHOLD sits in that gap.
+
+    The tests here stub the embedding. What a real model returns is measured in
+    `tests/evals/matching.py`; what must hold regardless is the plumbing —
+    which way it fails, and that it never merges on a near miss.
+    """
+
+    BODY = "Read the intake spec first.\n\n## Search by signature\n\nNot title."
+
+    def stub(self, scores: dict[str, float]):
+        """Embeddings whose cosine reproduces the scores asked for.
+
+        One dimension per name plus a slack dimension that makes the target a
+        unit vector; each candidate is a basis vector, so cosine comes out as
+        exactly the number given. The slack dimension is not decoration — with
+        one candidate and no slack the vectors are one-dimensional and positive,
+        so cosine is 1.0 whatever score was asked for, and a near-miss test
+        passes when it should fail.
+        """
+        names = list(scores)
+        slack = max(0.0, 1.0 - sum(scores[n] ** 2 for n in names)) ** 0.5
+
+        def fake(text: str, **_kw):
+            if text.startswith(self.BODY[:20]):
+                return [scores[n] for n in names] + [slack]
+            for i, n in enumerate(names):
+                if text == f"body of {n}":
+                    v = [0.0] * (len(names) + 1)
+                    v[i] = 1.0
+                    return v
+            return [0.0] * (len(names) + 1)
+        return fake
+
+    def candidates(self, scores: dict[str, float]) -> dict[str, str]:
+        return {n: f"body of {n}" for n in scores}
+
+    def test_it_matches_the_closest_above_the_threshold(self):
+        from skillpp import similar
+        scores = {"filing-a-bug": 0.90, "cutting-a-tag": 0.40}
+        with unittest.mock.patch.object(similar, "embed",
+                                        self.stub(scores)):
+            best = similar.closest(self.BODY, self.candidates(scores))
+        self.assertEqual(best.name, "filing-a-bug")
+        self.assertTrue(best.confident)
+
+    def test_a_near_miss_is_reported_but_not_confident(self):
+        # The dangerous direction. A wrong merge inflates one count and discards
+        # a proposal with nothing recording that it happened, so the caller has
+        # to see the score rather than a boolean it cannot question.
+        from skillpp import similar
+        scores = {"filing-a-bug": similar.THRESHOLD - 0.01}
+        with unittest.mock.patch.object(similar, "embed", self.stub(scores)):
+            best = similar.closest(self.BODY, self.candidates(scores))
+        self.assertEqual(best.name, "filing-a-bug")
+        self.assertFalse(best.confident)
+
+    def test_an_empty_store_matches_nothing(self):
+        from skillpp import similar
+        self.assertIsNone(similar.closest(self.BODY, {}))
+
+    def test_recording_falls_through_to_new_when_ollama_is_down(self):
+        """The safe direction, and it has to be this one.
+
+        A duplicate entry can be merged later by a person. A wrong merge raises
+        someone else's count and throws the proposal away.
+        """
+        import io
+        from skillpp import similar
+        from skillpp.cli import main
+        transcript = write_transcript(
+            self.root,
+            *[rec(f"u{n}", content=f"request {n}") for n in range(30)],
+            name="s.jsonl")
+        memory.add_entry(self.config, name="already-here", body=self.BODY)
+        with unittest.mock.patch.object(
+                similar, "embed",
+                side_effect=similar.EmbeddingUnavailable("not running")):
+            with unittest.mock.patch("sys.stdin", io.StringIO(self.BODY)):
+                with unittest.mock.patch.dict(os.environ,
+                                              {"SKILLPP_MIN_NEW": "1"}):
+                    code = main(["--root", str(self.config.root),
+                                 "record-candidate", str(transcript),
+                                 "--name", "something-new", "--auto-match"])
+        self.assertEqual(code, 0)
+        names = sorted(e.name for e in memory.load(self.config))
+        self.assertIn("something-new", names)
+        self.assertEqual(memory.find(memory.load(self.config),
+                                     "already-here").count, 0)
