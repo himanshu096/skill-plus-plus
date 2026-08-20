@@ -1,5 +1,24 @@
 # Windowing: how much a split costs
 
+> **How much of this is established.** Three tiers, and they have been reported
+> in the same tone when they should not be.
+>
+> **Measured on data not built for the purpose:** the census — 14 of 14 real
+> sessions exceed a 16k context after a 47x extract — and the segment-size
+> distribution behind `BUDGET`. Those hold.
+>
+> **Weak:** every locator score. Twenty-one segments written *and* labelled here,
+> with the prompt revised seven times against them; the four cold fixtures are
+> the only unfitted evidence and they are six segments. Percentages computed
+> from them, including "zero agreed-wrong" at n=3 disagreements, are
+> illustrations rather than rates.
+>
+> **Not established at all:** that this pipeline detects the procedures the
+> current whole-session prompt detects. There is no end-to-end measurement,
+> because nothing calls `window.py` or `reconcile.py` yet. The direction being
+> right does not make this implementation of it work, and the numbers below
+> should not be read as saying it does.
+
 A session does not fit a local model. Measured on twelve real transcripts, the
 extract runs 60k–128k tokens *after* a 47× reduction, and every remaining
 compression summed to about 5%. So the prompt is split instead — and the whole
@@ -476,7 +495,7 @@ strict about confirmation and the other is not.
 
 | combiner | agreed and right | agreed and **wrong** | escalated |
 | --- | --- | --- | --- |
-| **qwen2.5 + granite3.3, unanimous or escalate** | **18** | **0** | 3 (14%) |
+| **qwen2.5 + granite3.3, unanimous or escalate** | 18 | 0 | 3 (14%) |
 | qwen2.5 + mistral | 17 | 0 | 4 (19%) |
 | granite3.3 + mistral | 20 | **2** | 1 (5%) |
 | all three | 17 | 0 | 4 (19%) |
@@ -488,10 +507,15 @@ the one that had them right. And **`granite3.3 + mistral` looks best on
 escalation rate and is the worst option available**: they share two failure
 modes, so they agree confidently and wrongly twice, which is silent.
 
-The pair to use is the strict model with a lenient one. Their disagreement is
-computed in code, needs no calibration, and lands exactly on the segments where
-the judgement is genuinely marginal — which is what a confidence score was
-supposed to provide and does not.
+The pair to use is a strict model with a lenient one, never two of the same
+temperament. Their disagreement is computed in code, needs no calibration, and
+lands on the segments where the judgement is marginal — which is what a
+confidence score is supposed to provide and does not.
+
+With the caveat that matters: this is three disagreements across twenty-one
+segments of my own construction. It is a mechanism that looks sound, not a
+measured error rate, and the number to trust instead is the end-to-end one
+below, which has not been run.
 
 ### Keeping the two prompts honest
 
