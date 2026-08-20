@@ -3004,3 +3004,92 @@ class TestHostPortability(TempRoot):
             with self.subTest(module.name):
                 self.assertNotIn('"claude"', text)
                 self.assertNotIn("'claude'", text)
+
+
+class TestTheKnobsActuallyReachSomething(TempRoot):
+    """Every documented override, tested through the code path it affects.
+
+    Four of these were dead at once: `SKILLPP_RECURRENCE` never reached
+    `reviewable`, `SKILLPP_LOCAL_MODEL` and `SKILLPP_EMBED_MODEL` were read into
+    `Config` and never passed anywhere, and `SKILLPP_OLLAMA` had a helper —
+    `endpoint_for` — that nothing called.
+
+    The test that let that happen called `endpoint_for` directly and passed,
+    which is the trap: a helper that works proves nothing about whether the code
+    uses it. So these assert on the request that actually leaves the process,
+    and on the value the caller actually gets.
+    """
+
+    def captured(self):
+        """A urlopen stand-in that records the URL and body it was given."""
+        seen = {}
+
+        class Response:
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *a): return False
+            def read(self_inner):
+                return json.dumps({"response": "yes",
+                                   "embeddings": [[1.0, 0.0]]}).encode()
+
+        def fake(request, timeout=None):
+            seen["url"] = request.full_url
+            seen["body"] = json.loads(request.data.decode())
+            return Response()
+        return seen, fake
+
+    def test_the_ollama_host_reaches_the_generate_request(self):
+        from skillpp import local
+        seen, fake = self.captured()
+        with unittest.mock.patch.dict(
+                os.environ, {"SKILLPP_OLLAMA": "http://gpu-box:9999"}):
+            config = Config(self.root / "a")
+        with unittest.mock.patch("urllib.request.urlopen", fake):
+            local.triage("> do the thing\n  $ Bash make release\n    = ok\n" * 4,
+                         model="some-model", config=config)
+        self.assertEqual(seen["url"], "http://gpu-box:9999/api/generate")
+        self.assertEqual(seen["body"]["model"], "some-model")
+
+    def test_the_ollama_host_reaches_the_embed_request(self):
+        from skillpp import similar
+        seen, fake = self.captured()
+        with unittest.mock.patch.dict(os.environ, {
+                "SKILLPP_OLLAMA": "http://gpu-box:9999",
+                "SKILLPP_EMBED_MODEL": "mxbai-embed-large"}):
+            config = Config(self.root / "b")
+        with unittest.mock.patch("urllib.request.urlopen", fake):
+            similar.closest("a body", {"stored": "another body"}, config=config)
+        self.assertEqual(seen["url"], "http://gpu-box:9999/api/embed")
+        self.assertEqual(seen["body"]["model"], "mxbai-embed-large")
+
+    def test_the_embed_model_reaches_an_exemplar(self):
+        from skillpp import similar
+        seen, fake = self.captured()
+        with unittest.mock.patch.dict(
+                os.environ, {"SKILLPP_EMBED_MODEL": "mxbai-embed-large"}):
+            config = Config(self.root / "c")
+        with unittest.mock.patch("urllib.request.urlopen", fake):
+            similar.add_exemplar(config, name="n", session="s", text="t")
+        self.assertEqual(seen["body"]["model"], "mxbai-embed-large")
+
+    def test_the_recurrence_threshold_reaches_the_review_queue(self):
+        entry = memory.Candidate(name="x", body="b",
+                                 sessions=["a", "b", "c"], dates=["d"] * 3)
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_RECURRENCE": "5"}):
+            raised = Config(self.root / "d")
+        self.assertEqual(memory.reviewable([entry], config=raised), [])
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_RECURRENCE": "2"}):
+            lowered = Config(self.root / "e")
+        self.assertEqual(len(memory.reviewable([entry], config=lowered)), 1)
+        # And the module default still applies when nothing is configured.
+        self.assertEqual(len(memory.reviewable([entry])), 1)
+
+    def test_every_documented_knob_is_read_by_config(self):
+        """Guards the reverse mistake: documenting a variable nothing reads."""
+        documented = ("SKILLPP_ROOT", "SKILLPP_SKILLS_DIR", "SKILLPP_MIN_NEW",
+                      "SKILLPP_AGENT", "SKILLPP_OLLAMA", "SKILLPP_LOCAL_MODEL",
+                      "SKILLPP_EMBED_MODEL", "SKILLPP_RECURRENCE")
+        source = (Path(__file__).resolve().parent.parent
+                  / "skillpp" / "config.py").read_text()
+        for name in documented:
+            with self.subTest(name):
+                self.assertIn(name, source)

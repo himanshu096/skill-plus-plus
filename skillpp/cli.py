@@ -174,7 +174,7 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
         from .similar import EmbeddingUnavailable, closest
         try:
             stored = {e.name: e.body for e in load(config)}
-            best = closest(body, stored)
+            best = closest(body, stored, config=config)
         except EmbeddingUnavailable as exc:
             print(f"local matching unavailable ({exc}); filing as new",
                   file=sys.stderr)
@@ -503,7 +503,8 @@ def cmd_drain(args: argparse.Namespace) -> int:
             # context for all but the largest sessions.
             text = asks if worth_reading(asks) else "\n".join(
                 s.text for s in segs)
-            worth, why = triage(text, model=args.triage_model)
+            worth, why = triage(text, config=config,
+                                model=args.triage_model or config.local_model)
             if not worth:
                 skipped.append((session, why))
                 todo.remove((session, path))
@@ -588,7 +589,7 @@ def cmd_candidates(args: argparse.Namespace) -> int:
               f"Store: {store}")
         return 0
 
-    ready = reviewable(entries)
+    ready = reviewable(entries, config=config)
     # --open-only feeds the review queue, so it is the threshold that applies
     # rather than the status alone. The plain listing below still shows
     # everything: what has been seen once is a log, and a log is worth reading.
@@ -1165,8 +1166,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--triage", action="store_true",
                    help="ask a local model which sessions are worth a frontier "
                         "call, and skip the rest. Needs Ollama running")
-    p.add_argument("--triage-model", default="qwen2.5:7b",
-                   help="the local model to triage with (default qwen2.5:7b)")
+    p.add_argument("--triage-model",
+                   help="the local model to triage with; defaults to "
+                        "SKILLPP_LOCAL_MODEL, then qwen2.5:7b")
     p.add_argument("--prune", action="store_true",
                    help="drop entries whose transcript no longer exists; a "
                         "`claude -p` run leaves one every time")

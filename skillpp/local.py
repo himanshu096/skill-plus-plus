@@ -85,21 +85,23 @@ def _context_for(prompt: str) -> int:
     return size
 
 
-def _ask(model: str, prompt: str, *, timeout: int = 300) -> str:
+def _ask(model: str, prompt: str, *, timeout: int = 300,
+         endpoint: str | None = None) -> str:
     context = _context_for(prompt)
     body = json.dumps({
         "model": model, "prompt": prompt, "stream": False,
         "options": {"temperature": 0, "num_predict": PREDICT,
                     "num_ctx": context},
     }).encode()
+    where = endpoint or ENDPOINT
     request = urllib.request.Request(
-        ENDPOINT, data=body, headers={"Content-Type": "application/json"})
+        where, data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise LocalModelUnavailable(
-            f"could not reach Ollama at {ENDPOINT}: {exc}") from exc
+            f"could not reach Ollama at {where}: {exc}") from exc
     if payload.get("error"):
         raise LocalModelUnavailable(str(payload["error"]))
     answer = payload.get("response", "")
@@ -199,7 +201,8 @@ def spans(verdicts: list[Verdict]) -> list[tuple[int, int]]:
     return out
 
 
-def triage(transcript_text: str, *, model: str = STRICT) -> tuple[bool, str]:
+def triage(transcript_text: str, *, model: str = STRICT,
+           config=None) -> tuple[bool, str]:
     """Is this session worth a frontier call at all?
 
     The one local job that pays. Measured on twelve sessions the pipeline had
@@ -220,7 +223,7 @@ def triage(transcript_text: str, *, model: str = STRICT) -> tuple[bool, str]:
     prompt = (PROMPTS / "triage.md").read_text(encoding="utf-8").replace(
         "{SESSION}", transcript_text)
     try:
-        answer = _yes_no(_ask(model, prompt))
+        answer = _yes_no(_ask(model, prompt, endpoint=endpoint_for(config)))
     except LocalModelUnavailable as exc:
         return True, f"local model unavailable ({exc}); sending on"
     if answer is None:

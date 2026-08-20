@@ -205,17 +205,26 @@ def find(candidates: list[Candidate], name: str) -> Candidate | None:
 
 
 def reviewable(candidates: list[Candidate],
-               threshold: int = THRESHOLD) -> list[Candidate]:
+               threshold: int | None = None,
+               config=None) -> list[Candidate]:
     """The ones worth asking a person about.
 
     This filters the queue; it does not change what an entry *is*. Everything
+    ``threshold`` wins if given, then ``config.recurrence_threshold``, then the
+    module default. Without that middle step ``SKILLPP_RECURRENCE`` existed,
+    read the environment, and reached nothing — a knob that does nothing is
+    worse than no knob.
+
     below the threshold stays stored, stays counted, and still shows up in
     ``skillpp candidates`` -- it is simply not a question yet. Keeping the two
     apart is the same separation as status and evidence: what a thing is, and
     how much of it there is, are not the same fact.
     """
+    resolved = (threshold if threshold is not None else
+                getattr(config, "recurrence_threshold", None)
+                or THRESHOLD)
     return [c for c in candidates
-            if c.status == CANDIDATE and c.count >= threshold]
+            if c.status == CANDIDATE and c.count >= resolved]
 
 
 def order(candidates: list[Candidate]) -> list[Candidate]:

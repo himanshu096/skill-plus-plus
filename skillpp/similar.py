@@ -136,16 +136,18 @@ class Nearest:
         return not self.matches and not self.is_new
 
 
-def embed(text: str, *, model: str = MODEL, timeout: int = 180) -> list[float]:
+def embed(text: str, *, model: str = MODEL, timeout: int = 180,
+          endpoint: str | None = None) -> list[float]:
     body = json.dumps({"model": model, "input": text[:MAX_CHARS]}).encode()
+    where = endpoint or ENDPOINT
     request = urllib.request.Request(
-        ENDPOINT, data=body, headers={"Content-Type": "application/json"})
+        where, data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise EmbeddingUnavailable(
-            f"could not reach Ollama at {ENDPOINT}: {exc}") from exc
+            f"could not reach Ollama at {where}: {exc}") from exc
     if payload.get("error"):
         raise EmbeddingUnavailable(str(payload["error"]))
     vectors = payload.get("embeddings") or []
@@ -162,7 +164,7 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 
 def closest(body: str, candidates: dict[str, str], *,
-            model: str = MODEL) -> Match | None:
+            model: str = MODEL, config=None) -> Match | None:
     """The stored procedure this body most resembles, or None if the store is empty.
 
     Returns the best match whether or not it clears the threshold, so a caller
@@ -170,8 +172,10 @@ def closest(body: str, candidates: dict[str, str], *,
     """
     if not candidates:
         return None
-    target = embed(body, model=model)
-    scored = [(cosine(target, embed(text, model=model)), name)
+    model = getattr(config, "embed_model", None) or model
+    where = endpoint_for(config)
+    target = embed(body, model=model, endpoint=where)
+    scored = [(cosine(target, embed(text, model=model, endpoint=where)), name)
               for name, text in candidates.items()]
     score, name = max(scored)
     return Match(name=name, score=score)
@@ -186,7 +190,8 @@ def add_exemplar(config, *, name: str, session: str, text: str,
     them, so a procedure seen three times is easier to recognise than one seen
     once — which is the same reason the count exists.
     """
-    vector = embed(text, model=model)
+    vector = embed(text, model=getattr(config, "embed_model", None) or model,
+                   endpoint=endpoint_for(config))
     line = json.dumps({"name": name, "session": session, "vector": vector},
                       ensure_ascii=False)
     config.exemplars_file.parent.mkdir(parents=True, exist_ok=True)
@@ -222,7 +227,8 @@ def nearest_session(config, text: str, *, model: str = MODEL) -> Nearest | None:
     stored = exemplars(config)
     if not stored:
         return None
-    target = embed(text, model=model)
+    target = embed(text, model=getattr(config, "embed_model", None) or model,
+                   endpoint=endpoint_for(config))
     best: dict[str, float] = {}
     seen: dict[str, int] = {}
     for item in stored:
