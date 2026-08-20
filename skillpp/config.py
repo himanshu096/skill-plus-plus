@@ -109,6 +109,18 @@ class Config:
         return self.root / "decisions.jsonl"
 
     @property
+    def exemplars_file(self) -> Path:
+        """Append-only log of what a procedure's sessions look like, embedded.
+
+        One line per sighting, because matching a session against a written
+        body does not work: a session sits near-equidistant from every body in
+        the store (a spread of 0.07 across all of them), while two sessions
+        doing the same procedure are separable. Comparing like with like needs
+        something session-shaped to compare against, and this is it.
+        """
+        return self.root / "exemplars.jsonl"
+
+    @property
     def reviews_dir(self) -> Path:
         """What each individual review proposed, as it proposed it.
 

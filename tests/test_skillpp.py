@@ -2851,3 +2851,92 @@ class TestLocalMatching(TempRoot):
         self.assertIn("something-new", names)
         self.assertEqual(memory.find(memory.load(self.config),
                                      "already-here").count, 0)
+
+
+class TestSessionExemplars(TempRoot):
+    """Matching a session against previous sessions, not against a body.
+
+    Measured on real data: a session sits near-equidistant from every written
+    body in the store — a spread of 0.07 across all of them — so there is
+    nothing to choose between. Two sessions doing the same procedure separate:
+    0.727 to 0.827 against 0.638 to 0.723 for different ones.
+
+    That gap is 0.004 wide, which is why there are three zones rather than a
+    threshold. The middle one decides nothing and is handed on, and these tests
+    exist mostly to hold that boundary in place.
+    """
+
+    def vec(self, *values: float) -> list[float]:
+        return list(values)
+
+    def test_exemplars_are_appended_never_rewritten(self):
+        from skillpp import similar
+        with unittest.mock.patch.object(similar, "embed",
+                                        return_value=[1.0, 0.0]):
+            similar.add_exemplar(self.config, name="filing", session="s1",
+                                 text="x")
+            before = self.config.exemplars_file.read_bytes()
+            similar.add_exemplar(self.config, name="filing", session="s2",
+                                 text="y")
+        after = self.config.exemplars_file.read_bytes()
+        self.assertTrue(after.startswith(before))
+        self.assertEqual(len(similar.exemplars(self.config)), 2)
+
+    def test_a_procedure_is_scored_on_its_best_sighting_not_its_average(self):
+        """Averaging hides the match.
+
+        The question is whether this session looks like *any* previous run of
+        the work. One unusual sighting should not drag a good match below the
+        line.
+        """
+        from skillpp import similar
+        vectors = iter([[1.0, 0.0], [0.0, 1.0]])  # one aligned, one orthogonal
+        with unittest.mock.patch.object(similar, "embed",
+                                        side_effect=lambda *a, **k: next(vectors)):
+            similar.add_exemplar(self.config, name="filing", session="s1", text="x")
+            similar.add_exemplar(self.config, name="filing", session="s2", text="y")
+        with unittest.mock.patch.object(similar, "embed",
+                                        return_value=[1.0, 0.0]):
+            near = similar.nearest_session(self.config, "a new session")
+        self.assertEqual(near.name, "filing")
+        self.assertAlmostEqual(near.score, 1.0, places=5)   # best, not 0.5
+        self.assertEqual(near.sessions, 2)
+
+    def test_the_three_zones(self):
+        from skillpp.similar import Nearest, SURE_MATCH, SURE_NEW
+        self.assertTrue(Nearest("a", SURE_MATCH, 1).matches)
+        self.assertTrue(Nearest("a", SURE_NEW, 1).is_new)
+        mid = (SURE_MATCH + SURE_NEW) / 2
+        middle = Nearest("a", mid, 1)
+        self.assertTrue(middle.unsure)
+        self.assertFalse(middle.matches)
+        self.assertFalse(middle.is_new)
+
+    def test_the_measured_scores_land_where_they_should(self):
+        """The boundary, pinned to the numbers it came from.
+
+        Any edit that moves SURE_MATCH or SURE_NEW past these fails here, which
+        is the point: they are not round numbers, they are the ends of a
+        measured gap.
+        """
+        from skillpp.similar import Nearest
+        # Highest score seen between two sessions doing *different* work.
+        self.assertFalse(Nearest("a", 0.723, 1).matches)
+        # Lowest between two doing the *same* work.
+        self.assertFalse(Nearest("a", 0.727, 1).is_new)
+        # Comfortably same, comfortably different.
+        self.assertTrue(Nearest("a", 0.827, 1).matches)
+        self.assertTrue(Nearest("a", 0.638, 1).is_new)
+
+    def test_an_empty_log_matches_nothing(self):
+        from skillpp import similar
+        self.assertIsNone(similar.nearest_session(self.config, "anything"))
+
+    def test_a_corrupt_line_does_not_lose_the_rest(self):
+        from skillpp import similar
+        with unittest.mock.patch.object(similar, "embed",
+                                        return_value=[1.0, 0.0]):
+            similar.add_exemplar(self.config, name="filing", session="s1", text="x")
+        with self.config.exemplars_file.open("a", encoding="utf-8") as handle:
+            handle.write("not json\n\n")
+        self.assertEqual(len(similar.exemplars(self.config)), 1)

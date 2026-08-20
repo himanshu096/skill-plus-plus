@@ -142,6 +142,28 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
     matches = args.matches
     decided_locally = ""
     if matches is None and args.auto_match:
+        # Session against session first, because it is the only comparison that
+        # separates before a body exists. Three zones: act on the ends, hand the
+        # middle to the frontier model, which is what happened before this
+        # existed. The margin between the ends is 0.004 wide and is not
+        # something to round off.
+        from .similar import EmbeddingUnavailable as _Unavailable
+        from .similar import nearest_session
+        try:
+            prepared_peek = prepare(args.target, config=config)
+            near = nearest_session(
+                config, "\n".join(m.text for m in prepared_peek.new_messages))
+        except (_Unavailable, Exception):  # noqa: BLE001
+            near = None
+        if near is not None:
+            if near.matches:
+                matches = near.name
+                decided_locally = (f" [session {near.score:.3f} vs "
+                                   f"{near.sessions} sighting(s) of {near.name}]")
+            elif near.unsure:
+                decided_locally = (f" [session {near.score:.3f} vs {near.name} "
+                                   f"— too close to call locally]")
+
         # Local, and an embedding rather than a judgement. This is the only
         # decision here that scaled with the store: passing every candidate to
         # a model to compare means the prompt grows forever. Falls through to
@@ -169,6 +191,19 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
     except (TranscriptNotFound, ValueError, KeyError) as exc:
         print(str(exc).strip("'"), file=sys.stderr)
         return 1
+    # Remember what this session looked like, whatever was decided about it.
+    # A procedure seen three times is easier to recognise than one seen once,
+    # which is why every sighting is kept rather than only the first.
+    if args.auto_match:
+        from .similar import EmbeddingUnavailable as _Unavailable
+        from .similar import add_exemplar
+        try:
+            add_exemplar(config, name=matches or args.name,
+                         session=prepared.session,
+                         text="\n".join(m.text for m in prepared.new_messages))
+        except (_Unavailable, OSError):
+            pass  # a missing exemplar costs recognition later, never correctness
+
     verb = f"merged into '{matches}'" if matches else "recorded"
     print(f"{verb}: {args.name} -> {written}{decided_locally}")
     return 0

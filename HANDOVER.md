@@ -380,12 +380,26 @@ does not. It falls through to "new" when Ollama is unreachable, which is the saf
 direction — a duplicate can be merged by a person later, while a wrong merge
 raises someone else's count and discards a proposal with nothing recording it.
 
-**The limit, measured rather than assumed.** Matching compares bodies to bodies.
-Raw session text scored 0.62 to 0.67 against its *own* procedure's body, inside
-the different-procedure band, on four real sessions — so nothing matches a
-session before a body exists for it, and the body needs Claude. That is why
-`locate` and `window.py` are not wired into anything: they were built to feed a
-local writer, and there is no local writer.
+**Two comparisons, because a session and a body do not compare.** A session sits
+near-equidistant from every written body in the store — a spread of 0.07 across
+all of them — and neither nomic's task prefixes nor comparing against the trigger
+sentence alone changed that. The signal does not survive crossing registers.
+
+Session against session does separate, so every sighting's session text is
+embedded and appended to `exemplars.jsonl`, and a new session is compared against
+the best sighting of each procedure. The gap there is 0.004 wide — 0.723 for the
+closest different pair, 0.727 for the furthest same pair — so it has three zones
+rather than a threshold: act above `SURE_MATCH`, act below `SURE_NEW`, hand the
+middle to the frontier model. On three real sessions that gave one correct match,
+one correct new, and one honest deferral. There is a test pinning the boundaries
+to the measured numbers, because they are not round figures.
+
+The margin should widen as procedures recur, since a session is scored against
+the best of several sightings rather than one. That is a prediction and nothing
+here tests it — only future sessions can.
+
+`locate` and `window.py` remain unwired: both were built to feed a local writer,
+and a 7B cannot write a body.
 
 **No framework.** `skillpp/` is stdlib-only with no dependency manifest, which
 is the point: it runs as a hook inside someone else's session and must never
