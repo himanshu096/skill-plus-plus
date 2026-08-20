@@ -219,3 +219,101 @@ def triage(transcript_text: str, *, model: str = STRICT) -> tuple[bool, str]:
         return True, "no clear answer; sending on"
     return answer, ("looks like a procedure was carried out" if answer
                     else "looks like talk, reading, or a one-line change")
+
+
+# --------------------------------------------------------------------------
+# composing a body, one narrow question at a time
+# --------------------------------------------------------------------------
+#
+# Asking a 7B to write a SKILL.md from a session in one call produced something
+# worse than nothing: it transcribed the run rather than generalising it, named
+# the repo and the function it happened to touch, picked a procedure the
+# frontier judge had explicitly rejected as mechanical, and invented a command
+# the session never ran.
+#
+# So the body is not written by the model. It is *assembled here* out of answers
+# to questions narrow enough for a small model to get right, which is the only
+# technique in this project with a track record -- the same move took the
+# locator from 3 of 8 to 20 of 21.
+#
+#   which steps are the method?   one yes/no per step
+#   what does this step look like without this run's details?   one line in, one out
+#   what rule would have avoided this failure?   one sentence
+#   when should this be used?   one sentence, shown only the generalised steps
+#
+# The last one matters: the trigger is written from the *generalised* steps
+# rather than from the session, so there are no instance details in front of it
+# to copy.
+
+_STEP = re.compile(r"^\s*([$!=.])\s*(.*)$")
+
+
+def _steps_and_failures(text: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Tool calls in order, and the ones whose result failed."""
+    steps: list[str] = []
+    failures: list[tuple[str, str]] = []
+    last: str | None = None
+    for line in text.splitlines():
+        match = _STEP.match(line)
+        if not match:
+            continue
+        marker, rest = match.groups()
+        if marker == "$":
+            steps.append(rest.strip())
+            last = rest.strip()
+        elif marker == "!" and last is not None:
+            failures.append((last, rest.strip()))
+    return steps, failures
+
+
+def _ask_one(model: str, prompt_file: str, **slots: str) -> str:
+    text = (PROMPTS / prompt_file).read_text(encoding="utf-8")
+    for key, value in slots.items():
+        text = text.replace("{" + key.upper() + "}", value)
+    return _ask(model, text).strip()
+
+
+def compose(ask: str, text: str, *, model: str = STRICT) -> str:
+    """A SKILL.md body, assembled from narrow answers rather than written.
+
+    ``ask`` is what the developer wanted; ``text`` is the rendered work. Returns
+    the body, or an empty string if nothing in the work turned out to be method.
+    """
+    steps, failures = _steps_and_failures(text)
+    if not steps:
+        return ""
+
+    method = []
+    for step in steps:
+        if _yes_no(_ask_one(model, "keep.md", ask=ask, step=step)):
+            method.append(step)
+    if not method:
+        return ""
+
+    general = []
+    for step in method:
+        line = _ask_one(model, "generalise.md", step=step).splitlines()[0]
+        # A model that answered with prose instead of a command is dropped
+        # rather than pasted: a sentence in a command block is worse than a
+        # missing step.
+        general.append(line.strip("` ") if len(line) < 200 else step)
+
+    rules = []
+    for step, error in failures:
+        sentence = _ask_one(model, "rule.md", step=step, error=error[:300])
+        first = sentence.split("\n")[0].strip()
+        if first and len(first) < 300:
+            rules.append(first)
+
+    listed = "\n    ".join(general)
+    trigger = _ask_one(model, "trigger.md", steps=listed).split("\n")[0].strip()
+
+    out = [trigger if trigger.lower().startswith("use when")
+           else f"Use when {trigger[0].lower() + trigger[1:]}" if trigger
+           else "Use when this situation comes up again.", ""]
+    out += ["## Steps", ""]
+    out += [f"```\n{step}\n```" for step in general]
+    if rules:
+        out += ["", "## Rules learned the hard way", ""]
+        out += [f"- {rule}" for rule in rules]
+    return "\n".join(out) + "\n"

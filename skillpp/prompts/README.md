@@ -141,3 +141,41 @@ file. The prompt said "when you are unsure, answer `yes`", meaning to bias
 toward recall. The model answered `yes` to all twelve sessions, which is the
 same as not answering. Replaced with a statement that most sessions are `no` and
 that answering `yes` to everything is not an answer.
+
+
+## Writing the body: not possible on a 7B
+
+The goal was no frontier model anywhere. It fails at exactly one step, and it is
+the step that produces the product.
+
+**One call.** `write.md` asked qwen2.5:7b for a body from a whole session. It
+transcribed the run instead of generalising it, named the repository and the
+function that run happened to touch, selected a procedure the frontier judge had
+explicitly rejected as mechanical, and invented a command the session never ran.
+
+**Four narrow calls.** The technique that took the locator from 3 of 8 to 20 of
+21 — one question per call, assembled in code — applied here as `keep.md`
+(is this step method?), `generalise.md` (strip this run's details),
+`rule.md` (what avoids this failure), `trigger.md` (when to use it), with the
+body assembled by `compose()` rather than written by the model. Each question is
+narrow and each answer is short. It still fails:
+
+- `trigger.md` describes the steps rather than the situation — "count its lines,
+  extract the first entry's timestamp, enumerate through each line"
+- `generalise.md` handles `git commit -am '<message>'` and fails on anything
+  real, leaving an absolute transcript path in three separate steps and
+  flattening heredocs into one unusable line
+- `keep.md` reduced a docstring-and-test segment to `Read <file path>`, dropping
+  the edit that was the point
+
+The placeholders do work in isolation, which is the one encouraging part and not
+enough. Selecting which steps are the method, and saying what situation calls
+for them, both need the whole span held at once — which is what that branch's
+`docs/detection.md` concluded about a small model and what this now confirms from
+the other direction.
+
+**Where that leaves it.** Everything except the body can be local: triage is
+measured and wired, and matching is semantic similarity, which is an embedding
+model's job rather than a generative one. The body needs a frontier model, or
+hardware that holds something much larger than 12B. This is kept in the tree
+rather than deleted so the next person does not spend the day rediscovering it.
