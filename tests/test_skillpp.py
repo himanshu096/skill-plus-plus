@@ -1876,3 +1876,107 @@ class TestHeredocClipping(unittest.TestCase):
         body = "feat: subject\n" + "filler.\n" * 60
         rendered = _arguments("Bash", {"command": self.cmd(body)})
         self.assertIn("chars written", rendered)
+
+
+class TestWindowing(unittest.TestCase):
+    """Splitting a session into pieces a local model could read.
+
+    Compression cannot close the gap -- twelve real sessions run 60k-128k tokens
+    after a 47x reduction, and every further cut summed to about 5%. So the
+    prompt is split instead, and the whole risk of splitting is that half a
+    procedure reads as a finished one. That is how the capture branch failed,
+    banking `ruff check` + `git commit` as a recipe of its own.
+    """
+
+    def session(self, *records: dict) -> list:
+        from skillpp.transcript import read
+        root = Path(tempfile.mkdtemp())
+        return read(write_transcript(root, *records))
+
+    def work(self, n: int, topic: str) -> list[dict]:
+        """Tool calls with bulky arguments, so a budget can actually be hit."""
+        out = []
+        for i in range(n):
+            call = {"type": "tool_use", "id": f"tu{topic}{i}", "name": "Bash",
+                    "input": {"command": f"run --{topic}{i} " + "x" * 400}}
+            out += [rec(f"a{topic}{i}", "assistant", [call]),
+                    rec(f"r{topic}{i}", "user",
+                        [tool_result("ok " + "y" * 400, tid=f"tu{topic}{i}")])]
+        return out
+
+    def test_a_boundary_only_falls_where_a_person_typed(self):
+        from skillpp.window import segments
+        msgs = self.session(rec("u1", content="first ask"), *self.work(2, "a"),
+                            rec("u2", content="second ask"), *self.work(2, "b"))
+        segs = segments(msgs)
+        self.assertEqual(len(segs), 2)
+        self.assertIn("first ask", segs[0].ask)
+        self.assertIn("second ask", segs[1].ask)
+
+    def test_a_tool_result_is_not_a_new_request(self):
+        # Every call is followed by a user-role message carrying its result. If
+        # those counted, a segment would break between a call and its own
+        # output and every procedure would be shredded.
+        from skillpp.window import segments
+        msgs = self.session(rec("u1", content="one ask"), *self.work(6, "a"))
+        self.assertEqual(len(segments(msgs)), 1)
+
+    def test_an_injected_message_is_not_a_new_request(self):
+        # Measured at 1.2% of real boundaries. A task notification arriving
+        # mid-procedure would break it at exactly the wrong place.
+        from skillpp.window import segments
+        msgs = self.session(
+            rec("u1", content="the ask"), *self.work(2, "a"),
+            rec("u2", content="<task-notification>\nbackground job done"),
+            *self.work(2, "b"))
+        self.assertEqual(len(segments(msgs)), 1)
+
+    def test_a_segment_is_never_split_across_windows(self):
+        from skillpp.window import windows
+        msgs = self.session(rec("u1", content="ask one"), *self.work(20, "a"),
+                            rec("u2", content="ask two"), *self.work(20, "b"))
+        wins = windows(msgs, budget=2_000, overlap=0)
+        seen = [s.ask for w in wins for s in w.segments]
+        # Two segments, each landing whole in exactly one window.
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_an_oversized_segment_gets_its_own_window(self):
+        # 3 of 1,758 real segments exceed an 8k budget alone, the largest
+        # 11,940 tokens. Cutting one would separate a request from its work.
+        from skillpp.window import windows
+        msgs = self.session(rec("u1", content="small"), *self.work(1, "a"),
+                            rec("u2", content="huge"), *self.work(40, "b"))
+        wins = windows(msgs, budget=1_000, overlap=0)
+        big = [w for w in wins if w.tokens > 1_000]
+        self.assertEqual(len(big), 1)
+        self.assertEqual(len(big[0].segments), 1)
+
+    def test_overlap_keeps_a_straddling_procedure_whole_somewhere(self):
+        # The property the overlap exists for. Without it a procedure lying
+        # across a boundary is in no window whole, and a half is what gets
+        # read as finished work.
+        from skillpp.window import segments, windows
+        msgs = self.session(rec("u1", content="ask A"), *self.work(4, "a"),
+                            rec("u2", content="ask B"), *self.work(4, "b"),
+                            rec("u3", content="ask C"), *self.work(4, "c"))
+        segs = segments(msgs)
+        wins = windows(msgs, budget=segs[0].tokens + 1, overlap=2)
+        pairs = [("ask A", "ask B"), ("ask B", "ask C")]
+        for first, second in pairs:
+            intact = any(first in w.text and second in w.text for w in wins)
+            self.assertTrue(intact, f"{first}+{second} split across every window")
+
+    def test_no_overlap_means_no_such_guarantee(self):
+        # Stated as a test so the overlap is never removed as dead weight.
+        from skillpp.window import segments, windows
+        msgs = self.session(rec("u1", content="ask A"), *self.work(4, "a"),
+                            rec("u2", content="ask B"), *self.work(4, "b"))
+        # Derived rather than hard-coded: a budget that fits one segment and
+        # not two is the only one that puts a boundary between them, and the
+        # extractor's compression ratio is not a number to guess at.
+        segs = segments(msgs)
+        budget = segs[0].tokens + 1
+        wins = windows(msgs, budget=budget, overlap=0)
+        self.assertGreater(len(wins), 1)
+        self.assertFalse(any("ask A" in w.text and "ask B" in w.text
+                             for w in wins))
