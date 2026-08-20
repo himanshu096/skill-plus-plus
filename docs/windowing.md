@@ -263,11 +263,30 @@ Run on a frontier model, seven full-content cases and three paired against
 | `recurrence-a` | wrong on segment 1 | wrong on segments 0 and 1 |
 | `retry`, `distinct`, `explore`, `recurs` | ok | not run |
 
-**Tools-only cost exactly one extra segment, and both its errors ran in the
-conservative direction** — a segment called unresolved when it was empty. Nothing
-was called finished that was not, so no procedure was dropped. For a cheap first
-pass whose job is to decide what to escalate, over-flagging is the error to
-have.
+Tools-only cost exactly one extra segment, and both its errors ran in the
+conservative direction — a segment called unresolved when it was empty. Nothing
+was called finished that was not.
+
+**A third run broke that reading.** After the fixes below, full content went 2/2
+and tools-only failed differently: segment 2 of `recurrence-a`, the segment where
+the issue is updated and the thread posted back, came out `open`. That is the
+destructive direction — an `open` verdict on finished work means nothing looks at
+it again, while a wrong `landed` only costs a later judgement that finds nothing.
+Two runs of conservative errors were not enough to claim the errors are
+conservative.
+
+Its cause was an instruction, not the model. The prompt said a command list
+"that ends in a read" is usually not `landed`, and that segment's mutations sit
+mid-list followed by four unrelated greps. Real segments end with unrelated work
+constantly — a status check, the start of the next thing — so reading the final
+line as the verdict marks finished procedures unresolved. The rule now asks
+whether the work was *carried out* anywhere in the segment and says outright that
+position is not evidence.
+
+**And a command list alone has no success signal.** A mutation is visible; whether
+it took is not, because results are withheld. Failures are 0.8% of a corpus, so
+the cheap pass now shows tools *and* failures — 41.2% of a segment instead of
+40.4% — and absence of a failure becomes the evidence that a change worked.
 
 Two things the run exposed were faults in the question, not the answers.
 

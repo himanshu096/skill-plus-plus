@@ -667,33 +667,45 @@ CASES = [
          command="/locate", bookmarks=False,
          check_run=_locator_check("recurrence-a")),
     Case("locate-tools-refine",
-         asks="the same verdicts from the tool calls alone, no narration",
+         asks="the same verdicts from the commands and failures alone",
          breaks="a first pass over tools only cannot tell finished work from "
                 "unresolved, so the cheap stage that removes 63% of window "
                 "boundaries cannot be the cheap stage",
          transcripts=lambda out: [_their("refine", out)],
          command="/locate ".strip(),
-         args="--aspect tools",
+         # Failures come along at 0.8% of a corpus. Without them a command
+         # list has no success signal at all -- a mutation is there and
+         # nothing says whether it took -- and the first run marked a finished
+         # procedure `open` for exactly that reason.
+         args="--aspect tools --aspect failures",
          bookmarks=False,
          check_run=_locator_check("their-refine")),
     Case("locate-tools-mid-investigation",
-         asks="the same verdicts from the tool calls alone, no narration",
+         asks="the same verdicts from the commands and failures alone",
          breaks="a first pass over tools only cannot tell finished work from "
                 "unresolved, so the cheap stage that removes 63% of window "
                 "boundaries cannot be the cheap stage",
          transcripts=lambda out: [_their("mid-investigation", out)],
          command="/locate ".strip(),
-         args="--aspect tools",
+         # Failures come along at 0.8% of a corpus. Without them a command
+         # list has no success signal at all -- a mutation is there and
+         # nothing says whether it took -- and the first run marked a finished
+         # procedure `open` for exactly that reason.
+         args="--aspect tools --aspect failures",
          bookmarks=False,
          check_run=_locator_check("their-mid-investigation")),
     Case("locate-tools-recurrence-a",
-         asks="the same verdicts from the tool calls alone, no narration",
+         asks="the same verdicts from the commands and failures alone",
          breaks="a first pass over tools only cannot tell finished work from "
                 "unresolved, so the cheap stage that removes 63% of window "
                 "boundaries cannot be the cheap stage",
          transcripts=lambda out: [locator.FIXTURES["recurrence-a"]],
          command="/locate ".strip(),
-         args="--aspect tools",
+         # Failures come along at 0.8% of a corpus. Without them a command
+         # list has no success signal at all -- a mutation is there and
+         # nothing says whether it took -- and the first run marked a finished
+         # procedure `open` for exactly that reason.
+         args="--aspect tools --aspect failures",
          bookmarks=False,
          check_run=_locator_check("recurrence-a")),
     Case("barren",

@@ -49,9 +49,20 @@ The block may say it is showing only some aspects of each request. That is
 deliberate, and it is not a reason to refuse or to hedge: answer from what is
 shown. Answer `open` when the shown aspects contain nothing, rather than refusing.
 
-If the agent's account is withheld, you are judging from the commands alone.
-Prefer `open` where you would have wanted the account to decide — a command list
-that ends in a commit is usually `landed`, and one that ends in a read is not.
+If the agent's account is withheld, you are judging from the commands alone. Ask
+whether the request's work was *carried out*, not where it sits in the list:
+
+- Did something get changed — a file written, an issue updated, a message
+  posted, a release deployed? If nothing was, the answer is `open`.
+- Is there anything showing that change failing? If not, treat it as having
+  worked. Absence of a failure is the only success signal a command list has.
+
+**Where the last command sits is not evidence.** A segment often ends with
+unrelated work — a few greps after the real change, a status check, the start of
+the next thing — and reading the final line as the verdict marks finished
+procedures unresolved. That is the worst error available here: an `open` verdict
+on finished work means nothing looks at it again, while a wrong `landed` only
+costs a later judgement that finds nothing.
 
 ## Read the account, not just the commands
 
