@@ -69,15 +69,58 @@ def cmd_prepare_session(args: argparse.Namespace) -> int:
     Exits 0 even when there is nothing to review. The caller substitutes this
     output into a skill via `` !`command` ``, where a status code is invisible
     — so "stop, there is nothing here" has to be a sentence the model reads.
+
+    ``--window`` narrows the output to one window, which is opt-in on purpose.
+    Whole-session rendering is what the 18-of-18 eval arm measures, and real
+    sessions render at 60k-128k tokens against a largest tested case of 16k. The
+    flag exists so that gap can be A/B'd rather than closed by assumption.
     """
     from .prepare import TranscriptNotFound, prepare, render
 
     config = Config(args.root)
     try:
-        print(render(prepare(args.target, config=config)))
+        prepared = prepare(args.target, config=config)
     except (TranscriptNotFound, ValueError) as exc:
         print(f"Could not prepare this session: {exc}\n\n"
               f"Stop here and write nothing.")
+        return 0
+
+    if args.window is None and not args.windows:
+        print(render(prepared))
+        return 0
+
+    from .window import windows
+    panes = windows(prepared.new_messages)
+    if not panes:
+        print("Nothing new in this session. Stop here and write nothing.")
+        return 0
+
+    if args.windows:
+        print(f"{len(panes)} window(s) over {len(prepared.new_messages)} "
+              f"new messages:\n")
+        for i, pane in enumerate(panes):
+            first, last = pane.span
+            print(f"  {i}  requests {first}-{last}  {pane.tokens:>6,} tokens"
+                  + (f"  ({pane.overlapping} carried from the window before)"
+                     if pane.overlapping else ""))
+        return 0
+
+    if not 0 <= args.window < len(panes):
+        print(f"No window {args.window} — this session has {len(panes)} "
+              f"(0-{len(panes) - 1}).\n\nStop here and write nothing.")
+        return 0
+
+    pane = panes[args.window]
+    first, last = pane.span
+    print(f"window         {args.window} of {len(panes)}")
+    print(f"requests       {first}-{last}")
+    if pane.overlapping:
+        # Said out loud because a caller comparing findings across windows has
+        # to know which ones it has already been shown.
+        print(f"carried over   the first {pane.overlapping} request(s) were also "
+              f"in the previous window")
+    print()
+    print(pane.text)
     return 0
 
 
@@ -856,6 +899,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="print a session's new work for review")
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
+    p.add_argument("--window", type=int, metavar="N",
+                   help="print only window N instead of the whole session")
+    p.add_argument("--windows", action="store_true",
+                   help="list the windows and their sizes, printing none")
     p.set_defaults(func=cmd_prepare_session)
 
     p = sub.add_parser("segments",

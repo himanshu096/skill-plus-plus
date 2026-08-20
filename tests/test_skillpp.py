@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -2387,3 +2388,65 @@ class TestLocalSpans(unittest.TestCase):
         self.assertEqual(_context_for("x" * 4 * 9_000), 16_384)
         # Never past the ceiling: allocating for the worst case would not fit.
         self.assertEqual(_context_for("x" * 4 * 40_000), CTX_CEILING)
+
+
+class TestPrepareSessionWindows(TempRoot):
+    """Windowing wired into the pipeline, opt-in.
+
+    Whole-session rendering is what the verified eval arm measures. Real
+    sessions render at 60k-128k tokens against a largest tested case of 16k, so
+    the flags exist to A/B that gap rather than close it by assumption — which
+    means the default path must stay byte-identical.
+    """
+
+    def session(self) -> Path:
+        records = []
+        for n in range(8):
+            records += [
+                rec(f"u{n}", content=f"request number {n} " + "context " * 40),
+                rec(f"a{n}", "assistant",
+                    [tool_use("Bash", command=f"run --step{n} " + "x" * 300)]),
+                rec(f"r{n}", "user",
+                    [tool_result("ok " + "y" * 300, tid="tu_Bash")]),
+            ]
+        return write_transcript(self.root, *records, name="w.jsonl")
+
+    def run_it(self, *extra: str) -> str:
+        import contextlib
+        import io
+        from skillpp.cli import main
+        buf = io.StringIO()
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_MIN_NEW": "1"}):
+            with contextlib.redirect_stdout(buf):
+                self.assertEqual(
+                    main(["--root", str(self.config.root), "prepare-session",
+                          str(self.session()), *extra]), 0)
+        return buf.getvalue()
+
+    def test_the_default_path_is_untouched(self):
+        plain = self.run_it()
+        self.assertIn("# New in this session", plain)
+        self.assertNotIn("window ", plain.split("\n")[0])
+
+    def test_listing_windows_prints_no_session_content(self):
+        listed = self.run_it("--windows")
+        self.assertIn("window(s) over", listed)
+        self.assertNotIn("request number 0 ", listed)
+
+    def test_one_window_names_its_own_requests(self):
+        one = self.run_it("--window", "0")
+        self.assertIn("window         0 of", one)
+        self.assertRegex(one, r"requests\s+\d+-\d+")
+
+    def test_the_windows_together_cover_every_request(self):
+        # A window that quietly dropped a request would lose a procedure with
+        # nothing reporting it.
+        listed = self.run_it("--windows")
+        spans = re.findall(r"requests (\d+)-(\d+)", listed)
+        covered = {i for a, b in spans for i in range(int(a), int(b) + 1)}
+        self.assertEqual(covered, set(range(max(covered) + 1)))
+
+    def test_asking_for_a_window_that_does_not_exist_says_stop(self):
+        # This output goes into a prompt, where an exit code cannot be seen.
+        self.assertIn("Stop here and write nothing",
+                      self.run_it("--window", "99"))
