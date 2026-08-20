@@ -313,6 +313,28 @@ serve components that are not in the pipeline. The three above are the product.
 
 ### Not yet tested
 
+**The queue is now drainable, and had never been drained.** The project
+`SessionEnd` hook has been appending every ended session to
+`.claude/skillpp/memory/ended-sessions.jsonl` for weeks: 159 queued, 2 reviewed,
+157 not. So the trigger was never the missing piece — the drain was. `skillpp
+drain` reads the queue, skips what is reviewed, and is a dry run unless
+`--apply`, since each application is a model call.
+
+Two facts it exists to survive. **143 of the 157 unreviewed entries point at a
+transcript that no longer exists** — the parent directories are there with 24
+files each, and none of the 143 are anywhere on disk. Whether they were pruned
+or never wrote a transcript cannot be told after the fact, but a queued path can
+be dead by the time anyone looks, so draining promptly is strictly safer than
+sweeping later. And a drain that spawns `claude -p` **without**
+`--no-session-persistence` creates a session that ends, which the hook enqueues,
+which the next drain picks up: the queue refills itself faster than it empties.
+There is a test asserting the flag is in every command the dry run prints.
+
+That leaves 14 sessions drainable right now, 13 of them large enough to clear the
+message floor. Draining them is the first time the store would have real
+accumulated input, which is what the 3x threshold needs before
+`/review-candidates` has ever had anything to offer.
+
 **Anything local.** `window.py`, `reconcile.py` and `/locate` exist to put the
 cheap pass on a local model and none of it has met one. `qwen2.5:7b-ctx16k` and
 `gemma4:12b-ctx16k` are installed. The standing instruction is not to try until

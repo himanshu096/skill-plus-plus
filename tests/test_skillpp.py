@@ -2581,3 +2581,89 @@ class TestTheWholeLoop(TempRoot):
         self.assertEqual(again.status, memory.PROMOTED)
         self.assertEqual(len(list(self.config.patterns_dir.glob("*.md"))), 1,
                          "a recurrence after promotion filed a second entry")
+
+
+class TestDrain(TempRoot):
+    """Emptying the queue of sessions that ended while nobody looked.
+
+    The SessionEnd hook has been appending for weeks and nothing ever read the
+    file: 159 queued, 157 unreviewed, which is the whole distance between
+    "watches how work gets done" and "waits to be asked".
+    """
+
+    def queue(self, *rows: dict) -> Path:
+        path = self.root / "ended-sessions.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows),
+                        encoding="utf-8")
+        return path
+
+    def transcript(self, tag: str) -> Path:
+        return write_transcript(self.root, rec(f"{tag}u", content="hello"),
+                                name=f"{tag}.jsonl")
+
+    def drain(self, queue: Path, *extra: str) -> str:
+        import contextlib
+        import io
+        from skillpp.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(main(["--root", str(self.config.root), "drain",
+                                   "--queue", str(queue), *extra]), 0)
+        return buf.getvalue()
+
+    def test_it_is_a_dry_run_unless_told_otherwise(self):
+        # Each application is a model call, so spending them cannot be the
+        # default.
+        out = self.drain(self.queue(
+            {"session_id": "a", "transcript_path": str(self.transcript("a"))}))
+        self.assertIn("Dry run", out)
+        self.assertIn("--no-session-persistence", out)
+
+    def test_a_missing_transcript_is_counted_not_an_error(self):
+        # 143 of 157 real queue entries pointed at a file that no longer
+        # existed. Treating that as a failure would stop the drain on its first
+        # entry, every time.
+        out = self.drain(self.queue(
+            {"session_id": "gone", "transcript_path": "/nope/missing.jsonl"},
+            {"session_id": "here", "transcript_path": str(self.transcript("h"))}))
+        self.assertIn("transcript gone 1", out)
+        self.assertIn("to review      1", out)
+
+    def test_an_already_reviewed_session_is_skipped(self):
+        self.config.reviews_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.reviews_dir / "old.md").write_text("reviewed", "utf-8")
+        out = self.drain(self.queue(
+            {"session_id": "old", "transcript_path": str(self.transcript("o"))}))
+        self.assertIn("reviewed       1", out)
+        self.assertIn("to review      0", out)
+
+    def test_a_session_queued_twice_is_reviewed_once(self):
+        path = str(self.transcript("d"))
+        out = self.drain(self.queue({"session_id": "d", "transcript_path": path},
+                                    {"session_id": "d", "transcript_path": path}))
+        self.assertIn("ended          1 sessions", out)
+
+    def test_the_drain_never_spawns_a_persisted_session(self):
+        """The trap that makes the queue refill itself.
+
+        A `claude -p` run without --no-session-persistence is a session that
+        ends, which the hook enqueues, which the next drain picks up. The flag
+        is asserted in the dry-run output because that is the only place it can
+        be checked without spending a call.
+        """
+        out = self.drain(self.queue(
+            {"session_id": "x", "transcript_path": str(self.transcript("x"))}))
+        for line in out.splitlines():
+            if line.strip().startswith("claude -p"):
+                self.assertIn("--no-session-persistence", line)
+
+    def test_no_queue_is_not_a_failure(self):
+        out = self.drain(self.root / "absent.jsonl")
+        self.assertIn("No queue at", out)
+
+    def test_a_corrupt_line_does_not_stop_the_drain(self):
+        path = self.root / "q.jsonl"
+        path.write_text('{"session_id": "a", "transcript_path": "'
+                        + str(self.transcript("a")) + '"}\nnot json\n\n',
+                        encoding="utf-8")
+        self.assertIn("to review      1", self.drain(path))

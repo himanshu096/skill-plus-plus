@@ -350,6 +350,90 @@ def cmd_locate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_drain(args: argparse.Namespace) -> int:
+    """Review the sessions that ended while nobody was looking.
+
+    The `SessionEnd` hook appends every ended session to a queue and nothing
+    has ever emptied it: measured here, 159 queued and 157 unreviewed. That is
+    the gap between "watches how work gets done" and "waits to be asked".
+
+    Two things this has to survive. A queued transcript can be gone by the time
+    anyone looks — 143 of those 157 were — so a missing file is skipped and
+    counted rather than treated as an error. And a drain that spawns
+    `claude -p` without `--no-session-persistence` creates a session that ends,
+    which the hook enqueues, which the next drain picks up: the queue refills
+    itself faster than it empties.
+
+    Dry run unless ``--apply``, because each application is a model call.
+    """
+    import subprocess
+    from .prepare import project_slug
+
+    config = Config(args.root)
+    queue = Path(args.queue).expanduser() if args.queue else (
+        Path.cwd() / ".claude" / "skillpp" / "memory" / "ended-sessions.jsonl")
+    if not queue.is_file():
+        print(f"No queue at {queue}. Nothing has ended yet, or the SessionEnd "
+              f"hook is not installed.")
+        return 0
+
+    reviewed = {p.stem for p in config.reviews_dir.glob("*.md")}
+    seen: set[str] = set()
+    todo: list[tuple[str, Path]] = []
+    gone = done = 0
+    for line in queue.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        session = str(row.get("session_id") or "")
+        if not session or session in seen:
+            continue
+        seen.add(session)
+        if session in reviewed:
+            done += 1
+            continue
+        path = Path(str(row.get("transcript_path") or "")).expanduser()
+        if not path.is_file():
+            gone += 1
+            continue
+        todo.append((session, path))
+
+    print(f"queue          {queue}")
+    print(f"ended          {len(seen)} sessions")
+    print(f"reviewed       {done}")
+    print(f"transcript gone {gone}")
+    print(f"to review      {len(todo)}")
+    if args.limit:
+        todo = todo[: args.limit]
+        print(f"limited to     {len(todo)} this run")
+    if not todo:
+        return 0
+
+    if not args.apply:
+        print("\nDry run. Each of these is one model call:\n")
+        for session, path in todo:
+            print(f"  claude -p '/log-session {path}' "
+                  f"--no-session-persistence")
+        print("\nRun again with --apply to spend them.")
+        return 0
+
+    for n, (session, path) in enumerate(todo, 1):
+        print(f"\n[{n}/{len(todo)}] {session[:8]} {path.name}")
+        done_proc = subprocess.run(
+            ["claude", "-p", f"/log-session {path}",
+             # Mandatory: without it this session ends, the hook enqueues it,
+             # and the queue refills itself.
+             "--no-session-persistence",
+             "--allowed-tools", "Bash(python3 bin/skillpp *)"],
+            capture_output=True, text=True, timeout=900)
+        out = (done_proc.stdout or done_proc.stderr).strip()
+        print("".join(f"    {ln}\n" for ln in out.splitlines()[-6:]))
+    return 0
+
+
 def cmd_candidates(args: argparse.Namespace) -> int:
     """List what has been recorded, most-seen first."""
     from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
@@ -929,6 +1013,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--aspect", action="append",
                    help="show the models only these parts of each request")
     p.set_defaults(func=cmd_locate)
+
+    p = sub.add_parser("drain",
+                       help="review sessions that ended without being reviewed")
+    p.add_argument("--apply", action="store_true",
+                   help="actually run the reviews; each is a model call")
+    p.add_argument("--limit", type=int, help="review at most this many")
+    p.add_argument("--queue", help="path to ended-sessions.jsonl")
+    p.set_defaults(func=cmd_drain)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")
     p.add_argument("--json", action="store_true")
