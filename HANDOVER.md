@@ -28,6 +28,102 @@ instruction is not to until the frontier arm is clean.
 
 ---
 
+---
+
+## What 2026-08-20 established
+
+The day started with detection built and never observed working, and ended with
+the loop closed on real history and three of its four steps running locally.
+40 commits, 254 tests, 37 eval cases, pushed through `2fdd7f1`.
+
+### The loop closed, on real sessions
+
+`bootstrapping-an-ephemeral-test-runner` was detected in one of this machine's
+sessions, recognised in two more, reached the threshold, was offered, accepted,
+and is now a live skill in `~/.claude/skills`. Every stage of the chain has now
+happened for real rather than in a harness:
+
+    SessionEnd fired -> queued -> drained -> detected -> matched -> matched
+    -> x3 -> offered -> accepted -> SKILL.md written -> discovery lists it
+
+The trigger was never the missing piece. The `SessionEnd` hook had been
+appending for weeks — 159 queued, 2 reviewed — and nothing had ever read the
+file. `skillpp drain` is that reader.
+
+### Local does three of the four jobs
+
+| step | who | evidence |
+| --- | --- | --- |
+| below the message floor | code | 6 of 18 queued sessions, free |
+| is this session worth reading | `qwen2.5:7b` | 12 real sessions: 6 of 6 with a procedure sent on, **0 lost**, 4 of 6 empty skipped |
+| is this the same procedure | `nomic-embed-text` | merged at 0.848 and 0.873 under two *different* proposed names; declined an unrelated body at 0.513 |
+| write the body | frontier | measured out of reach — see below |
+
+Nothing outside `config.py` names a vendor. `SKILLPP_AGENT` is a command
+template, and the body is written by whatever agent runs `/log-session`, which
+is a prompt in a markdown file rather than an API call.
+
+### Four walls, measured rather than assumed
+
+Written down so the next person does not spend a day rediscovering them.
+
+- **A 7B cannot write a SKILL.md body**, one call or four decomposed calls. It
+  transcribes the run instead of generalising, names the repository it happened
+  to touch, and picks procedures the frontier judge rejected.
+- **A session cannot be matched against a body.** It sits near-equidistant from
+  every body in the store, a spread of 0.07. Not the model, not nomic's task
+  prefixes, not the granularity — comparing across registers is the problem.
+  Staged command matching scored 0/4, 1/4 and 1/7.
+- **Compression cannot fit a session into a local context.** 14 of 14 real
+  sessions exceed 16k after a 47x extract; every remaining cut summed to ~5%.
+  143 chars per line is already terse — the sessions are simply long.
+- **The span pass filters nothing.** 4%, 0% and 0% reduction on three real
+  sessions, because a partition cannot reduce. `window.py`, `reconcile.py` and
+  the locators stay unwired for that reason: they were built to feed a local
+  writer that does not exist.
+
+### The competing design, settled
+
+`feat/ignore-list-and-drift-tracking` was scored on six sessions built from its
+own scenario table, in its own vocabulary, inside its own budgets: **5 of 6
+against 2 of 6**. Its span logic fragments a procedure at every gate it passes,
+its recurrence counting never fires, and a long session banks either nothing or
+one 440-step blob. Full method in `docs/bakeoff.md`. Treat as settled.
+
+### Lessons that cost the most to learn
+
+- **Every auxiliary hint in a prompt gets read as a rule.** Seven revisions of
+  `/locate`, each one removing a hint of mine the model had used as sufficient
+  on its own. And the sharper form: *the hints a frontier model needs are the
+  ones a 7B over-applies* — the next-request peek took the judge from 20/21 to
+  21/21 and the 7B from 18/21 to 16/21. Two audiences need two prompts.
+- **A decision code can make must not go to a model** just because a model is in
+  the loop. Two instances: the drain spent five calls to be told sessions were
+  below the floor, and triage was asked about sessions containing no request at
+  all.
+- **Toy fixtures hid three separate defects** — a truncation, a boundary
+  placement, and the filtering — all of which appeared on the first real
+  session. Fixtures were 102 tokens with one procedure and no follow-up; real
+  segments run 869 median and 3,670 at p90.
+- **Test before building.** The last four builds each went one step past the
+  evidence. The one where the test came first cost ten minutes instead of an
+  hour.
+
+### Still open
+
+- **Cold discovery.** Whether a promoted skill fires unprompted. No harness
+  reaches it; only use answers it.
+- **Thin evidence everywhere local.** n=3 on triage negatives, n=4 body pairs,
+  n=15 session pairs with a 0.004 margin. All of it grows on its own —
+  `truth.py` reads labels from the reviews the pipeline writes, and exemplars
+  accumulate per sighting.
+- **The prediction to watch.** The session-matching margin should widen as a
+  procedure recurs, since scoring takes the best of several sightings. Nothing
+  tests it; only future sessions can.
+- **`drafting-a-repo-status-update-email` sits at x2.** One more sighting takes
+  it to x3 — the second promotion, and the first from a store that filled up on
+  its own rather than from a backlog.
+
 ## What this does
 
 ```
@@ -200,13 +296,13 @@ Four, all silent, none caught by the suite:
 Three layers, and the split matters: **anything with one right answer belongs in
 `tests/`, where it is free.** Only judgement is worth a model call.
 
-### `python3 -m unittest discover -s tests -q` — 167, ~2s
+### `python3 -m unittest discover -s tests -q` — 254, ~2s
 
 Counts, dates, ordering, the threshold, and the four append-only properties
 (round-trip with `##` sections, an occurrence not touching the entry file, a
 neighbour left byte-identical, a body containing a horizontal rule).
 
-### `python3 tests/evals/run.py` — 13 cases, minutes and cents each
+### `python3 tests/evals/run.py` — 37 cases, minutes and cents each
 
 Each case shells out to the **real** command file, sandboxed by environment
 alone. An eval that reconstructs the prompt tests the reconstruction, and the
