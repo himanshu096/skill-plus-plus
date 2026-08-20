@@ -2138,3 +2138,61 @@ class TestReconcile(unittest.TestCase):
         self.assertEqual(reconcile([]), [])
         self.assertEqual(settled([]), [])
         self.assertEqual(questions([]), [])
+
+
+class TestSegmentsCommand(TempRoot):
+    """The locator's input: one request and its work, numbered.
+
+    Deterministic, so it is tested here rather than paid for in an eval. What
+    matters is that the numbering the model answers against is the same
+    numbering `reconcile` groups by — a mismatch there would score correct
+    answers as wrong and be invisible in the output.
+    """
+
+    def transcript(self) -> Path:
+        return write_transcript(
+            self.root,
+            rec("u1", content="first ask"),
+            rec("a1", "assistant", [tool_use("Bash", command="npm test")]),
+            rec("r1", "user", [tool_result("14 passing", tid="tu_Bash")]),
+            rec("u2", content="second ask"),
+            rec("a2", "assistant", [tool_use("Bash", command="git commit -am x")]),
+            rec("r2", "user", [tool_result("[main abc] x", tid="tu_Bash")]))
+
+    def run_it(self, target: Path) -> str:
+        import io
+        import contextlib
+        from skillpp.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = main(["--root", str(self.config.root), "segments", str(target)])
+        self.assertEqual(code, 0)
+        return buf.getvalue()
+
+    def test_each_request_is_its_own_numbered_segment(self):
+        out = self.run_it(self.transcript())
+        self.assertIn("--- segment 0 ---", out)
+        self.assertIn("--- segment 1 ---", out)
+        self.assertNotIn("--- segment 2 ---", out)
+        self.assertLess(out.index("first ask"), out.index("--- segment 1 ---"))
+
+    def test_the_numbering_matches_what_reconcile_groups_by(self):
+        # A silent-failure guard. If these ever diverge, correct answers score
+        # as wrong and nothing in the output says so.
+        from skillpp.transcript import read
+        from skillpp.window import segments
+        segs = segments(read(self.transcript()))
+        out = self.run_it(self.transcript())
+        for seg in segs:
+            self.assertIn(f"--- segment {seg.index} ---", out)
+
+    def test_an_unreadable_target_says_stop_rather_than_failing(self):
+        # This output is substituted into a prompt, where an exit code cannot
+        # be seen — so "there is nothing here" has to be a sentence.
+        out = self.run_it(self.root / "does-not-exist.jsonl")
+        self.assertIn("Stop here and write nothing", out)
+
+    def test_an_empty_transcript_says_stop_too(self):
+        empty = self.root / "empty.jsonl"
+        empty.write_text("", encoding="utf-8")
+        self.assertIn("Stop here", self.run_it(empty))

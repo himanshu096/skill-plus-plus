@@ -167,6 +167,43 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_segments(args: argparse.Namespace) -> int:
+    """Print a session's segments, numbered, one request and its work each.
+
+    The input to the locator question, which is asked per segment rather than
+    per session: did the work in this one reach a resolved state? That is a
+    visible fact about a small piece of text, which is the shape a small model
+    answers reliably -- and it is deliberately *not* "is this worth keeping",
+    which needs the whole span in working memory.
+
+    Exits 0 with a sentence when there is nothing, for the same reason
+    ``prepare-session`` does: this output is substituted into a prompt where an
+    exit code cannot be seen.
+    """
+    from .prepare import TranscriptNotFound, resolve
+    from .transcript import read
+    from .window import segments
+
+    try:
+        path = resolve(args.target)
+        segs = segments(read(path))
+    except (TranscriptNotFound, ValueError, OSError) as exc:
+        print(f"Could not read this session: {exc}\n\n"
+              f"Stop here and write nothing.")
+        return 0
+    if not segs:
+        print("This session has no requests in it. Stop here and write nothing.")
+        return 0
+
+    print(f"transcript     {path.name}")
+    print(f"segments       {len(segs)}\n")
+    for seg in segs:
+        print(f"--- segment {seg.index} ---")
+        print(seg.text)
+        print()
+    return 0
+
+
 def cmd_candidates(args: argparse.Namespace) -> int:
     """List what has been recorded, most-seen first."""
     from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
@@ -717,6 +754,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
     p.set_defaults(func=cmd_prepare_session)
+
+    p = sub.add_parser("segments",
+                       help="print a session's requests and their work, numbered")
+    p.add_argument("target", nargs="?",
+                   help="transcript path or session id (default: this session)")
+    p.set_defaults(func=cmd_segments)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")
     p.add_argument("--json", action="store_true")

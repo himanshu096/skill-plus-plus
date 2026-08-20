@@ -41,6 +41,7 @@ from typing import Callable
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "tests" / "fixtures"), str(Path(__file__).parent)]
 
+import locator                              # noqa: E402
 from skillpp.config import Config          # noqa: E402
 from skillpp.memory import (PROMOTED, add_entry, add_occurrence,  # noqa: E402
                             record_decision)
@@ -428,6 +429,23 @@ def _seed_queue(config: Config) -> None:
             add_occurrence(config, name=name, session=f"{name}-{n}")
 
 
+def _locator_check(name: str):
+    """Score a /locate reply against the labelled truth for one fixture.
+
+    Also guards that nothing was written. The locator is asked to answer and
+    stop; a reply that also records a candidate has done the frontier judge's
+    job on a fraction of the context, which is the failure mode the whole split
+    exists to prevent.
+    """
+    def check(root: Path, said: str, entries: list[dict]) -> str | None:
+        import locator
+        if entries:
+            return (f"wrote {len(entries)} candidate(s) — the locator answers "
+                    f"and stops: {[e['name'] for e in entries]}")
+        return locator.score(name, said)
+    return check
+
+
 def _their(which: str, out: Path) -> Path:
     import their_scenarios
     return their_scenarios.ALL[which](out)
@@ -589,6 +607,60 @@ CASES = [
          transcripts=lambda out: [_their("recurs", out)],
          min_messages=1,
          check=_generalised_across_both_runs),
+    # ---- the locator question, on a frontier model first ----
+    # Per segment: did the work reach a resolved state? Deliberately not "is it
+    # worth keeping", which needs the whole span. Tested at the ceiling before
+    # anything is built on a 7B model: if a frontier model cannot answer it,
+    # the architecture that puts this step locally is dead.
+    Case("locate-refine",
+         asks="per-segment verdicts for the their-refine fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("refine", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-refine")),
+    Case("locate-retry",
+         asks="per-segment verdicts for the their-retry fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("retry", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-retry")),
+    Case("locate-distinct",
+         asks="per-segment verdicts for the their-distinct fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("distinct-tasks", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-distinct")),
+    Case("locate-explore",
+         asks="per-segment verdicts for the their-explore fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("explore-then-fix", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-explore")),
+    Case("locate-mid-investigation",
+         asks="per-segment verdicts for the their-mid-investigation fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("mid-investigation", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-mid-investigation")),
+    Case("locate-recurs",
+         asks="per-segment verdicts for the their-recurs fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [_their("recurs", out)],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("their-recurs")),
+    Case("locate-recurrence-a",
+         asks="per-segment verdicts for the recurrence-a fixture",
+         breaks="the locator cannot tell finished work from unresolved work, "
+                "so every span it hands on is guesswork",
+         transcripts=lambda out: [locator.FIXTURES["recurrence-a"]],
+         command="/locate", bookmarks=False,
+         check_run=_locator_check("recurrence-a")),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
