@@ -406,6 +406,22 @@ def cmd_drain(args: argparse.Namespace) -> int:
     print(f"reviewed       {done}")
     print(f"transcript gone {gone}")
     print(f"to review      {len(todo)}")
+    if args.prune and gone:
+        kept = []
+        for line in queue.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            path = Path(str(row.get("transcript_path") or "")).expanduser()
+            if path.is_file():
+                kept.append(line)
+        queue.write_text("\n".join(kept) + ("\n" if kept else ""),
+                         encoding="utf-8")
+        print(f"pruned         {gone} entries with no transcript to review")
+
     if args.limit:
         todo = todo[: args.limit]
         print(f"limited to     {len(todo)} this run")
@@ -1020,6 +1036,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="actually run the reviews; each is a model call")
     p.add_argument("--limit", type=int, help="review at most this many")
     p.add_argument("--queue", help="path to ended-sessions.jsonl")
+    p.add_argument("--prune", action="store_true",
+                   help="drop entries whose transcript no longer exists; a "
+                        "`claude -p` run leaves one every time")
     p.set_defaults(func=cmd_drain)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")

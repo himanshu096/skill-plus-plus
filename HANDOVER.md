@@ -320,20 +320,31 @@ serve components that are not in the pipeline. The three above are the product.
 drain` reads the queue, skips what is reviewed, and is a dry run unless
 `--apply`, since each application is a model call.
 
-Two facts it exists to survive. **143 of the 157 unreviewed entries point at a
-transcript that no longer exists** — the parent directories are there with 24
-files each, and none of the 143 are anywhere on disk. Whether they were pruned
-or never wrote a transcript cannot be told after the fact, but a queued path can
-be dead by the time anyone looks, so draining promptly is strictly safer than
-sweeping later. And a drain that spawns `claude -p` **without**
-`--no-session-persistence` creates a session that ends, which the hook enqueues,
-which the next drain picks up: the queue refills itself faster than it empties.
-There is a test asserting the flag is in every command the dry run prints.
+**Most of that queue was never real work.** 158 of 174 entries pointed at a
+transcript that does not exist, and the cause is not pruning: a `claude -p` run
+ends like any session and fires the `SessionEnd` hook, but
+`--no-session-persistence` means it writes no transcript. So every eval sweep and
+every drain call left a dead entry. `--no-session-persistence` stops the
+transcript, not the hook — which is worth knowing, because the earlier note here
+claiming it prevents re-enqueueing was wrong.
 
-That leaves 14 sessions drainable right now, 13 of them large enough to clear the
-message floor. Draining them is the first time the store would have real
-accumulated input, which is what the 3x threshold needs before
-`/review-candidates` has ever had anything to offer.
+Fixed at the source: the hook now skips a session whose transcript is not on
+disk, so automation stops queueing itself. `skillpp drain --prune` clears a
+backlog; it took 174 entries to 16.
+
+**The loop has now run end to end on real history.** Drained 15 sessions:
+`bootstrapping-an-ephemeral-test-runner` was detected in one, matched in two
+more, reached x3, was the only candidate `/review-candidates` offered, was
+accepted, and is now a live skill at
+`~/.claude/skills/bootstrapping-an-ephemeral-test-runner/SKILL.md` — it appears
+in the skill list of sessions in this repo. Claims one, two and three are
+observed facts rather than eval assertions.
+
+Precision on the rest was good and is weak evidence: of the last 10 drained, 5
+stopped at the message floor and 5 were reviewed with nothing recorded, declining
+sessions that were skillpp fixture-testing, skillpp dogfooding, or themselves a
+`/log-session` run. Correct answers, but those sessions are unusually meta — a
+fairer test needs sessions doing ordinary work.
 
 **Anything local.** `window.py`, `reconcile.py` and `/locate` exist to put the
 cheap pass on a local model and none of it has met one. `qwen2.5:7b-ctx16k` and

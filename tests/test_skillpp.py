@@ -2667,3 +2667,27 @@ class TestDrain(TempRoot):
                         + str(self.transcript("a")) + '"}\nnot json\n\n',
                         encoding="utf-8")
         self.assertIn("to review      1", self.drain(path))
+
+    def test_pruning_drops_only_the_unreviewable(self):
+        """A `claude -p` run leaves a dead queue entry every time.
+
+        Such a run ends like any session and fires the SessionEnd hook, but
+        --no-session-persistence means it writes no transcript — so the entry
+        points at a file that never existed. Measured on the real queue: 158 of
+        174 entries were that, which is every eval sweep and every drain call
+        ever made. The hook now skips them at the source; this clears a backlog.
+        """
+        live = str(self.transcript("keep"))
+        queue = self.queue(
+            {"session_id": "dead1", "transcript_path": "/gone/a.jsonl"},
+            {"session_id": "keep", "transcript_path": live},
+            {"session_id": "dead2", "transcript_path": "/gone/b.jsonl"})
+        out = self.drain(queue, "--prune")
+        self.assertIn("pruned         2 entries", out)
+        left = [json.loads(l) for l in queue.read_text().splitlines() if l.strip()]
+        self.assertEqual([r["session_id"] for r in left], ["keep"])
+
+    def test_pruning_says_nothing_when_there_is_nothing_dead(self):
+        queue = self.queue({"session_id": "a",
+                            "transcript_path": str(self.transcript("a"))})
+        self.assertNotIn("pruned", self.drain(queue, "--prune"))
