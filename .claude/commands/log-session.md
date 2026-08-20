@@ -62,45 +62,26 @@ shown. Paths printed in the block above are there to be read, not passed back:
 handing one to `--root` builds a second store inside the first, and every
 count starts again from zero with nothing reporting a problem.
 
-The store shown above holds every candidate from every session ever reviewed —
-not just this conversation's. Your only decision per proposal is whether it
-describes **a procedure already in there**, judged on what the procedure *does*
-rather than what it is called, because the same work gets named differently
-every time.
+**You do not decide whether a proposal matches something already recorded.**
+`--auto-match` decides it, by comparing this session against the sessions that
+produced each stored procedure. That comparison is arithmetic rather than
+judgement, it does not get worse as the store grows, and it is not something to
+second-guess from the listing above.
 
-**A match.** Send **this session's account only**. The stored body is not
-touched — a match records that the procedure happened again, and nothing else.
-Do not try to combine the two: the stored body is what the first occurrence
-taught, and anything you send is kept in this session's review file rather than
-folded into it.
+One call per proposal:
 
 ```bash
 python3 bin/skillpp record-candidate $ARGUMENTS \
-  --name <clearer-of-the-two-names> --matches "<the existing name>" <<'SKILL'
-<this session's body>
-SKILL
-```
-
-**A match against something under `## Made into skills`.** Treat it exactly the
-same way — `--matches` that entry. It stays promoted and its count rises; the
-command will not put a promoted skill back in the review queue. Doing the work
-again is evidence the skill earns its place, so this is the wanted outcome, not
-a reason to skip recording or to file it as new. Filing it fresh instead is the
-one mistake here that leaves a duplicate the store cannot reconcile.
-
-**Something new:**
-
-```bash
-python3 bin/skillpp record-candidate $ARGUMENTS \
-  --name <name> <<'SKILL'
+  --name <name> --auto-match <<'SKILL'
 <the body>
 SKILL
 ```
 
-One call per proposal. Everything that follows — the count, the provenance, the
-dates, the ordering — happens in the command, against files you never edit. A
-new proposal gets its own file; a match appends one line to a log. Nothing is
-rewritten, so no existing candidate can be damaged by a proposal you make now.
+What the command reports back tells you what it decided: `recorded` for a
+procedure it had not seen, `merged into '<name>'` for one it recognised, and a
+score in brackets either way. A line saying the score was *too close to call
+locally* means it filed the proposal as new and a person will reconcile it — that
+is the intended outcome for an ambiguous case, not a failure.
 
 The count does not decide whether an entry belongs; your judgement already did
 that. It decides what a person is asked about, and when. A procedure seen once
