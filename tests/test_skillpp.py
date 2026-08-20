@@ -2372,3 +2372,18 @@ class TestLocalSpans(unittest.TestCase):
                                  side_effect=LocalModelUnavailable("no daemon")):
             with self.assertRaises(LocalModelUnavailable):
                 verdicts([Segment(messages=[], text="> x", index=0)])
+
+    def test_the_context_is_sized_for_the_prompt(self):
+        """The bug a real session found and 21 toy fixtures could not.
+
+        Ollama defaults num_ctx to 4096 and truncates a longer prompt from the
+        front, where the instructions are. Five of forty real segments exceeded
+        that; none of the label-set segments comes close, because they are 102
+        tokens at the median against 869 for real ones.
+        """
+        from skillpp.local import CTX_CEILING, CTX_FLOOR, _context_for
+        self.assertEqual(_context_for("x" * 400), CTX_FLOOR)
+        self.assertEqual(_context_for("x" * 4 * 4_000), 8_192)
+        self.assertEqual(_context_for("x" * 4 * 9_000), 16_384)
+        # Never past the ceiling: allocating for the worst case would not fit.
+        self.assertEqual(_context_for("x" * 4 * 40_000), CTX_CEILING)

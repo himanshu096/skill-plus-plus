@@ -36,6 +36,15 @@ PROMPTS = Path(__file__).resolve().parent / "prompts"
 # spends the whole budget and returns an empty string, which reads as a wrong
 # answer rather than as a truncation.
 PREDICT = 768
+# Ollama defaults num_ctx to 4096 and truncates a longer prompt *from the
+# front*, which is where the instructions are. Measured on one real session, 5
+# of 40 segments exceeded that once the prompt was added, so those five were
+# answered from a mangled prompt with nothing reporting it. Real segments run to
+# 11,940 tokens, so the context is sized per call from the prompt rather than
+# fixed: allocating 16k for a 400-token question wastes memory on a machine that
+# has none to spare.
+CTX_FLOOR = 4_096
+CTX_CEILING = 16_384
 STRICT = "qwen2.5:7b"    # refuses a change nothing confirmed
 LENIENT = "granite3.3:8b"  # accepts absence of failure
 
@@ -59,10 +68,21 @@ class Verdict:
         return self.landed is None
 
 
+def _context_for(prompt: str) -> int:
+    """Enough context for this prompt and its answer, rounded up in powers of two."""
+    needed = len(prompt) // 4 + PREDICT
+    size = CTX_FLOOR
+    while size < needed and size < CTX_CEILING:
+        size *= 2
+    return size
+
+
 def _ask(model: str, prompt: str, *, timeout: int = 300) -> str:
+    context = _context_for(prompt)
     body = json.dumps({
         "model": model, "prompt": prompt, "stream": False,
-        "options": {"temperature": 0, "num_predict": PREDICT},
+        "options": {"temperature": 0, "num_predict": PREDICT,
+                    "num_ctx": context},
     }).encode()
     request = urllib.request.Request(
         ENDPOINT, data=body, headers={"Content-Type": "application/json"})
@@ -77,6 +97,11 @@ def _ask(model: str, prompt: str, *, timeout: int = 300) -> str:
     answer = payload.get("response", "")
     if payload.get("done_reason") == "length":
         answer += f"\n[truncated at {PREDICT} tokens before answering]"
+    # A prompt over the ceiling is still truncated, but now it says so instead
+    # of being answered from whatever survived.
+    if len(prompt) // 4 + PREDICT > CTX_CEILING:
+        answer += (f"\n[prompt is {len(prompt)//4} tokens, over the "
+                   f"{CTX_CEILING} context — it was cut]")
     return answer
 
 

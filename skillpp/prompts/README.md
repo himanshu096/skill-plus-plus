@@ -31,6 +31,25 @@ three, under three seconds each — against the same model returning
 `{SEGMENT}` is replaced with the rendered request. Keep these short: length is
 what invites a small model to find a rule in the wording.
 
+## The scores below were measured on toy segments
+
+Stated first because it changes how to read everything after it. The 21 labelled
+segments are **102 tokens at the median and 225 at the largest**. Real segments,
+measured across twelve sessions, are **869 at the median, 3,670 at p90 and
+11,940 at the largest** — nine times bigger in the middle and fifty times at the
+tail.
+
+So these scores say a model can answer this question about a short request. They
+do not say it can answer it about a real one, and the first real session run
+found a defect the fixtures could not: five of its forty segments exceeded
+Ollama's default 4096 context once the prompt was added, and Ollama truncates
+from the front, where the instructions are. Those five were answered from a
+mangled prompt with nothing reporting it. `num_ctx` is now sized per call.
+
+The honest next measurement is real segments, which have no labels — so it is a
+plausibility check against what the frontier judge finds on the same session,
+not an accuracy score.
+
 ## Measured
 
 `qwen2.5:7b-ctx16k`, 21 labelled segments across 11 fixtures, full content:
