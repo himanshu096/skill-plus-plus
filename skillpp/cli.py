@@ -401,10 +401,28 @@ def cmd_drain(args: argparse.Namespace) -> int:
             continue
         todo.append((session, path))
 
+    # The floor is a code decision and was being paid for with a model call.
+    # A session below it writes no review file, so it is never marked reviewed
+    # and comes back on every drain: measured, five sessions cost five calls to
+    # be told "8 messages, below 25" and would have cost five more next time.
+    from .prepare import prepare
+    thin = []
+    for session, path in list(todo):
+        try:
+            prepared = prepare(str(path), config=config)
+        except Exception:  # noqa: BLE001 - an unreadable transcript is not thin
+            continue
+        if not prepared.has_enough:
+            thin.append((session, path, len(prepared.new_messages)))
+            todo.remove((session, path))
+
     print(f"queue          {queue}")
     print(f"ended          {len(seen)} sessions")
     print(f"reviewed       {done}")
     print(f"transcript gone {gone}")
+    if thin:
+        print(f"below the floor {len(thin)}   (skipped free, no model call: "
+              f"{', '.join(str(n) for _s, _p, n in thin)} new messages)")
     print(f"to review      {len(todo)}")
     if args.prune and gone:
         kept = []

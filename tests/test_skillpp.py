@@ -2598,8 +2598,16 @@ class TestDrain(TempRoot):
         return path
 
     def transcript(self, tag: str) -> Path:
-        return write_transcript(self.root, rec(f"{tag}u", content="hello"),
-                                name=f"{tag}.jsonl")
+        """A session with enough in it to be worth a call.
+
+        Above MIN_NEW_MESSAGES on purpose: the drain now skips thinner ones in
+        code, so a one-message transcript would test the floor rather than the
+        queue handling these tests are about.
+        """
+        records = []
+        for n in range(MIN_NEW_MESSAGES + 2):
+            records.append(rec(f"{tag}u{n}", content=f"request {n}"))
+        return write_transcript(self.root, *records, name=f"{tag}.jsonl")
 
     def drain(self, queue: Path, *extra: str) -> str:
         import contextlib
@@ -2686,6 +2694,23 @@ class TestDrain(TempRoot):
         self.assertIn("pruned         2 entries", out)
         left = [json.loads(l) for l in queue.read_text().splitlines() if l.strip()]
         self.assertEqual([r["session_id"] for r in left], ["keep"])
+
+    def test_a_thin_session_is_skipped_without_a_model_call(self):
+        """The floor is a code decision and was being paid for with a call.
+
+        A session below the floor writes no review file, so it is never marked
+        reviewed and returns on every drain. Measured: five sessions spent five
+        model calls to be told "8 messages, below 25", and would have spent five
+        more on the next drain, forever.
+        """
+        thin = write_transcript(self.root, rec("t1", content="tiny"),
+                                name="thin.jsonl")
+        out = self.drain(self.queue(
+            {"session_id": "thin", "transcript_path": str(thin)}))
+        self.assertIn("below the floor 1", out)
+        self.assertIn("to review      0", out)
+        # And it costs nothing: no command is printed for it.
+        self.assertNotIn("claude -p", out)
 
     def test_pruning_says_nothing_when_there_is_nothing_dead(self):
         queue = self.queue({"session_id": "a",
