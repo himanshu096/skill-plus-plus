@@ -2025,3 +2025,116 @@ class TestWindowing(unittest.TestCase):
                 Segment(messages=[], text="y" * 400),
                 Segment(messages=[], text="z" * 40_000)]
         self.assertEqual(_carry(segs, 1_000), [])
+
+
+class TestReconcile(unittest.TestCase):
+    """Putting per-window findings back together.
+
+    Two forces pulling opposite ways. The overlap shows one procedure to two
+    windows, so the same finding arrives twice and must not count twice. A
+    boundary splits one procedure across two windows, so two halves must become
+    one. Dedupe too eagerly and a split collapses to a half; merge too eagerly
+    and two procedures become one entry — which is the silent failure, because
+    it inflates a count and discards a proposal with nothing recording it.
+    """
+
+    def find(self, name: str, span: tuple[int, int], *,
+             complete: bool = True, window: int = 0):
+        from skillpp.reconcile import Finding
+        return Finding(name=name, body=f"body of {name}", window=window,
+                       span=span, complete=complete)
+
+    def test_the_same_procedure_in_overlapping_windows_is_one(self):
+        from skillpp.reconcile import DUPLICATE, reconcile, settled
+        groups = reconcile([self.find("filing-a-bug", (4, 8), window=0),
+                            self.find("filing-a-bug", (7, 12), window=1)])
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].verdict, DUPLICATE)
+        self.assertEqual(len(settled(groups)), 1)
+
+    def test_the_wider_view_of_a_duplicate_is_the_one_kept(self):
+        # Both windows saw the procedure; the one that saw more of it wrote its
+        # body from more of it.
+        from skillpp.reconcile import reconcile
+        groups = reconcile([self.find("filing-a-bug", (7, 8), window=1),
+                            self.find("filing-a-bug", (4, 8), window=0)])
+        self.assertEqual(groups[0].best.span, (4, 8))
+
+    def test_a_partial_never_wins_over_a_whole_one(self):
+        from skillpp.reconcile import reconcile
+        groups = reconcile([
+            self.find("filing-a-bug", (2, 9), window=0, complete=False),
+            self.find("filing-a-bug", (8, 10), window=1, complete=True)])
+        self.assertTrue(groups[0].best.complete)
+
+    def test_the_same_name_far_apart_is_a_recurrence_not_a_duplicate(self):
+        """The rule that is easy to get wrong by matching on names.
+
+        A procedure done twice in one session is two sightings of one entry —
+        what `their-recurs` tests. Folding them together because the names
+        match destroys the evidence the entry earns its place.
+        """
+        from skillpp.reconcile import RECURRENCE, reconcile, settled
+        groups = reconcile([self.find("rolling-out-a-release", (1, 3)),
+                            self.find("rolling-out-a-release", (11, 14))])
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].verdict, RECURRENCE)
+        # Both survive: the count depends on them staying separate.
+        self.assertEqual(len(settled(groups)), 2)
+
+    def test_adjacent_halves_are_a_question_not_a_decision(self):
+        # The case a boundary creates. Whether these are one procedure or two
+        # is a judgement, and guessing it either way is the failure.
+        from skillpp.reconcile import SPLIT, questions, reconcile
+        groups = reconcile([self.find("searching-the-tracker", (5, 7)),
+                            self.find("linking-the-thread", (8, 10))])
+        self.assertEqual(groups[0].verdict, SPLIT)
+        self.assertEqual(len(questions(groups)), 1)
+
+    def test_two_names_over_the_same_segments_is_a_question(self):
+        from skillpp.reconcile import AMBIGUOUS, questions, reconcile
+        groups = reconcile([self.find("filing-a-bug", (4, 9)),
+                            self.find("triaging-support", (5, 8))])
+        self.assertEqual(groups[0].verdict, AMBIGUOUS)
+        self.assertEqual(len(questions(groups)), 1)
+
+    def test_unrelated_work_asks_nothing(self):
+        from skillpp.reconcile import DISTINCT, questions, reconcile, settled
+        groups = reconcile([self.find("filing-a-bug", (0, 2)),
+                            self.find("cutting-a-tag", (9, 11))])
+        self.assertEqual(len(groups), 2)
+        self.assertTrue(all(g.verdict == DISTINCT for g in groups))
+        self.assertEqual(questions(groups), [])
+        self.assertEqual(len(settled(groups)), 2)
+
+    def test_a_procedure_across_three_windows_becomes_one_group(self):
+        # Built transitively: A touches B and B touches C, so all three are one
+        # question rather than two unrelated ones.
+        from skillpp.reconcile import reconcile
+        groups = reconcile([self.find("part-one", (0, 3), window=0),
+                            self.find("part-two", (4, 6), window=1),
+                            self.find("part-three", (7, 9), window=2)])
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups[0].findings), 3)
+        self.assertEqual(groups[0].span, (0, 9))
+
+    def test_one_ambiguous_pair_makes_the_whole_group_a_question(self):
+        # A group settled on most of its pairs is still unsettled: resolving the
+        # ambiguity is what decides whether the rest belongs together.
+        from skillpp.reconcile import AMBIGUOUS, reconcile
+        groups = reconcile([self.find("filing-a-bug", (2, 6), window=0),
+                            self.find("filing-a-bug", (5, 9), window=1),
+                            self.find("triaging-support", (5, 7), window=1)])
+        self.assertEqual(groups[0].verdict, AMBIGUOUS)
+
+    def test_names_differing_only_in_separators_are_the_same(self):
+        from skillpp.reconcile import DUPLICATE, reconcile
+        groups = reconcile([self.find("filing_a_bug", (1, 4)),
+                            self.find("Filing-A-Bug", (3, 6))])
+        self.assertEqual(groups[0].verdict, DUPLICATE)
+
+    def test_nothing_in_nothing_out(self):
+        from skillpp.reconcile import questions, reconcile, settled
+        self.assertEqual(reconcile([]), [])
+        self.assertEqual(settled([]), [])
+        self.assertEqual(questions([]), [])

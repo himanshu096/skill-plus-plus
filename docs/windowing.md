@@ -101,7 +101,7 @@ leak is real; it is cheaper than any of its fixes.
 that does not add a boundary — a merge over what the windows report, which is a
 reconcile step rather than a carry.
 
-## Known limits
+## Known limits, and the pass that answers them
 
 - A procedure longer than the carry is intact in no window.
 - A window can hold a procedure's tail without its method. At `BUDGET`, the
@@ -110,7 +110,50 @@ reconcile step rather than a carry.
   will propose halves.
 - 19% of boundaries carry nothing, as above.
 
-All three want the same thing: a reconcile pass over per-window findings.
+All three arrive as the same symptom — a procedure reported in pieces — and
+`skillpp/reconcile.py` is where the pieces are put back together. It has to
+resolve two forces pulling opposite ways: the overlap deliberately shows one
+procedure to two windows, so the same finding must not count twice, while a
+boundary splits one procedure in two, so two halves must become one. Dedupe too
+eagerly and a split collapses into a half; merge too eagerly and two procedures
+become one entry, which is the silent failure — an inflated count and a
+discarded proposal with nothing recording that it happened.
+
+**Provenance decides, not prose.** Each finding carries the segment span it drew
+on, and that separates most cases mechanically:
+
+| relation between two findings | verdict | decided by |
+| --- | --- | --- |
+| overlapping spans, same name | duplicate | code |
+| overlapping spans, different names | ambiguous | model |
+| adjacent spans, different names | possible split | model |
+| adjacent spans, same name | recurrence | code |
+| disjoint spans, same name | recurrence | code |
+| disjoint spans, different names | distinct | code |
+
+The row worth staring at is *same name, disjoint spans*. That is a **recurrence**
+— one procedure genuinely done twice, which is what `their-recurs` tests — and
+folding those two into one because the names match destroys the evidence the
+entry earns its place. Name matching alone gets this backwards.
+
+Names are compared for equality after normalising case and separators, and
+nothing softer. Lexical similarity was measured on this exact problem and
+returned 0.00 on every real pair of names for the same procedure, because the
+same work gets named differently every time. Anything below equality is a
+judgement, and judgements go to a model rather than being guessed at.
+
+**The judgement cost is bounded by ambiguity, not by window count.** Across the
+twelve sessions there are 155 window boundaries, about 12 per session, which is
+the ceiling on questions — and only boundaries where *both* adjacent windows
+reported something can produce one. Most windows report nothing, because most
+sessions contain nothing.
+
+Verified against `big`'s real windows, `[(0,6), (6,15), (15,18)]`, using the
+measured failure where window 2 holds the procedure's tail alone:
+
+    both windows name it the same    -> 0 questions, 1 settled  (deduped in code)
+    the tail is named differently    -> 1 question,  0 settled
+    plus unrelated work elsewhere    -> 1 question,  1 settled
 
 ## Compression techniques, measured against this corpus
 

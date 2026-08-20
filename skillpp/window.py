@@ -67,6 +67,10 @@ class Segment:
 
     messages: list[Message]
     text: str
+    # Position in the session, so a finding can say which requests it drew on.
+    # Without it two findings from overlapping windows are indistinguishable
+    # from two findings about different work.
+    index: int = -1
 
     @property
     def tokens(self) -> int:
@@ -99,6 +103,20 @@ class Window:
     @property
     def tokens(self) -> int:
         return sum(s.tokens for s in self.segments)
+
+    @property
+    def span(self) -> tuple[int, int]:
+        """First and last segment index, inclusive. ``(-1, -1)`` if empty.
+
+        What a finding from this window is allowed to claim it saw. Two
+        findings whose spans overlap may be the same procedure reported twice,
+        because the overlap deliberately shows it to both; two whose spans are
+        adjacent may be one procedure split at the boundary. Neither question
+        can be asked without this.
+        """
+        if not self.segments:
+            return (-1, -1)
+        return (self.segments[0].index, self.segments[-1].index)
 
 
 # User-role messages the harness injected rather than a person sending them.
@@ -142,7 +160,7 @@ def segments(messages: list[Message]) -> list[Segment]:
     for group in groups:
         text = extract(group).strip()
         if text:
-            out.append(Segment(messages=group, text=text))
+            out.append(Segment(messages=group, text=text, index=len(out)))
     return out
 
 
