@@ -112,6 +112,51 @@ reconcile step rather than a carry.
 
 All three want the same thing: a reconcile pass over per-window findings.
 
+## Compression techniques, measured against this corpus
+
+Two external sources were checked rather than taken on trust: a tool (`sqz`)
+that caches repeated tool output and returns a short reference, and an article
+listing five small-context techniques. Everything below is measured on the same
+twelve sessions, 4.2 MB of extract.
+
+Position matters for the first one. `sqz` sits between tool calls and the model
+*during* a session; this reads a transcript afterwards, through an extractor
+that already drops `Read` results outright and caps every result at 3 lines and
+200 characters. Most of what it saves is already gone here.
+
+| Claim / technique | Measured here | Verdict |
+| --- | --- | --- |
+| Repeated file reads | `Read` results are already dropped; repeated *calls* are 1.8% | mostly already free |
+| Verbose JSON, null fields | **70 instances in 4.2 MB** | does not apply |
+| Repeated log lines | 4.2% of the extract | real, see below |
+| Consecutive repeats collapsed, count kept | **0.0%** — 36 runs in 12 sessions, longest 3 | dead end |
+| Duplicate lines replaced with a back-reference | 3.3% results only, 6.6% all lines | available, unverified |
+| Observation masking, keep 4 newest segments | 3.7% | available, contradicts a measured prior |
+| Observation masking, mask every success | 8.2% | measured-bad — see `extract.py`, dropping results "lost almost every concrete claim" |
+| Sliding window / FIFO truncation | — | **wrong for this problem.** A procedure is anywhere in the session; dropping the oldest turns drops procedures. |
+| Token budgeting | already done — `BUDGET` | done |
+| Rolling summaries | already done — the extractor, 47× | done |
+| RAG instead of pasting the store | not measured; this is the local-embeddings step | separate work |
+
+Two findings worth keeping.
+
+**The duplication is scattered, not clustered.** 9.4% of extract lines are exact
+repeats of an earlier line, but consecutive runs account for 0.0% of it. So a
+retry loop is not what repeats — the same line recurs far apart in the session.
+That kills the safe fix (collapse a run, state the count) and leaves only the
+unsafe-looking one, a back-reference the model has to resolve by scanning.
+
+**Failures are 0.5% of the corpus.** Keeping every failed result while masking
+successes is therefore free, which makes graded masking cheaper to try than it
+looks. What stops it being obvious is `extract.py`'s own measurement: dropping
+results lost almost every concrete claim a summary made — which binaries were
+missing, that the suite passed, what the coverage was.
+
+**None of this enables a local model.** Stacked optimistically at 10%, the
+corpus goes from 60k–128k tokens to 54k–115k, still three to seven times over a
+16k context. These are frontier-cost savings, in the same category as the
+heredoc cap. Windowing is the only measure that reached local range.
+
 ## Still to measure
 
 **Whether windowing loses procedures the un-windowed judge finds.** Take ten
