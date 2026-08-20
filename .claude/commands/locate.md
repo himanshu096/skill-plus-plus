@@ -34,10 +34,21 @@ do not name it, do not judge which of its steps matter, and do not write a
 skill. Those are separate questions asked later with more context than you have
 here. A segment can be `landed` and completely mundane — most are.
 
+## When part of a request is withheld
+
+The block may say it is showing only some aspects of each request. That is
+deliberate, and it is not a reason to refuse or to hedge: answer from what is
+shown. Say `none` only when the shown aspects contain nothing, not when you
+suspect the withheld ones would have changed your mind.
+
+If the agent's account is withheld, you are judging from the commands alone.
+Prefer `open` where you would have wanted the account to decide — a command list
+that ends in a commit is usually `landed`, and one that ends in a read is not.
+
 ## Read the account, not just the commands
 
-The last line of a segment is usually the agent saying what happened, and it is
-the most reliable evidence in the block. "Green, committed" is `landed`.
+When it is shown, the last line of a segment is usually the agent saying what
+happened, and it is the most reliable evidence in the block. "Green, committed" is `landed`.
 "Nothing conclusive yet — I'd need a profile to say which" is `open`, however
 many commands ran above it.
 

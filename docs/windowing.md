@@ -200,6 +200,74 @@ corpus goes from 60k–128k tokens to 54k–115k, still three to seven times ove
 16k context. These are frontier-cost savings, in the same category as the
 heredoc cap. Windowing is the only measure that reached local range.
 
+## Splitting by aspect, not only by position
+
+Windowing cuts a session by position. It can also be cut by *aspect* — show a
+first pass only the tool calls, and only escalate to the rest of a request where
+that pass suspected something. The two compose: a first pass over 40% of each
+segment fits four times as much session in a window.
+
+Aspect shares across twelve real sessions (4.2 MB of extract):
+
+| aspect | share |
+| --- | --- |
+| tool calls | 40.4% |
+| agent narration | 31.7% |
+| results, succeeded | 19.7% |
+| developer prompts | 7.4% |
+| results, failed | 0.8% |
+
+What that buys, at the same 8,000-token budget:
+
+| first pass shows | boundaries | tokens | locating recall |
+| --- | --- | --- | --- |
+| everything (today) | 155 | 1,180,469 | 88.0% |
+| **tools only** | **58** | 492,610 | **96.9%** |
+| tools + prompts | 70 | 576,693 | 95.9% |
+| tools + prompts + narration | 124 | 940,260 | 90.3% |
+
+**Recall rises from 88.0% to 96.9%**, and not because the judgement improved —
+because there are 58 boundaries instead of 155, and boundaries are what lose a
+procedure. It is the largest recall gain measured anywhere in this document, and
+it comes from showing the model *less*.
+
+Cost falls too, by 28% to 48% of a single full pass depending on how many
+segments escalate. Escalating 53% of them — the share of labelled segments that
+landed — still saves 28%.
+
+### The part that decides whether it works
+
+Tools are the cheapest aspect and may be the weakest evidence for the question
+the first pass has to answer. Whether a request *resolved* is usually stated in
+the agent's account — "green, committed" against "nothing conclusive yet, I'd
+need a profile" — and that is the 31.7% a tools-only pass withholds. A command
+list ending in a commit is a decent proxy; a command list is also what
+`docs/bakeoff.md` shows a regex failing on, firing at every gate a procedure
+passes.
+
+So the ablation is the experiment, not the design: the same `/locate`
+instructions over the same labelled segments, once with everything and once with
+`--aspect tools`. `locate-tools-*` cases exist for the three fixtures where the
+account should matter most — a change that was edited but never verified, an
+investigation that concluded nothing, and two long segments of pure reading.
+
+If tools-only holds up, the first pass is 40% of the content at 96.9% recall. If
+it collapses, the first pass has to include narration, which is 79% of the
+content at 90.3% — most of the gain gone, and the honest conclusion is that this
+axis mainly saves frontier cost rather than enabling a local model.
+
+### Confidence should come from agreement, not from asking
+
+The natural way to combine staged passes is to ask each for a confidence and
+multiply. Not worth doing: a model's self-reported confidence is a number, not a
+probability, and combining several multiplies the error rather than reducing it.
+
+Agreement is discrete and needs no calibration. Two passes over different
+aspects that flag the same segment is evidence; two that disagree is a reason to
+escalate that segment and nothing more. `reconcile.py` already resolves exactly
+this shape of disagreement over spans, so the same machinery extends to aspects
+without a confidence model.
+
 ## Still to measure
 
 **Whether windowing loses procedures the un-windowed judge finds.** Take ten

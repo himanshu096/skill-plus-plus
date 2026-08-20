@@ -182,7 +182,7 @@ def cmd_segments(args: argparse.Namespace) -> int:
     """
     from .prepare import TranscriptNotFound, resolve
     from .transcript import read
-    from .window import segments
+    from .window import ASPECTS, DEFAULT_ASPECTS, keep_aspects, segments
 
     try:
         path = resolve(args.target)
@@ -195,12 +195,29 @@ def cmd_segments(args: argparse.Namespace) -> int:
         print("This session has no requests in it. Stop here and write nothing.")
         return 0
 
+    chosen = tuple(args.aspect) if args.aspect else DEFAULT_ASPECTS
+    unknown = [a for a in chosen if a not in ASPECTS.values()]
+    if unknown:
+        print(f"Unknown aspect(s) {unknown}. Choose from "
+              f"{sorted(set(ASPECTS.values()))}.\n\nStop here and write nothing.")
+        return 0
+
     print(f"transcript     {path.name}")
-    print(f"segments       {len(segs)}\n")
+    print(f"segments       {len(segs)}")
+    if chosen != DEFAULT_ASPECTS:
+        print(f"showing        {', '.join(chosen)} only — the rest of each "
+              f"request is deliberately withheld")
+    print()
+    shown = 0
     for seg in segs:
+        text = (seg.text if chosen == DEFAULT_ASPECTS
+                else keep_aspects(seg.text, chosen))
         print(f"--- segment {seg.index} ---")
-        print(seg.text)
+        # An empty segment is still numbered. Renumbering to close a gap would
+        # break the correspondence the answers and `reconcile` both rely on.
+        print(text if text.strip() else "(nothing of the shown aspects here)")
         print()
+        shown += bool(text.strip())
     return 0
 
 
@@ -759,6 +776,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="print a session's requests and their work, numbered")
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
+    p.add_argument("--aspect", action="append",
+                   help="show only these parts of each request: tools, "
+                        "prompts, narration, results, failures. Repeatable. "
+                        "Default shows all.")
     p.set_defaults(func=cmd_segments)
 
     p = sub.add_parser("candidates", help="list what has been proposed so far")

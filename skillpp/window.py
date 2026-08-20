@@ -127,6 +127,36 @@ _INJECTED = ("<task-notification>", "<system-reminder>", "<local-command",
              "<command-name>", "<command-message>", "<command-args>")
 
 
+# Which marker in a rendered segment belongs to which aspect. A continuation
+# line belongs to whichever marker opened it, so filtering has to be stateful.
+ASPECTS = {"$": "tools", ">": "prompts", ".": "narration",
+           "=": "results", "!": "failures"}
+# Measured across twelve real sessions: tools 40.4%, narration 31.7%, results
+# 19.7% + 0.8% failed, prompts 7.4%. Showing a first pass the tools alone cuts
+# window boundaries from 155 to 58 at the same budget, and boundaries are what
+# lose a procedure -- so the filter is a recall measure as much as a cost one.
+DEFAULT_ASPECTS = tuple(ASPECTS.values())
+
+
+def keep_aspects(text: str, aspects: tuple[str, ...]) -> str:
+    """One segment, showing only the named aspects.
+
+    Failures are their own aspect rather than part of results, because they are
+    0.8% of a corpus and the reason a route took its shape. Anything that keeps
+    results should almost always keep them; something showing only tools may
+    still want them.
+    """
+    out, keeping = [], False
+    for line in text.splitlines():
+        marker = ASPECTS.get(line.strip()[:1])
+        if marker is not None:
+            keeping = marker in aspects
+        if keeping or (marker is None and not out):
+            if keeping:
+                out.append(line)
+    return "\n".join(out)
+
+
 def _is_prompt(message: Message) -> bool:
     """A person typed this, rather than a tool or the harness speaking.
 

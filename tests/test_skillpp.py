@@ -2196,3 +2196,62 @@ class TestSegmentsCommand(TempRoot):
         empty = self.root / "empty.jsonl"
         empty.write_text("", encoding="utf-8")
         self.assertIn("Stop here", self.run_it(empty))
+
+
+class TestAspectFilter(unittest.TestCase):
+    """Showing a first pass one aspect of a request at a time.
+
+    Measured on twelve real sessions: tools are 40.4% of a segment, narration
+    31.7%, results 20.5%, prompts 7.4%. Showing only the tools cuts window
+    boundaries from 155 to 58 at the same budget — and boundaries are what lose
+    a procedure, so this is a recall measure as much as a cost one.
+
+    Whether it *works* is a question for a model and is asked in the evals. What
+    is deterministic, and tested here, is that the filter shows what it claims
+    and nothing else.
+    """
+
+    SEG = ("> add a rate limit\n"
+           "  $ Edit src/api/export.py\n"
+           "    = edited\n"
+           "  $ Bash npm test\n"
+           "    ! 3 failing\n"
+           "  . Fixed the ordering; suite green now.")
+
+    def keep(self, *aspects: str) -> str:
+        from skillpp.window import keep_aspects
+        return keep_aspects(self.SEG, aspects)
+
+    def test_each_aspect_shows_only_itself(self):
+        self.assertEqual(self.keep("prompts").strip(), "> add a rate limit")
+        self.assertIn("$ Edit", self.keep("tools"))
+        self.assertNotIn("= edited", self.keep("tools"))
+        self.assertNotIn("Fixed the ordering", self.keep("tools"))
+
+    def test_a_continuation_line_follows_the_marker_that_opened_it(self):
+        # Filtering has to be stateful: a wrapped result has no marker of its
+        # own, and leaking it into a tools-only view would defeat the point.
+        from skillpp.window import keep_aspects
+        wrapped = "  $ Bash x\n    = line one\n      line two wrapped\n  . said"
+        self.assertNotIn("line two wrapped", keep_aspects(wrapped, ("tools",)))
+        self.assertIn("line two wrapped", keep_aspects(wrapped, ("results",)))
+
+    def test_failures_are_their_own_aspect(self):
+        # 0.8% of a corpus and the reason a route took its shape, so something
+        # showing only tools may still want them.
+        self.assertNotIn("3 failing", self.keep("tools", "results"))
+        self.assertIn("3 failing", self.keep("tools", "failures"))
+
+    def test_asking_for_everything_changes_nothing(self):
+        from skillpp.window import DEFAULT_ASPECTS, keep_aspects
+        kept = keep_aspects(self.SEG, DEFAULT_ASPECTS)
+        for line in self.SEG.splitlines():
+            self.assertIn(line.strip(), kept)
+
+    def test_an_empty_result_is_still_a_segment(self):
+        # The numbering the model answers against and the one `reconcile`
+        # groups by must not drift, so a segment with nothing of the shown
+        # aspect stays in place rather than being dropped.
+        self.assertEqual(self.keep("failures").strip(), "! 3 failing")
+        self.assertEqual(self.keep("narration").strip(),
+                         ". Fixed the ordering; suite green now.")

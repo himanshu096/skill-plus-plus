@@ -124,6 +124,11 @@ class Case:
     # would otherwise be answered "stop" without the judgement ever being put
     # to the model. Only set it where the fixture is small by design.
     min_messages: int | None = None
+    # Appended after the transcript path in the prompt, so it reaches the
+    # command file's own `!` line. Used to withhold aspects for the ablation:
+    # same instructions, different input, which is what makes it a comparison
+    # rather than two experiments.
+    args: str = ""
     check_run: Callable[[Path, str, list[dict]], str | None] | None = None
 
 
@@ -661,6 +666,36 @@ CASES = [
          transcripts=lambda out: [locator.FIXTURES["recurrence-a"]],
          command="/locate", bookmarks=False,
          check_run=_locator_check("recurrence-a")),
+    Case("locate-tools-refine",
+         asks="the same verdicts from the tool calls alone, no narration",
+         breaks="a first pass over tools only cannot tell finished work from "
+                "unresolved, so the cheap stage that removes 63% of window "
+                "boundaries cannot be the cheap stage",
+         transcripts=lambda out: [_their("refine", out)],
+         command="/locate ".strip(),
+         args="--aspect tools",
+         bookmarks=False,
+         check_run=_locator_check("their-refine")),
+    Case("locate-tools-mid-investigation",
+         asks="the same verdicts from the tool calls alone, no narration",
+         breaks="a first pass over tools only cannot tell finished work from "
+                "unresolved, so the cheap stage that removes 63% of window "
+                "boundaries cannot be the cheap stage",
+         transcripts=lambda out: [_their("mid-investigation", out)],
+         command="/locate ".strip(),
+         args="--aspect tools",
+         bookmarks=False,
+         check_run=_locator_check("their-mid-investigation")),
+    Case("locate-tools-recurrence-a",
+         asks="the same verdicts from the tool calls alone, no narration",
+         breaks="a first pass over tools only cannot tell finished work from "
+                "unresolved, so the cheap stage that removes 63% of window "
+                "boundaries cannot be the cheap stage",
+         transcripts=lambda out: [locator.FIXTURES["recurrence-a"]],
+         command="/locate ".strip(),
+         args="--aspect tools",
+         bookmarks=False,
+         check_run=_locator_check("recurrence-a")),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
@@ -720,7 +755,8 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
         env["SKILLPP_MIN_NEW"] = str(case.min_messages)
     said, why = [], ""
     for path in case.transcripts(root) or [None]:
-        prompt = f"{case.command} {path}".strip() if path else case.command
+        prompt = (f"{case.command} {path} {case.args}".strip() if path
+                  else f"{case.command} {case.args}".strip())
         proc = subprocess.run(
             ["claude", "-p", prompt,
              "--no-session-persistence",
