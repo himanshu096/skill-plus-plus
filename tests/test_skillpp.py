@@ -1815,3 +1815,64 @@ class TestTheMessageFloor(TempRoot):
         with unittest.mock.patch.dict(os.environ, {"SKILLPP_MIN_NEW": "many"}):
             self.assertEqual(Config(self.root / "c").min_new_messages,
                              MIN_NEW_MESSAGES)
+
+
+class TestHeredocClipping(unittest.TestCase):
+    """A heredoc body is content written to a file, not the command.
+
+    `Write`'s content and `Edit`'s new_string are already capped at 250 here on
+    a measured argument -- the step is "wrote the file", the content is the
+    product. A heredoc is `Write` spelled in shell and had been getting Bash's
+    full 1500, because flattening newlines before truncating left no delimiter
+    to find. Measured at 4.8% of a 12 MB session's extract, and 12% of one that
+    staged every commit message through /tmp.
+    """
+
+    def cmd(self, body: str, *, tail: str = "\ngit commit -F /tmp/m.txt") -> str:
+        return f"cat > /tmp/m.txt <<'EOF'\n{body}\nEOF{tail}"
+
+    def test_a_long_body_is_clipped_but_its_opening_survives(self):
+        from skillpp.extract import _clip_heredocs
+        body = "feat(x): the subject line\n" + "filler that repeats.\n" * 40
+        out = _clip_heredocs(self.cmd(body))
+        self.assertLess(len(out), len(self.cmd(body)))
+        # A convention is stated at the top of a file, which is the half kept.
+        self.assertIn("feat(x): the subject line", out)
+        self.assertIn("chars written", out)
+
+    def test_the_command_around_it_is_untouched(self):
+        # The reason not to drop the body outright: what follows the closing
+        # delimiter is often the step that matters.
+        from skillpp.extract import _clip_heredocs
+        out = _clip_heredocs(self.cmd("x\n" * 200))
+        self.assertIn("cat > /tmp/m.txt <<'EOF'", out)
+        self.assertIn("EOF", out)
+        self.assertIn("git commit -F /tmp/m.txt", out)
+
+    def test_a_short_body_is_left_alone(self):
+        from skillpp.extract import _clip_heredocs
+        original = self.cmd("feat: one line")
+        self.assertEqual(_clip_heredocs(original), original)
+
+    def test_an_unterminated_heredoc_is_left_alone(self):
+        # No closing delimiter means no way to tell body from the rest of the
+        # command, and guessing would eat a real step.
+        from skillpp.extract import _clip_heredocs
+        original = "cat > f <<'EOF'\n" + "line\n" * 200
+        self.assertEqual(_clip_heredocs(original), original)
+
+    def test_two_heredocs_in_one_command_are_both_clipped(self):
+        from skillpp.extract import _clip_heredocs
+        one = "a\n" * 200
+        original = f"cat > x <<'A'\n{one}\nA\ncat > y <<'B'\n{one}\nB"
+        out = _clip_heredocs(original)
+        self.assertEqual(out.count("chars written"), 2)
+
+    def test_it_runs_before_the_flattening_that_used_to_hide_it(self):
+        # The regression guard. Flattening first leaves the body with no
+        # delimiter, the clip silently matches nothing, and the only symptom is
+        # a bigger prompt -- which no assertion would have caught.
+        from skillpp.extract import _arguments
+        body = "feat: subject\n" + "filler.\n" * 60
+        rendered = _arguments("Bash", {"command": self.cmd(body)})
+        self.assertIn("chars written", rendered)

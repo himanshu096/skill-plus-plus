@@ -163,6 +163,40 @@ _SYSTEM_REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 _HOME_PREFIX = re.compile(r"/Users/[^/\s\"']+/")
 _ECHO_RULE = re.compile(r"""echo\s+["']?[-=*_]{3,}[^;&|"']*["']?\s*;?\s*""")
 
+# A heredoc body is content being written to a file, which is the same thing as
+# `Write`'s content and `Edit`'s new_string -- and those are capped at 250 above
+# for a reason already measured here: the step is "wrote the file", the content
+# is the product. A heredoc is `Write` spelled in shell, so it gets the same
+# allowance rather than Bash's 1500.
+#
+# Measured on a 12 MB session: 23 such bodies held 18,319 characters, 30.6% of
+# all Bash text, and were mostly commit messages staged through /tmp. Capping
+# them takes 5.0% off the whole extract.
+#
+# Not dropped outright, because the comment on Bash's own limit is right that
+# heredocs carry conventions worth keeping -- and a convention is stated at the
+# top of a file, not buried at the end. 250 characters keeps the commit
+# subject, the shebang, the first rule; it is the body underneath that repeats
+# what the surrounding commands already say.
+_HEREDOC = re.compile(r"(<<-?\s*['\"]?(\w+)['\"]?\n)(.*?)(\n\s*\2\b)", re.S)
+HEREDOC_CHARS = 250
+
+
+def _clip_heredocs(command: str) -> str:
+    """Shorten what a heredoc writes, keeping the command that writes it.
+
+    Runs before newlines are flattened: once the command is one line the body
+    has no delimiter left to find, which is why this was invisible the first
+    time the extract was measured for compressible bulk.
+    """
+    def clip(match: re.Match) -> str:
+        opener, _name, body, closer = match.groups()
+        if len(body) <= HEREDOC_CHARS:
+            return match.group(0)
+        return (f"{opener}{body[:HEREDOC_CHARS]}"
+                f"\n[…{len(body) - HEREDOC_CHARS:,} chars written…]{closer}")
+    return _HEREDOC.sub(clip, command)
+
 
 def _declutter(command: str) -> str:
     """Strip filler from a shell command without changing what it did."""
@@ -215,6 +249,8 @@ def _arguments(name: str, tool_input: dict) -> str:
     else:
         values = [f"{k}={v}" for k, v in list(tool_input.items())[:2]
                   if isinstance(v, (str, int, float, bool))]
+    if name == "Bash":
+        values = [_clip_heredocs(v) for v in values]
     argument = " ".join(values).replace("\n", " ")
     argument = _declutter(argument) if name == "Bash" else _HOME_PREFIX.sub("~/", argument)
     limit = ARG_CHARS.get(
