@@ -1,18 +1,30 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree, pushed through `6572b44`.
-**167 tests pass:** `python3 -m unittest discover -s tests -q`.
-**13 evals**, of which six are verified since the last full run — see *Testing*.
-`python3 tests/evals/run.py` spends a real model call per case, so run
-`--case <name>` unless a full sweep is actually wanted.
+Branch: `feat/pattern-detection`, clean tree, **19 commits ahead of
+`origin/feat/pattern-detection` and not pushed** (origin is at `6572b44`).
+**207 tests pass:** `python3 -m unittest discover -s tests -q`.
+**37 eval cases.** `python3 tests/evals/run.py` spends a real model call per
+case, so run `--case <name>` unless a full sweep is actually wanted. Which cases
+are verified and which are stale is in *Testing*.
 No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
 Invoke the CLI as `python3 bin/skillpp`.
 
 Numbers marked *measured* come from the transcripts on this machine: ~117 files,
 ~324 MB, six projects, about 60 days.
 
-**Detection is built and live-tested end to end.** The current task is testing
-it further — what to try, and what already passed, is under *Testing* below.
+**Detection is built and live-tested end to end**, and was compared head to head
+against the competing design on `feat/ignore-list-and-drift-tracking`: this
+branch won 5 of 6 against 2 of 6 on six sessions built from *that* branch's own
+scenario table. Method and per-scenario results in `docs/bakeoff.md`. Treat the
+verdict as settled.
+
+**The current work is getting inference onto a local model**, step by step, by
+making the prompt smaller rather than by swapping the model. `docs/windowing.md`
+is the live document for it. Short version: compression is spent — twelve real
+sessions run 60k-128k tokens after a 47x extract, and every remaining cut summed
+to about 5% — so the prompt is *split* instead, and `window.py`, `reconcile.py`
+and `/locate` are that pipeline. Nothing local has been tried yet; the standing
+instruction is not to until the frontier arm is clean.
 
 ---
 
@@ -121,6 +133,8 @@ claim that they were already read.
 | `extract.py` | messages → compressed text (**324 MB → 12.3 MB, 26×**) |
 | `memory.py` | the store: entry files, the two logs, derived counts, the threshold |
 | `prepare.py` | resolve, slice against the bookmark, floor, record, commit |
+| `window.py` | messages → segments (one request and its work) → windows that fit a small context. Also `keep_aspects`, which shows one aspect of a request at a time |
+| `reconcile.py` | per-window findings → groups, deciding from segment provenance which are duplicates, which are recurrences, and which need a judgement |
 
 And the tests, which are two different things and should stay that way:
 
@@ -130,6 +144,11 @@ And the tests, which are two different things and should stay that way:
 | `tests/evals/run.py` | the judgement cases. One real model call each |
 | `tests/evals/sessions.py` | fixtures the recurrence seeder cannot express |
 | `tests/evals/mundane.py` | a session worth no skill at all |
+| `tests/evals/their_scenarios.py` | the capture branch's own six scenarios, built on its turf, for the symmetric round |
+| `tests/evals/replay.py` | a transcript replayed as the hook stream it would have produced, so that branch's capture can be driven from a fixture |
+| `tests/evals/bakeoff.py` | runs every fixture through that branch's detector. **No model calls** — its detection is code |
+| `tests/evals/locator.py` | fifteen labelled segments for `/locate`. The prompt was revised against these, so they are tuned |
+| `tests/evals/cold.py` | four fixtures the `/locate` prompt was never tuned against, labelled before first run. **Do not revise a label because an answer disagrees** |
 | `tests/fixtures/seed_recurrence.py` | two snapshots of one conversation doing the same procedure twice. Regenerate; the `.jsonl` is gitignored |
 
 ### Decisions measurement forced
@@ -270,15 +289,29 @@ and have not been re-run against them.
 
 ### Not yet tested
 
-**The accept path.** `/review-candidates` up to the question is covered; what
-happens after a person answers "make it a skill" is not, and needs a human.
+**Anything local.** `window.py`, `reconcile.py` and `/locate` exist to put the
+cheap pass on a local model and none of it has met one. `qwen2.5:7b-ctx16k` and
+`gemma4:12b-ctx16k` are installed. The standing instruction is not to try until
+the frontier arm is clean.
+
+**Nothing calls `window.py` or `reconcile.py`.** Both are libraries with tests
+and no caller; `prepare-session` still renders a whole session. Wiring them in
+is what changes the input a model sees, and the eval to run at that point is
+`big` — the `their-*` and `locate-*` fixtures are 200-300 tokens and produce one
+window each, so windowing is a no-op on them.
 
 **Cold discovery.** Whether a promoted skill fires unprompted — the real test of
 `description` and `when_to_use`. Needs a different harness and something
 promoted; both promoted skills were cleared to give the threshold a clean run.
 
 **Above the budget.** 72% of real increments exceed ~30k tokens; `big` sits at
-16k. Whether `prepare-session` truncates or floods at 2× that is unknown.
+16k. Whether `prepare-session` truncates or floods at 2× that is unknown. The
+census in `docs/windowing.md` is the sharper number: 14 of 14 real sessions
+exceed a 16k context after extraction, at 60k-128k tokens.
+
+The accept path **is** covered now — `TestTheAcceptPath`, eleven tests against
+`promote-candidate`, including that the entry file is byte-identical after a
+promotion.
 
 ---
 

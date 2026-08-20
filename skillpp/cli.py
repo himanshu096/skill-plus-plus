@@ -208,7 +208,6 @@ def cmd_segments(args: argparse.Namespace) -> int:
         print(f"showing        {', '.join(chosen)} only — the rest of each "
               f"request is deliberately withheld")
     print()
-    shown = 0
     for seg in segs:
         text = (seg.text if chosen == DEFAULT_ASPECTS
                 else keep_aspects(seg.text, chosen))
@@ -217,7 +216,6 @@ def cmd_segments(args: argparse.Namespace) -> int:
         # break the correspondence the answers and `reconcile` both rely on.
         print(text if text.strip() else "(nothing of the shown aspects here)")
         print()
-        shown += bool(text.strip())
     return 0
 
 

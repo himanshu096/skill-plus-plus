@@ -256,27 +256,22 @@ review has nothing to look at. That failure is final.
 
 ## Still to run
 
-- The paid half: `/skillpp-review` against the candidates banked above, to see
-  how much of a bad span a review recovers.
-- **`their-explore` is unmeasured.** Its `record-candidate` and
-  `commit-session` calls were refused by the permission layer, so nothing was
-  recorded and no judgement was observed. The harness caught it and said so
-  rather than reading an empty store as "found nothing", which is the one thing
-  that must not happen here. Cause unknown — the same `--allowed-tools` value
-  worked on the other five. Needs a rerun with the run kept.
+The symmetric round is done — both arms are scored in the tables above, and
+`their-explore` turned out to be this branch's one genuine loss rather than an
+unmeasured case. What is left:
 
-- **This branch against the same six symmetric fixtures.** Added to
-  `tests/evals/run.py` as `their-refine`, `their-retry`, `their-distinct`,
-  `their-explore`, `their-mid`, `their-recurs`. This is the other half of the
-  symmetric round and the only thing that could still overturn the verdict: if
-  this branch also fragments `refine` or misses the recurrence in `recurs`, the
-  gap is smaller than stated. Needs model calls.
+- **The paid half of that branch.** `/skillpp-review` against the candidates it
+  banked, to see how much of a bad span a review recovers. Only matters if
+  someone wants to reopen the verdict; it cannot rescue `big`, where nothing was
+  banked for a review to read.
+- **This branch's original thirteen cases as one sweep.** Untouched since the
+  symmetric work. Six were verified after the last prompt change to
+  `log-session.md`; the other seven are older than the current file, and none
+  have run since `extract.py` started clipping heredoc bodies.
 
-  First attempt returned 0/6 and none of it was about detection: all six
-  fixtures were built to that branch's span budgets, which put every one of them
-  under this branch's 25-message floor, so `prepare-session` correctly answered
-  "stop" and the model was never asked. The floor is now overridable
-  (`SKILLPP_MIN_NEW`) and the six cases set it, since an eval is the one caller
-  that means to pay the cost of a small session.
-- This branch's original 13 cases as one sweep. Six were verified after the
-  last prompt change; the other seven are older than the current command file.
+Note for whoever reruns anything here: the six symmetric fixtures were built to
+that branch's span budgets, which puts all of them under this branch's
+25-message floor. The floor is overridable (`SKILLPP_MIN_NEW`) and the
+`their-*` cases already set it. A first attempt without that returned 0/6 with
+nothing to do with detection — `prepare-session` correctly answered "stop" and
+the model was never asked.
