@@ -287,6 +287,31 @@ Verified since the last full sweep: `near`, `promoted`, `secrets`, `stop`,
 universal bookmark check, the streamed output and `SKILLPP_SKILLS_DIR` landed,
 and have not been re-run against them.
 
+### Verified for the current configuration
+
+Frontier writes the body, local does everything else. Both matching paths have
+evidence, and they were exercised separately rather than one masking the other.
+
+| path | verified by | adversarial case included |
+| --- | --- | --- |
+| session against session (`nearest_session`) | a real drain: merged at 0.848 and 0.873 under two *different* proposed names, declined an unrelated body at 0.513 | yes — the 0.513 |
+| body against body (`closest`, the fallback) | eval cases `match`, `distinct`, `near`, `promoted`, `stop`, `their-recurs`, 6/6 | yes — `distinct` and `near` both require refusing a merge |
+| local triage | 12 labelled real sessions: 6 of 6 sent on, 0 lost, 4 of 6 skipped | the 0-lost is the point |
+| the whole loop | a sandboxed drain to promotion: 3 sessions, one entry at x3, offered, accepted, SKILL.md on disk | — |
+
+The eval seeds write entries and occurrences but no exemplars, so
+`nearest_session` finds nothing there and falls through to body comparison. That
+is why the seeded cases test the fallback and the real drain tests the primary
+path; neither substitutes for the other.
+
+The run worth repeating for the division of labour, from one drain of three:
+
+    below the floor 5   free, no model at all
+    triaged out    2    local model
+    matched        2    local embeddings, 0.848 and 0.873
+    declined       1    local embeddings, 0.513
+    bodies written 3    frontier
+
 ### The three that matter
 
 Everything else in the eval suite is secondary to these, and it is worth knowing
