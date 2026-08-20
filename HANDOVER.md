@@ -396,6 +396,31 @@ path.
 
 ## Prompt-design lessons already paid for
 
+**Every auxiliary hint gets promoted to a verdict.** `/locate` has been revised
+four times and each revision removed a hint of mine that the model had used as
+sufficient on its own. "A command list that ends in a read is usually not
+landed" marked a finished procedure unresolved, because its mutations sat
+mid-list with unrelated greps after them. "The developer accepted it and moved
+on" made a request that merely *extended* the same change read as acceptance.
+"Or the developer moved on to different work" made a question answered from one
+grep read as finished work.
+
+The pattern is not that the hints were badly worded. It is that a hint offered
+as corroboration is read as a rule. State the condition that actually decides —
+for `landed`, that something was carried out *and* confirmed, both halves
+required — and give the auxiliary signals only as things that corroborate it,
+saying explicitly that none of them suffices alone.
+
+**A verdict the model cannot answer consistently is usually two questions.**
+`/locate` began with three verdicts and every disagreement it produced was
+between `none` and `open`, never involving `landed`. Reading that is the first
+half of a procedure is both "nothing happened" and "unresolved" at once.
+Collapsing them fixed the inconsistency, and cost something worth knowing: the
+surviving `open` now means two things, and the prompt has to say what unites
+them rather than define them.
+
+
+
 - **"Dead ends omitted" was wrong.** A task's failures *were* the reasoning.
 - **A sharpening clause can become a loophole.** *"Would they only discover it
   by failing?"* let general shell trivia through. When adding a test to a

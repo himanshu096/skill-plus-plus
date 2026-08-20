@@ -26,6 +26,18 @@ Each shape here is one the tuned set does not contain:
 - **`mixed`** — three segments of interleaved real work, one abandoned approach
   among them, and unrelated reads after the resolution. The tuned set's noise is
   clean generated filler.
+
+**First cold run: 7 of 8.** ``mixed`` segment 2 came back ``landed`` on full
+content and ``open`` — correctly — from commands alone. The label was not
+revised. The prompt was, because it was the cause: ``landed`` listed "the
+developer moved on to different work" as sufficient, without requiring that
+anything had been carried out, and segment 2 answers a question from one grep and
+ends the session. That is the same error as an earlier rule that read the last
+command as the verdict: an auxiliary signal promoted to a sufficient condition.
+
+Worth keeping for its own sake: the narration is what misled the full-content
+arm, and withholding it produced the right answer. The cheap pass is not
+uniformly weaker.
 """
 
 from __future__ import annotations

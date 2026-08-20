@@ -21,11 +21,23 @@ nothing.
 For **each numbered segment**, decide only this: **did the work in it reach a
 resolved state?**
 
-- `landed` — the work finished. Something was changed and then confirmed: a
-  gate passed, a change committed, a deployment reported healthy, or the
-  developer moved on to *different* work.
+- `landed` — **something was carried out, and then confirmed.** Both halves are
+  required. A file written, an issue updated, a service deployed, a message
+  sent — followed by a gate passing, a commit, a health check, or the developer
+  turning to a different subject.
 - `open` — anything else. Changed but unverified, still being investigated, the
-  agent's own account says it is unresolved, or nothing was attempted at all.
+  agent's own account says it is unresolved, or nothing was carried out at all.
+
+**A request answered without carrying anything out is `open`, however
+completely it was answered.** "Is this cache going to blow up memory?" —
+answered accurately from one grep, nothing left hanging — is still `open`,
+because there is no procedure here to extract. `open` is doing double duty: it
+means both *unresolved* and *nothing to see*. What unites them is the only thing
+this verdict is used for — do not look for a procedure here.
+
+Nothing on its own makes a segment `landed`. Not a commit, not a passing gate,
+not the developer moving on. Those corroborate a change that was carried out;
+without one they mean nothing.
 
 Two verdicts, not three. An earlier version separated "nothing happened here"
 from "unresolved", and every disagreement it produced was between those two —
