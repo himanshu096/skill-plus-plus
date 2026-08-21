@@ -1,9 +1,8 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree, **19 commits ahead of
-`origin/feat/pattern-detection` and not pushed** (origin is at `6572b44`).
-**207 tests pass:** `python3 -m unittest discover -s tests -q`.
-**37 eval cases.** `python3 tests/evals/run.py` spends a real model call per
+Branch: `feat/pattern-detection`, clean tree, pushed through `9258fdc`.
+**259 tests pass:** `python3 -m unittest discover -s tests -q`.
+**40 eval cases.** `python3 tests/evals/run.py` spends a real model call per
 case, so run `--case <name>` unless a full sweep is actually wanted. Which cases
 are verified and which are stale is in *Testing*.
 No `pyproject.toml`; use `uv run --with pytest pytest tests/` if you want pytest.
@@ -27,6 +26,85 @@ and `/locate` are that pipeline. Nothing local has been tried yet; the standing
 instruction is not to until the frontier arm is clean.
 
 ---
+
+---
+
+## What 2026-08-21 established
+
+Detection, discovery and verification are three different questions, and until
+today only the first had a test. A skill can be detected correctly, fire
+correctly, and still be wrong.
+
+| | the question | cases |
+| --- | --- | --- |
+| detection | is there a procedure here worth recording? | `new`, `barren`, `match`, `distinct`, `near` |
+| discovery | does the promoted skill get found and reached for? | `discovery-fires`, `discovery-quiet` |
+| verification | followed as written, does the work actually succeed? | `verify` |
+
+### Cold discovery works, confirmed by hand
+
+`bootstrapping-an-ephemeral-test-runner` fired unprompted in a throwaway
+project that had never seen the original work — first action, from "Run this
+project's tests", nothing naming it. That closes the last link the loop had
+never been observed doing outside a harness.
+
+`discovery-quiet` is the half that earns its keep. Without a case proving the
+skill *stays quiet* on a request it does not cover, a description matching
+everything passes the fire test. Over-firing is not harmless: it loads a body
+on unrelated requests and teaches the developer to ignore skills.
+
+### The first promoted skill was already wrong
+
+It fired, ran its prescribed command, hit a pytest collection error, recovered
+with `PYTHONPATH=.`, and reported success. Every naive check passes that run.
+
+This is the asymmetry worth internalising: a **missing** skill costs nothing
+that was not already missing, while a **wrong** one fires in every matching
+session from now on and the agent trusts it rather than reasoning from scratch.
+Blast radius scales with promotion count, silently. At the time of writing the
+defect rate on promoted skills is one for one.
+
+### Assert on retries, not outcomes
+
+Two assertions were tried and were wrong before this one:
+
+- **Exit codes**, wrong in both directions. Too strict: the skill's own probe
+  `which uv pipx pip3` exits 1 whenever one is absent, which is the probe
+  working. Too lax: the test command ends `2>&1 | tail -80`, so the pipeline
+  exits 0 even when collection fails — hiding the only real defect.
+- **Substring matching over every command**, which called `ls dir` followed by
+  `ls dir/tests` a retry. Browsing is not retrying.
+
+What survives: if the agent runs a command and then runs that same command with
+something added, the first attempt did not do the job, and **what it added is a
+rule the skill should have carried**. Plus fired, finished, and left no `.venv`
+— the last being the skill's own promise about itself.
+
+Proven by use: `verify` failed, the rule moved from recovery into prevention,
+`verify` passed. The first edit taught the skill to *recover* from the error
+rather than *prevent* it, and only the retry check could tell the difference.
+
+### The harness blames the model for its own problems
+
+Four times now an environment failure was reported as a wrong judgement: tool
+denials, an expired OAuth token, permission refusals counted as failed calls,
+and a check reading assistant prose where it needed the raw event stream. Each
+would have read as "the model got it wrong".
+
+Assume a fifth. Environment failures now carry a `HARNESS:` prefix, and the
+fixes carry their reasons in the code.
+
+### Usage tracking is gone, not fixed
+
+`record_use` was only ever called from a `PostToolUse` hook that is not
+installed, so `skillpp lifecycle` stamped "never used" on every skill —
+including one demonstrably firing on demand. A column that can only report zero
+reads as a measurement, so the fields went with the writer.
+
+Nothing was lost. **An invocation is already in the transcript.** Both usage
+counts and last-used dates are a `json.loads` away, and deriving them cannot
+disagree with the record the way a second copy can. No hook is needed to know
+whether a skill is used.
 
 ---
 
@@ -296,13 +374,13 @@ Four, all silent, none caught by the suite:
 Three layers, and the split matters: **anything with one right answer belongs in
 `tests/`, where it is free.** Only judgement is worth a model call.
 
-### `python3 -m unittest discover -s tests -q` — 254, ~2s
+### `python3 -m unittest discover -s tests -q` — 259, ~2s
 
 Counts, dates, ordering, the threshold, and the four append-only properties
 (round-trip with `##` sections, an occurrence not touching the entry file, a
 neighbour left byte-identical, a body containing a horizontal rule).
 
-### `python3 tests/evals/run.py` — 37 cases, minutes and cents each
+### `python3 tests/evals/run.py` — 40 cases, minutes and cents each
 
 Each case shells out to the **real** command file, sandboxed by environment
 alone. An eval that reconstructs the prompt tests the reconstruction, and the
@@ -335,6 +413,23 @@ two drift the first time someone edits the command file.
 
 `big` is 1,879 records / **433 KB raw** — the median real increment, not a toy —
 extracting to ~16k tokens.
+
+**Discovery and verification.** These three run against the *live*
+`~/.claude/skills`, where Claude Code actually reads — `SKILLPP_SKILLS_DIR` is
+no help, that being where skillpp writes. Each builds a throwaway project and
+runs with `cwd` there.
+
+- `discovery-fires` — a bare Python project and "run the tests", nothing naming
+  the skill. Asserts it was reached for.
+- `discovery-quiet` — a request the skill does not cover. Without it, a
+  description matching everything passes the fire test.
+- `verify` — fired, finished, no retry of its own command, and no `.venv` left
+  behind. The retry check is the load-bearing one; see *What 2026-08-21
+  established* for why outcomes and exit codes both failed as assertions.
+
+They read the promoted SKILL.md by path, so they test the wording that actually
+shipped. Delete that file and all three fail on a missing path rather than
+telling you anything.
 
 **Review.** `AskUserQuestion` is withheld deliberately: everything up to the
 question is observable, and answering it would mean stubbing the tool and
@@ -428,7 +523,7 @@ offers that name, promotion writes the SKILL.md, and a fourth sighting afterward
 raises the count without filing a duplicate. The only thing left out is pressing
 the button, which `claude -p` cannot do.
 
-Worth keeping in proportion: 24 of the 37 eval cases are `locate-*`, `their-*`
+Worth keeping in proportion: 24 of the 40 eval cases are `locate-*`, `their-*`
 and `cold-*` — the local-inference track and the cross-branch comparison. Those
 serve components that are not in the pipeline. The three above are the product.
 
@@ -601,11 +696,19 @@ exists) but whether a skill's text may change under the developer without
 review, which cuts against "promoting one is a separate deliberate act". Middle
 option: flag drift in `/review-candidates` and let a person refresh.
 
-**The store on this machine is deliberately empty of promotions.** Both promoted
-skills were test artifacts and were cleared, along with
-`PATTERNS.md.superseded`, so the threshold gets a clean run. Three candidates
-remain (`x2`, `x2`, `x1`); nothing reaches the queue until something hits `x3`.
-Cold-discovery testing is blocked until something is promoted again.
+**The store on this machine holds one real promotion and five candidates
+short of the threshold.** `bootstrapping-an-ephemeral-test-runner` sits at `x3`,
+promoted 2026-08-20; the rest are at `x1` or `x2` and nothing expires them. The
+funnel over its first two days: 18 sessions queued, 14 reviewed, 10 occurrences,
+6 candidates, 1 promoted — an average of 1.67 sightings against a threshold of
+3, so most candidates will never cross it. Whether that ratio is healthy is
+unmeasured and is the open question behind everything else.
+
+**The promoted skill exists only in `~/.claude/skills`, untracked.** It is the
+pipeline's one durable output and it is in a home directory under no version
+control. Three eval cases read it by path, so the tests are in git and the
+thing they test is not. That is the team-distribution gap at its sharpest: the
+handover says "skills are the team artifact" and nothing ships one anywhere.
 
 **Automatic triggering is deferred, not rejected.** The `SessionEnd` hook still
 enqueues to `ended-sessions.jsonl` and nothing drains it — deliberately, since
