@@ -1,8 +1,8 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree, **4 commits ahead of origin and
+Branch: `feat/pattern-detection`, clean tree, **7 commits ahead of origin and
 not pushed** (origin is at `9258fdc`).
-**275 tests pass:** `python3 -m unittest discover -s tests -q`.
+**280 tests pass:** `python3 -m unittest discover -s tests -q`.
 **40 eval cases.** `python3 tests/evals/run.py` spends a real model call per
 case, so run `--case <name>` unless a full sweep is actually wanted. Which cases
 are verified and which are stale is in *Testing*.
@@ -322,7 +322,8 @@ one 440-step blob. Full method in `docs/bakeoff.md`. Treat as settled.
 | `~/.claude/skillpp/patterns/<name>.md` | one candidate, written once, never reopened for writing |
 | `~/.claude/skillpp/occurrences.jsonl` | one line per sighting; the count is how many there are |
 | `~/.claude/skillpp/decisions.jsonl` | one line per human decision; the last one is the status |
-| `~/.claude/skillpp/reviews/<session>.steps.jsonl` | what that session literally ran, scrubbed — the input for redrafting a body |
+| `~/.claude/skillpp/reviews/<session>.steps.jsonl` | what that session literally ran, scrubbed — read by `skillpp redraft` |
+| `<root>/drafts/<name>/SKILL.md` | a redrafted body awaiting review; never installed |
 | `~/.claude/skillpp/reviews/<session-id>.md` | what a session proposed **and how far it read** |
 | `<repo>/.claude/skills/<name>/SKILL.md` | a promoted skill — the only thing that lands in a repo |
 
@@ -799,10 +800,27 @@ opening paragraph. That was the `SECTION_HEAD` parser ending an entry at the
 next `##`. It is gone with the document, and a test pins bodies with sections
 through a round trip.
 
-When the refresh is picked up, the question is not mechanical (`--force`
-exists) but whether a skill's text may change under the developer without
-review, which cuts against "promoting one is a separate deliberate act". Middle
-option: flag drift in `/review-candidates` and let a person refresh.
+**Half of the refresh now exists: `skillpp redraft <name>`.** It loads a body
+plus the trace of what its sessions actually ran, hands both to the
+developer's own agent, and writes a *draft* — never the store, never
+`~/.claude/skills`. Dry run unless `--apply`; refuses outright on an entry
+recorded before traces were kept, rather than rewriting prose with nothing new
+to go on.
+
+It found a defect on the first entry it was pointed at. Given
+`bootstrapping-an-ephemeral-test-runner` and the fourteen commands its sessions
+ran, the trace shows `python -m pytest` failing, then `python3 -m pytest`
+failing, *then* the tooling probe — so the body had been teaching an agent to
+discover its runner by eating two failures. The redraft moved the probe first.
+Same class of defect as the `PYTHONPATH` gap, found **without running
+anything**, which is the whole reason the trace is kept.
+
+What is still missing is the other half: nothing carries a draft back into the
+store, and nothing decides which version of a body is live. Entry files are
+write-once, so a second version needs either a versioned path or a decision
+log entry naming the current one — undecided. The question that made this
+deferred in the first place is unchanged and is the reason it stops at a
+draft: a skill's text may not change under the developer without review.
 
 **The store on this machine holds one real promotion and five candidates
 short of the threshold.** `bootstrapping-an-ephemeral-test-runner` sits at `x3`,
