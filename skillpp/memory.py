@@ -298,6 +298,25 @@ def load(config: Config) -> list[Candidate]:
     return order(list(entries.values()))
 
 
+def trace_for(config: Config, candidate: "Candidate") -> list[dict]:
+    """Everything the sessions that taught this body actually ran.
+
+    Session-scoped, so this is wider than the procedure -- without
+    segmentation that is the honest granularity, and a redraft is given the
+    surrounding work rather than a claim of precision that is not there.
+    """
+    out: list[dict] = []
+    for session in candidate.sessions:
+        for step in read_steps(config, session):
+            # A step whose arguments were all dropped carries nothing a
+            # redraft can use -- `Read` and the other browsing tools keep only
+            # their name. Counting them as trace makes 712 steps out of a
+            # session that did far less.
+            if step.get("input"):
+                out.append(step)
+    return out
+
+
 def find(candidates: list[Candidate], name: str) -> Candidate | None:
     """By name, then by slug, so a renamed-on-disk entry is still reachable."""
     for candidate in candidates:

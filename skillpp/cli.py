@@ -599,6 +599,96 @@ def cmd_drain(args: argparse.Namespace) -> int:
     return 0
 
 
+_REDRAFT_OPEN = "<<<SKILLPP-BODY"
+_REDRAFT_CLOSE = "SKILLPP-BODY>>>"
+
+
+def cmd_redraft(args: argparse.Namespace) -> int:
+    """Rewrite a body against the trace of what its sessions actually ran.
+
+    The reader for a trace that was, until now, only ever written. Its reason
+    for existing is the `PYTHONPATH` case: a promoted skill fired, ran its
+    prescribed command, hit an error it had never mentioned, and recovered.
+    Nothing in the store could have produced the missing rule, because the
+    store held only the generalised body.
+
+    Writes a *draft*, never the store and never the skills directory. A
+    promoted skill's text changing under the developer without review cuts
+    against promotion being a deliberate act -- so the redraft is a proposal,
+    and someone still has to look at it.
+
+    Dry run unless ``--apply``: one model call.
+    """
+    import shlex
+    import subprocess
+    from .memory import find, load, trace_for
+
+    config = Config(args.root)
+    entry = find(load(config), args.name)
+    if entry is None:
+        print(f"No candidate named {args.name!r}", file=sys.stderr)
+        return 1
+
+    steps = trace_for(config, entry)
+    out = config.root / "drafts" / entry.name / "SKILL.md"
+
+    if args.show:
+        # Read by the command file, before the model is asked anything.
+        print(f"candidate      {entry.name}  (seen {entry.count}x)")
+        print(f"write the body to  {out}\n")
+        print("# The body as it stands\n")
+        print(entry.body.strip())
+        print(f"\n# What those sessions ran ({len(steps)} steps)\n")
+        for step in steps:
+            arg = (step.get("input") or {}).get("command") or \
+                  (step.get("input") or {}).get("file_path") or ""
+            print(f"  {step.get('tool','?'):10} {str(arg)[:100]}")
+        if not steps:
+            print("  (no trace — this entry predates the trace being kept)")
+        return 0
+
+    if not steps:
+        print(f"No trace for {entry.name!r}: it was recorded before traces were "
+              f"kept, so there is nothing to redraft against.", file=sys.stderr)
+        return 1
+
+    argv = [part.replace("{prompt}", f"/skillpp-redraft {entry.name}")
+            for part in shlex.split(config.agent_command)]
+    if not args.apply:
+        print(f"candidate  {entry.name}  (seen {entry.count}x, {len(steps)} steps)")
+        print(f"draft to   {out}")
+        print("\n  " + " ".join(shlex.quote(a) for a in argv))
+        print("\nDry run. Run again with --apply to spend one model call.")
+        return 0
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True,
+                              timeout=args.timeout)
+    except FileNotFoundError:
+        print(f"agent not found: {argv[0]!r}. Set SKILLPP_AGENT.", file=sys.stderr)
+        return 1
+    said = (done.stdout or done.stderr).strip()
+
+    # The body comes back on stdout between markers rather than being written
+    # by the agent. Two reasons: the invocation is the developer's own and may
+    # carry no write permission at all, and this way the destination is chosen
+    # here rather than trusted to a model that was told a path.
+    body = ""
+    if _REDRAFT_OPEN in said and _REDRAFT_CLOSE in said:
+        body = said.split(_REDRAFT_OPEN, 1)[1].split(_REDRAFT_CLOSE, 1)[0].strip()
+
+    print("".join(f"  {ln}\n" for ln in said.splitlines()[-4:]))
+    if not body:
+        print("No draft: the agent judged the body already correct, or wrote "
+              "nothing between the markers.")
+        return 0
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(body + "\n", encoding="utf-8")
+    print(f"draft at {out} — nothing promoted, nothing installed.")
+    return 0
+
+
 def cmd_candidates(args: argparse.Namespace) -> int:
     """List what has been recorded, most-seen first."""
     from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
@@ -1199,6 +1289,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open-only", action="store_true",
                    help="only those not yet made into skills")
     p.set_defaults(func=cmd_candidates)
+
+    p = sub.add_parser("redraft",
+                       help="rewrite a body against what its sessions ran")
+    p.add_argument("name")
+    p.add_argument("--show", action="store_true",
+                   help="print the body and the trace; no model call")
+    p.add_argument("--apply", action="store_true",
+                   help="actually invoke the agent; one model call")
+    p.add_argument("--timeout", type=int, default=900)
+    p.set_defaults(func=cmd_redraft)
 
     p = sub.add_parser("promote-candidate",
                        help="write a candidate out as a skill and record it")

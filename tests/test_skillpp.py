@@ -2950,6 +2950,72 @@ class TestTraceIsScrubbedBeforeDisk(TempRoot):
         self.assertEqual(steps[0], {"tool": "Read", "input": {}})
 
 
+class TestRedraft(TempRoot):
+    """The reader for the trace, which was write-only until it existed."""
+
+    def seed(self, body="Old body.\n\n## Rule\n\nDo it."):
+        memory.add_entry(self.config, name="filing", body=body)
+        memory.add_occurrence(self.config, name="filing", session="s1")
+        memory.add_steps(self.config, session="s1", steps=[
+            {"tool": "Bash", "input": {"command": "uv run --with pytest pytest"}},
+            {"tool": "Read", "input": {}},
+        ])
+
+    def test_browsing_is_not_trace(self):
+        """A step whose arguments were all dropped tells a redraft nothing.
+
+        Counting them made 712 "steps" out of a session that ran 14 commands.
+        """
+        self.seed()
+        entry = memory.find(memory.load(self.config), "filing")
+        steps = memory.trace_for(self.config, entry)
+        self.assertEqual([s["tool"] for s in steps], ["Bash"])
+
+    def test_show_needs_no_model(self):
+        from skillpp.cli import main
+        self.seed()
+        code = main(["--root", str(self.config.root), "redraft", "filing", "--show"])
+        self.assertEqual(code, 0)
+
+    def test_an_entry_with_no_trace_refuses_rather_than_guessing(self):
+        """Entries recorded before traces were kept cannot be redrafted.
+
+        Refusing says so; redrafting from the body alone would be the model
+        rewriting its own prose with nothing new to go on.
+        """
+        from skillpp.cli import main
+        memory.add_entry(self.config, name="old", body="b")
+        memory.add_occurrence(self.config, name="old", session="s0")
+        self.assertEqual(
+            main(["--root", str(self.config.root), "redraft", "old", "--apply"]), 1)
+
+    def test_the_body_is_taken_from_between_the_markers(self):
+        import subprocess
+        from skillpp.cli import main
+        self.seed()
+        said = ("thinking out loud\n<<<SKILLPP-BODY\nNew body.\n\n## Probe first\n"
+                "\nDo that.\nSKILLPP-BODY>>>\nAdds: probing first.")
+        done = subprocess.CompletedProcess([], 0, stdout=said, stderr="")
+        with unittest.mock.patch("subprocess.run", return_value=done):
+            code = main(["--root", str(self.config.root), "redraft", "filing",
+                         "--apply"])
+        self.assertEqual(code, 0)
+        draft = self.config.root / "drafts" / "filing" / "SKILL.md"
+        self.assertEqual(draft.read_text().strip(),
+                         "New body.\n\n## Probe first\n\nDo that.")
+        # The store and the entry are untouched: this is a proposal.
+        self.assertIn("Old body", memory.find(memory.load(self.config), "filing").body)
+
+    def test_no_markers_means_the_body_was_already_right(self):
+        import subprocess
+        from skillpp.cli import main
+        self.seed()
+        done = subprocess.CompletedProcess([], 0, stdout="Already correct.", stderr="")
+        with unittest.mock.patch("subprocess.run", return_value=done):
+            main(["--root", str(self.config.root), "redraft", "filing", "--apply"])
+        self.assertFalse((self.config.root / "drafts" / "filing" / "SKILL.md").exists())
+
+
 class TestDerivedDependencies(TempRoot):
     """`skillpp check` reads requires_cli, and nothing ever wrote it."""
 
