@@ -193,3 +193,37 @@ def secrets(out: Path) -> Path:
     ]
     records += _filler(call, result, 6, "cleanup")
     return _write(out, "secrets.jsonl", records)
+
+
+def cold_project(out: Path, skill_src: Path) -> Path:
+    """A throwaway project holding one skill, and a reason to reach for it.
+
+    Cold discovery cannot be faked from the store: the question is whether
+    Claude Code finds the skill and whether the model decides the situation
+    calls for it, and both happen before any of this code runs. So the skill
+    goes where Claude Code actually looks -- the project's own
+    ``.claude/skills`` -- and the project is made to look like the situation
+    the skill claims to cover.
+    """
+    project = out / "coldproject"
+    skills = project / ".claude" / "skills" / skill_src.parent.name
+    skills.mkdir(parents=True, exist_ok=True)
+    (skills / "SKILL.md").write_text(skill_src.read_text(encoding="utf-8"),
+                                     encoding="utf-8")
+
+    tests = project / "tests"
+    tests.mkdir(parents=True, exist_ok=True)
+    (project / "app.py").write_text(
+        "def parse(text):\n"
+        "    return [p.strip() for p in text.split(',') if p.strip()]\n",
+        encoding="utf-8")
+    (tests / "test_app.py").write_text(
+        "from app import parse\n\n\n"
+        "def test_parse_drops_blanks():\n"
+        "    assert parse('a, ,b') == ['a', 'b']\n",
+        encoding="utf-8")
+    # pytest-shaped, deliberately with no venv and no lockfile: the exact
+    # environment the skill says it is for.
+    (project / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n",
+                                        encoding="utf-8")
+    return project

@@ -130,6 +130,12 @@ class Case:
     # rather than two experiments.
     args: str = ""
     check_run: Callable[[Path, str, list[dict]], str | None] | None = None
+    # Cold discovery runs somewhere else entirely: a throwaway project holding
+    # the skill, so Claude Code discovers it the way it would in real work.
+    # SKILLPP_SKILLS_DIR is no help here -- that is where skillpp *writes*, and
+    # this is about where Claude Code *reads*.
+    project: Callable[[Path], Path] | None = None
+    check_stream: Callable[[str], str | None] | None = None
 
 
 def _entry(entries: list[dict], name_part: str) -> dict | None:
@@ -507,6 +513,161 @@ def _kept_the_lock_rule(entries: list[dict]) -> str | None:
     return None
 
 
+PROMOTED_SKILL = (Path.home() / ".claude" / "skills"
+                  / "bootstrapping-an-ephemeral-test-runner" / "SKILL.md")
+
+
+def _cold(out: Path) -> Path:
+    import sessions
+    return sessions.cold_project(out, PROMOTED_SKILL)
+
+
+def _fired(stream: str) -> str | None:
+    called = _skills_invoked(stream)
+    if PROMOTED_SKILL.parent.name not in called:
+        return (f"the skill was on disk and was not reached for; "
+                f"skills called: {called or 'none'}")
+    return None
+
+
+def _stayed_quiet(stream: str) -> str | None:
+    # Without this, a description matching everything passes the fire test.
+    # Over-firing is not a harmless error: it costs a load of the body on
+    # every unrelated request, and it teaches the developer to ignore skills.
+    called = _skills_invoked(stream)
+    if PROMOTED_SKILL.parent.name in called:
+        return "fired on a request it does not cover — the description is too broad"
+    return None
+
+
+# What Claude Code says when it declines to run something, as opposed to
+# running it and getting a non-zero exit.
+REFUSALS = ("simple_expansion", "permission", "not allowed", "requires approval",
+            "user doesn't want", "was rejected")
+
+
+def _failed_calls(stream: str) -> list[str]:
+    """Tool calls that came back an error.
+
+    The signal verification actually needs. A skill that *fails* is easy to
+    notice; the dangerous one succeeds while the agent quietly improvises
+    around a gap in it, and then the gap is never found. That is exactly what
+    the first promoted skill did: it fired, ran its prescribed command, hit a
+    collection error, recovered with `PYTHONPATH=.`, and reported success. By
+    every naive measure that run passed.
+    """
+    bad = []
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or "tool_result" not in line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        for block in event.get("message", {}).get("content", []):
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            if not block.get("is_error"):
+                continue
+            body = block.get("content")
+            if isinstance(body, list):
+                body = " ".join(str(b.get("text", "")) for b in body
+                                if isinstance(b, dict))
+            body = str(body)
+            # A refusal is the allowlist being too tight, not the skill being
+            # wrong. Counting the two together said the first promoted skill
+            # errored five times when it had in fact run correctly -- the
+            # third time in this harness that an environment problem was
+            # reported as a judgement.
+            if any(m in body.lower() for m in REFUSALS):
+                continue
+            bad.append(body[:160])
+    return bad
+
+
+def _kept_its_promise(root: Path, said: str,
+                      entries: list[dict]) -> str | None:
+    """Its own claim, in its own description: nothing persists.
+
+    A skill that leaves a venv behind is not wrong about the tests -- it is
+    wrong about the thing it was promoted for.
+    """
+    project = root / "coldproject"
+    left = [p.name for p in project.glob(".venv")] + \
+           [p.name for p in project.glob("*.egg-info")]
+    if left:
+        return f"promised nothing would persist and left {left}"
+    return None
+
+
+# Looking around is not retrying. `ls dir` followed by `ls dir/tests` is one
+# substring of another and means nothing; the same shape in the command that
+# does the work is the signal.
+BROWSING = {"ls", "cat", "which", "find", "head", "tail", "grep", "pwd",
+            "echo", "wc", "stat", "file", "command", "type", "test"}
+
+
+def _commands(stream: str) -> list[str]:
+    out = []
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or '"Bash"' not in line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        for block in event.get("message", {}).get("content", []):
+            if (isinstance(block, dict) and block.get("type") == "tool_use"
+                    and block.get("name") == "Bash"):
+                cmd = str((block.get("input") or {}).get("command", "")).strip()
+                if not cmd:
+                    continue
+                first = cmd.split()[0].split("/")[-1] if cmd.split() else ""
+                if first in BROWSING:
+                    continue
+                out.append(cmd)
+    return out
+
+
+def _worked_as_written(stream: str) -> str | None:
+    """Fired, finished, and needed no improvisation.
+
+    All three read the raw event stream. An earlier version asked whether the
+    skill fired from ``_spoken`` output instead, which holds only assistant
+    prose -- so a skill that had plainly fired was reported as never called.
+    """
+    if PROMOTED_SKILL.parent.name not in _skills_invoked(stream):
+        return f"never fired; called: {_skills_invoked(stream) or 'none'}"
+    if "passed" not in _spoken(stream).lower():
+        return "no passing test run — the procedure did not finish"
+    return _no_retry(stream)
+
+
+def _no_retry(stream: str) -> str | None:
+    """Did the agent have to re-run the skill's command, changed?
+
+    Exit codes were tried first and were wrong in both directions. Too strict:
+    the skill's own probe, `which uv pipx pip3`, exits 1 whenever one of them
+    is absent -- which is the probe working, not failing. Too lax: its test
+    command ends `2>&1 | tail -80`, so the pipeline exits 0 even when pytest
+    fails collection, and the one real defect was invisible.
+
+    A retry survives both. If the agent runs a command and then runs that same
+    command with something added, the first attempt did not do the job, and
+    whatever it added is the rule the skill should have carried.
+    """
+    seen = _commands(stream)
+    for i, earlier in enumerate(seen):
+        for later in seen[i + 1:]:
+            if earlier != later and earlier in later:
+                added = later.replace(earlier, "").strip()
+                return (f"had to re-run its own command with {added!r} added — "
+                        f"that belongs in the skill, not in the recovery")
+    return None
+
+
 def _mundane(out: Path) -> Path:
     from mundane import transcript
     return transcript(out)
@@ -822,6 +983,41 @@ CASES = [
          command="/locate", args="--aspect tools --aspect failures",
          bookmarks=False,
          check_run=_cold_check("cold-mixed")),
+    Case("discovery-fires",
+         asks="a bare Python project and \"run the tests\" — nothing names the skill",
+         breaks="a promoted skill is never used, and the whole pipeline "
+                "produces files nothing reads",
+         transcripts=lambda out: [],
+         command="Run this project's tests.",
+         project=_cold,
+         tools="Bash(uv *),Bash(python3 *),Bash(which *),Bash(ls *),Bash(pytest *),Read,Glob,Skill",
+         denials_expected=True, bookmarks=False,
+         check_stream=_fired),
+    Case("discovery-quiet",
+         asks="the same project, but asked to write a test rather than run one",
+         breaks="the description matches everything, so firing proves nothing",
+         transcripts=lambda out: [],
+         command="Add a test for the parse function's handling of empty input. "
+                 "Do not run anything.",
+         project=_cold,
+         tools="Bash(uv *),Bash(python3 *),Bash(which *),Bash(ls *),Bash(pytest *),Read,Glob,Skill",
+         denials_expected=True, bookmarks=False,
+         check_stream=_stayed_quiet),
+    Case("verify",
+         asks="the promoted skill, followed literally, in a fresh trigger project",
+         breaks="a promoted skill that does not work fires in every matching "
+                "session from now on, and the agent trusts it",
+         transcripts=lambda out: [],
+         command="Run this project's tests.",
+         project=_cold,
+         # Bash unrestricted, in a throwaway project: the skill's subject is
+         # which shell command to reach for, so an allowlist that blocks one
+         # decides the result. Denials are *not* expected here -- one means
+         # the case is malformed, and should say so rather than pass quietly.
+         tools="Bash,Read,Glob,Skill",
+         denials_expected=False, bookmarks=False,
+         check_stream=_worked_as_written,
+         check_run=_kept_its_promise),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
@@ -839,6 +1035,29 @@ def store(root: Path) -> list[dict]:
                          cwd=REPO, env=env, capture_output=True, text=True)
     text = out.stdout.strip()
     return json.loads(text) if text.startswith("[") else []
+
+
+def _skills_invoked(stream: str) -> list[str]:
+    """Which skills the model actually reached for.
+
+    Read from the same event stream as the prose, and from the same tool_use
+    blocks a transcript records. Nothing needs to be instrumented for this: an
+    invocation is already written down, and a hook recording it separately
+    would only add a second account to disagree with the first.
+    """
+    found = []
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or '"Skill"' not in line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        for block in event.get("message", {}).get("content", []):
+            if block.get("type") == "tool_use" and block.get("name") == "Skill":
+                found.append(str((block.get("input") or {}).get("skill", "")))
+    return found
 
 
 def _spoken(stream: str) -> str:
@@ -879,7 +1098,10 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
            "SKILLPP_SKILLS_DIR": str(root / "skills")}
     if case.min_messages is not None:
         env["SKILLPP_MIN_NEW"] = str(case.min_messages)
-    said, why = [], ""
+    # Cold-discovery cases run inside their own project so Claude Code
+    # discovers the skill the way it would in real work.
+    work = case.project(root) if case.project else REPO
+    said, streams, why = [], [], ""
     for path in case.transcripts(root) or [None]:
         prompt = (f"{case.command} {path} {case.args}".strip() if path
                   else f"{case.command} {case.args}".strip())
@@ -888,10 +1110,25 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
              "--no-session-persistence",
              "--output-format", "stream-json", "--verbose",
              "--allowed-tools", case.tools],
-            cwd=REPO, env=env, capture_output=True, text=True, timeout=600)
+            cwd=work, env=env, capture_output=True, text=True, timeout=600)
         said.append(_spoken(proc.stdout))
+        streams.append(proc.stdout)
         if proc.returncode != 0:
-            why = f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}"
+            # Environment failures are not judgements. An expired token, a rate
+            # limit or a network error all reach the store as "nothing was
+            # recorded", which is exactly what a wrong answer looks like.
+            blob = (proc.stdout + proc.stderr).lower()
+            for signal, plain in (
+                    ("oauth", "not authenticated — run `claude` and sign in"),
+                    ("401", "not authenticated — run `claude` and sign in"),
+                    ("rate limit", "rate limited"),
+                    ("529", "the API is overloaded"),
+                    ("econnrefused", "no network")):
+                if signal in blob:
+                    why = f"HARNESS: {plain}, so this case did not run"
+                    break
+            else:
+                why = f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}"
             break
         # A refused tool call reaches the store as an empty store, which is
         # indistinguishable from a judgement that found nothing. Caught here so
@@ -907,6 +1144,8 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
     entries = store(root)
     if not why and case.check:
         why = case.check(entries) or ""
+    if not why and case.check_stream:
+        why = case.check_stream("\n".join(streams)) or ""
     if not why and case.check_run:
         why = case.check_run(root, "\n".join(said), entries) or ""
     if not why and case.bookmarks:
