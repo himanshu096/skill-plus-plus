@@ -18,7 +18,7 @@ from skillpp.capture import fold_session, handle_prompt, handle_tool, handle_ses
 from skillpp.config import Config
 from skillpp.ledger import Entry, Ledger, make_id
 from skillpp import memory
-from skillpp.lifecycle import check_staleness, parse_frontmatter, record_use, scan
+from skillpp.lifecycle import check_staleness, parse_frontmatter, scan
 from skillpp.normalize import normalize_command, parameterize, signature
 from skillpp.recurrence import find_match, similarity
 from skillpp.sanitize import scrub
@@ -562,17 +562,17 @@ class TestLifecycle(TempRoot):
             encoding="utf-8")
         return path
 
-    def test_scan_reports_tiers_and_usage(self):
+    def test_scan_reports_which_tier_each_skill_is_in(self):
+        # Usage used to be asserted here too. It was only ever written by a
+        # PostToolUse hook nobody installed, so in real use every skill read
+        # "never used" -- and an invocation is already recorded in the
+        # transcript, where it can be counted without a second account of it.
         hot = self.root / "skills"
         self._write_skill(hot, "alpha")
         self._write_skill(self.config.cold_dir, "beta")
-        record_use(self.config, "alpha")
-        record_use(self.config, "alpha")
         skills = {s.name: s for s in scan(hot, self.config, self.root)}
         self.assertEqual(skills["alpha"].tier, "hot")
-        self.assertEqual(skills["alpha"].uses, 2)
         self.assertEqual(skills["beta"].tier, "cold")
-        self.assertEqual(skills["beta"].uses, 0)
 
     def test_demotion_moves_files_and_never_deletes(self):
         hot = self.root / "skills"

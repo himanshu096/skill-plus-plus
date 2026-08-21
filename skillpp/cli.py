@@ -908,10 +908,8 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
         marks = []
         if skill.is_stale:
             marks.append(f"STALE({len(skill.stale_refs)})")
-        if skill.uses == 0:
-            marks.append("never used")
         suffix = ("  " + " ".join(marks)) if marks else ""
-        print(f"  [{skill.tier:8}] {skill.name:32} uses={skill.uses}{suffix}")
+        print(f"  [{skill.tier:8}] {skill.name:32}{suffix}")
         if args.verbose and skill.stale_refs:
             for ref in skill.stale_refs:
                 print(f"                 ↳ unresolved {ref}")

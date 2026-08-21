@@ -115,10 +115,6 @@ def handle_tool(config: Config, payload: dict) -> None:
     if not isinstance(raw_input, dict):
         raw_input = {"value": raw_input}
 
-    # A Skill invocation is how tiering learns what is actually used (README 6).
-    if tool == "Skill":
-        from .lifecycle import record_use
-        record_use(config, str(raw_input.get("skill", "")))
     keep = _KEEP_INPUT.get(tool)
     if keep:
         kept = {k: raw_input.get(k) for k in keep if raw_input.get(k) is not None}

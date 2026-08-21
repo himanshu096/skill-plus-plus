@@ -20,7 +20,6 @@ import json
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Config
@@ -49,8 +48,6 @@ class SkillInfo:
     requires_cli: list[str]
     requires_mcp: list[str]
     provenance: str
-    uses: int
-    last_used: str
     stale_refs: list[str]
 
     @property
@@ -100,35 +97,6 @@ def parse_frontmatter(text: str) -> dict:
             out[key] = parsed
             current_parent = key if parsed == {} else None
     return out
-
-
-def usage_path(config: Config) -> Path:
-    return config.root / "usage.json"
-
-
-def load_usage(config: Config) -> dict:
-    path = usage_path(config)
-    if path.exists():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
-
-
-def record_use(config: Config, skill_name: str) -> None:
-    """Called from the PostToolUse hook when a Skill invocation is observed."""
-    if not skill_name:
-        return
-    usage = load_usage(config)
-    entry = usage.setdefault(skill_name, {"uses": 0, "last_used": ""})
-    entry["uses"] = int(entry.get("uses", 0)) + 1
-    entry["last_used"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    try:
-        config.root.mkdir(parents=True, exist_ok=True)
-        usage_path(config).write_text(json.dumps(usage, indent=2), encoding="utf-8")
-    except OSError:
-        pass
 
 
 def _referenced(text: str, body_only: bool = True) -> tuple[list[str], list[str]]:
@@ -195,7 +163,6 @@ def check_staleness(skill_path: Path, project_root: Path | None = None) -> list[
 def scan(skills_dir: Path, config: Config,
          project_root: Path | None = None) -> list[SkillInfo]:
     """Inventory every skill across all tiers."""
-    usage = load_usage(config)
     found: list[SkillInfo] = []
     tiers = [("hot", skills_dir), ("cold", config.cold_dir), ("archived", config.archive_dir)]
     for tier, directory in tiers:
@@ -210,7 +177,6 @@ def scan(skills_dir: Path, config: Config,
             fm = parse_frontmatter(text)
             meta = fm.get("metadata") if isinstance(fm.get("metadata"), dict) else {}
             name = str(fm.get("name") or skill_file.parent.name)
-            stats = usage.get(name, {})
             found.append(SkillInfo(
                 name=name,
                 path=skill_file,
@@ -218,8 +184,6 @@ def scan(skills_dir: Path, config: Config,
                 requires_cli=list(meta.get("requires_cli") or []),
                 requires_mcp=list(meta.get("requires_mcp") or []),
                 provenance=str(meta.get("provenance") or ""),
-                uses=int(stats.get("uses", 0) or 0),
-                last_used=str(stats.get("last_used", "") or ""),
                 stale_refs=check_staleness(skill_file, project_root),
             ))
     return found
