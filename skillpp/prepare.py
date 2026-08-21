@@ -228,12 +228,25 @@ def prepare(target: str | None = None, config: Config | None = None,
     )
 
 
-def render(prepared: Prepared) -> str:
+def render(prepared: Prepared, *, store: bool = True) -> str:
     """The prepared session as text for a prompt.
 
     Where there is nothing to do, that is stated as an instruction rather than
     signalled by an exit code: the caller substitutes this straight into a
     prompt and never sees a status.
+
+    ``store=False`` omits the recorded candidates. They were there so the model
+    could decide whether a proposal matched something already stored; since
+    `--auto-match` that decision is an embedding, and `log-session.md` tells the
+    model outright not to make it. Measured on this machine's store the block is
+    **53% of the prompt** — 13,764 of 25,843 characters — and it grows with the
+    store while the session does not.
+
+    It is a flag rather than a deletion because the block may still be doing
+    work nobody has measured. It shows six procedures with their full section
+    structure immediately before the model is asked how many procedures are in
+    *this* session, which is a plausible source of the run-to-run variance in
+    that count. Plausible, not shown: that is what the flag exists to test.
     """
     head = [
         f"conversation   {prepared.conversation}",
@@ -260,9 +273,12 @@ def render(prepared: Prepared) -> str:
             f"write nothing — they stay unread and will arrive with the next "
             f"batch."])
 
-    parts = ["\n".join(head), "", "# Candidates recorded so far", ""]
-    parts += [prepared.patterns.strip() or "Nothing has been recorded yet.", ""]
-    parts += ["# New in this session", "", prepared.material]
+    parts = ["\n".join(head)]
+    if store:
+        parts += ["", "# Candidates recorded so far", ""]
+        parts += [prepared.patterns.strip() or "Nothing has been recorded yet.",
+                  ""]
+    parts += ["", "# New in this session", "", prepared.material]
     return "\n".join(parts)
 
 

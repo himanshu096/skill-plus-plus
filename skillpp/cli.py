@@ -86,7 +86,7 @@ def cmd_prepare_session(args: argparse.Namespace) -> int:
         return 0
 
     if args.window is None and not args.windows:
-        print(render(prepared))
+        print(render(prepared, store=not args.no_store))
         return 0
 
     from .window import windows
@@ -1236,6 +1236,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="print a session's new work for review")
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
+    p.add_argument("--no-store", action="store_true",
+                   help="omit the recorded candidates. Since --auto-match the "
+                        "model does not use them, and they are half the prompt")
     p.add_argument("--window", type=int, metavar="N",
                    help="print only window N instead of the whole session")
     p.add_argument("--windows", action="store_true",

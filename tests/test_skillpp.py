@@ -3356,3 +3356,65 @@ class TestTheKnobsActuallyReachSomething(TempRoot):
         for name in documented:
             with self.subTest(name):
                 self.assertIn(name, source)
+
+
+class TestRenderWithoutTheStore(TempRoot):
+    """Omitting the recorded candidates from the prompt.
+
+    They were there so the model could decide whether a proposal matched
+    something already recorded. Since `--auto-match` that decision is an
+    embedding and `log-session.md` tells the model not to make it, but the block
+    stayed — measured on the real store, 53% of the prompt, growing with the
+    store while the session does not.
+
+    A flag rather than a deletion: the block shows several procedures with their
+    full section structure immediately before the model is asked how many
+    procedures are in *this* session, which is a plausible source of the
+    run-to-run variance in that count. The flag exists so that can be tested
+    rather than assumed.
+    """
+
+    def prepared(self):
+        from skillpp.prepare import prepare
+        records = []
+        for n in range(MIN_NEW_MESSAGES + 2):
+            records.append(rec(f"u{n}", content=f"request number {n}"))
+        path = write_transcript(self.root, *records, name="s.jsonl")
+        memory.add_entry(self.config, name="already-stored",
+                         body="Do the thing.\n\n## A section\n\nDo it well.")
+        memory.add_occurrence(self.config, name="already-stored", session="old")
+        return prepare(str(path), config=self.config)
+
+    def test_the_default_still_carries_the_store(self):
+        from skillpp.prepare import render
+        text = render(self.prepared())
+        self.assertIn("# Candidates recorded so far", text)
+        self.assertIn("already-stored", text)
+
+    def test_no_store_omits_it(self):
+        from skillpp.prepare import render
+        text = render(self.prepared(), store=False)
+        self.assertNotIn("# Candidates recorded so far", text)
+        self.assertNotIn("already-stored", text)
+
+    def test_no_store_keeps_the_session_and_the_header(self):
+        # The point is to remove one block, not to shrink the prompt generally.
+        # A flag that also dropped the work would make the experiment measure
+        # two changes at once.
+        from skillpp.prepare import render
+        text = render(self.prepared(), store=False)
+        self.assertIn("# New in this session", text)
+        self.assertIn("request number 0", text)
+        self.assertIn("conversation", text)
+        self.assertIn("transcript", text)
+
+    def test_a_session_below_the_floor_still_says_stop_either_way(self):
+        # That message is not part of the store block and must survive, or arm B
+        # would review sessions arm A refuses.
+        from skillpp.prepare import prepare, render
+        path = write_transcript(self.root, rec("u1", content="tiny"),
+                                name="thin.jsonl")
+        thin = prepare(str(path), config=self.config)
+        for store in (True, False):
+            with self.subTest(store=store):
+                self.assertIn("Stop here", render(thin, store=store))
