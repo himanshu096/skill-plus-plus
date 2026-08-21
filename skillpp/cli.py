@@ -86,7 +86,8 @@ def cmd_prepare_session(args: argparse.Namespace) -> int:
         return 0
 
     if args.window is None and not args.windows:
-        print(render(prepared, store=not args.no_store))
+        print(render(prepared,
+                     store=config.include_store and not args.no_store))
         return 0
 
     from .window import windows

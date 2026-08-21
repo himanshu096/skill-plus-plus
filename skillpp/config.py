@@ -80,6 +80,14 @@ class Config:
                                    "http://127.0.0.1:11434")
         self.local_model = _str_env("SKILLPP_LOCAL_MODEL", "qwen2.5:7b")
         self.embed_model = _str_env("SKILLPP_EMBED_MODEL", "nomic-embed-text")
+        # Whether the recorded candidates go into the prompt. An environment
+        # variable rather than a flag: `$ARGUMENTS` in a command template is
+        # substituted into *every* command it contains, and `log-session.md`
+        # runs three. A `--no-store` passed that way reached `record-candidate`
+        # and `commit-session`, which reject it — so the arm meant to test
+        # anchoring measured argparse instead, twice returning zero candidates
+        # because the model correctly refused to run commands that fail.
+        self.include_store = _str_env("SKILLPP_NO_STORE", "") == ""
         # Below this many new messages a review is not worth its fixed cost.
         # Overridable because it is a cost guard rather than a judgement: an
         # eval deliberately pays that cost on a small session, and until this

@@ -129,6 +129,10 @@ class Case:
     # same instructions, different input, which is what makes it a comparison
     # rather than two experiments.
     args: str = ""
+    # Extra environment for this case. Preferred over `args` whenever the
+    # command template runs more than one command: `$ARGUMENTS` is substituted
+    # into all of them, so a flag only one accepts breaks the rest.
+    env: dict[str, str] = field(default_factory=dict)
     check_run: Callable[[Path, str, list[dict]], str | None] | None = None
     # Cold discovery runs somewhere else entirely: a throwaway project holding
     # the skill, so Claude Code discovers it the way it would in real work.
@@ -1082,7 +1086,8 @@ CASES = [
          breaks="two procedures collapse into one entry, or one splits into "
                 "several, and the count a person is asked about is wrong",
          transcripts=lambda out: [_multitask("two-tasks-one-sitting", out)],
-         min_messages=1, args="--no-store",
+         min_messages=1,
+         env={"SKILLPP_NO_STORE": "1"},
          check=_counted(2)),
     Case("multi-three",
          asks="one session holding 3 unrelated finished procedures",
@@ -1096,7 +1101,8 @@ CASES = [
          breaks="two procedures collapse into one entry, or one splits into "
                 "several, and the count a person is asked about is wrong",
          transcripts=lambda out: [_multitask("three-tasks-one-morning", out)],
-         min_messages=1, args="--no-store",
+         min_messages=1,
+         env={"SKILLPP_NO_STORE": "1"},
          check=_counted(3)),
     Case("barren",
          asks="a long session of ordinary git work",
@@ -1178,6 +1184,7 @@ def run(case: Case, *, keep: bool) -> tuple[bool, str, Path, str]:
            "SKILLPP_SKILLS_DIR": str(root / "skills")}
     if case.min_messages is not None:
         env["SKILLPP_MIN_NEW"] = str(case.min_messages)
+    env.update(case.env)
     # Cold-discovery cases run inside their own project so Claude Code
     # discovers the skill the way it would in real work.
     work = case.project(root) if case.project else REPO

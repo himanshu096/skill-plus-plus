@@ -3408,6 +3408,38 @@ class TestRenderWithoutTheStore(TempRoot):
         self.assertIn("conversation", text)
         self.assertIn("transcript", text)
 
+    def test_the_environment_can_withhold_the_store(self):
+        """A variable, not a flag, and the reason is the command template.
+
+        `$ARGUMENTS` is substituted into every command a template runs, and
+        `log-session.md` runs three. A `--no-store` passed that way reached
+        `record-candidate` and `commit-session`, which reject it — so the eval
+        arm meant to test anchoring measured argparse instead, twice banking
+        zero candidates because the model correctly refused to run commands
+        that fail.
+        """
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_NO_STORE": "1"}):
+            self.assertFalse(Config(self.root / "x").include_store)
+        self.assertTrue(Config(self.root / "y").include_store)
+
+    def test_withholding_the_store_leaves_other_commands_alone(self):
+        # The failure mode this replaced: a mechanism that reaches commands it
+        # was never meant to touch.
+        import contextlib
+        import io
+        from skillpp.cli import main
+        records = [rec(f"u{n}", content=f"request {n}")
+                   for n in range(MIN_NEW_MESSAGES + 2)]
+        path = write_transcript(self.root, *records, name="e.jsonl")
+        buf = io.StringIO()
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_NO_STORE": "1",
+                                                   "SKILLPP_MIN_NEW": "1"}):
+            with unittest.mock.patch("sys.stdin", io.StringIO("a body\n\n## s\n\nrun")):
+                with contextlib.redirect_stdout(buf):
+                    code = main(["--root", str(self.config.root),
+                                 "record-candidate", str(path), "--name", "ok"])
+        self.assertEqual(code, 0, buf.getvalue())
+
     def test_a_session_below_the_floor_still_says_stop_either_way(self):
         # That message is not part of the store block and must survive, or arm B
         # would review sessions arm A refuses.
