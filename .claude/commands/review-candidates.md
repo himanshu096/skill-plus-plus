@@ -68,10 +68,15 @@ person can usefully correct, and they cannot correct what they cannot see.
 
 ## On acceptance
 
+- `--requires-cli` — the commands the body actually invokes, comma-separated.
+  `skillpp check` reads these to tell a developer why a skill will not work on
+  their machine; without them it reports every skill as dependency-free.
+
 ```bash
 python3 bin/skillpp promote-candidate "<name>" \
   --description "<what it does. Use when <the situation>.>" \
-  --when-to-use "<trigger phrases or an example request>"
+  --when-to-use "<trigger phrases or an example request>" \
+  --requires-cli "<git,uv,python3>"
 ```
 
 Read back the path it wrote, then stop. Do not open the file, tidy it, or move

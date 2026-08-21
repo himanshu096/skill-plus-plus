@@ -741,6 +741,59 @@ path.
 
 ---
 
+## Fingerprint matching has no operating point — measured on their branch
+
+Run against `feat/episode-filter` directly, its own model (`gemma3n:e4b`), its
+own defaults, two real sessions from this machine. Their recognition step scores
+a command-shaped signature (`bash:python3 | bash:ls`) and merges above
+`SKILLPP_SIMILARITY`, shipped at **0.85**.
+
+**Two ordinary sessions demand contradictory thresholds:**
+
+| session | requirement | why |
+| --- | --- | --- |
+| three test-runner sessions | **< 0.460** | one procedure, three sightings, scoring 0.460–0.503 against each other. Above that they never merge, never reach ×3, never promote |
+| a UI-work session | **> 0.703** | fifteen distinct tasks. Below that, *"I have figured out a new onboarding journey"* merges with *"my previous chat was interrupted"* at **0.703** |
+
+`0.460 < 0.703`, so the window is **empty**. At their default the first session
+splits one procedure into three; at a tuned 0.45 the second falsely merges three
+unrelated tasks under a title that is a developer's prompt.
+
+Command shape is not identity. Two Edit-and-preview loops on different features
+score higher than two runs of the same procedure invoked slightly differently.
+
+Compare the same decision by embedding (`similar.py`, measured on real
+sessions): same procedure 0.848–0.873, different 0.513. A gap of ~0.3 against a
+window here that is negative.
+
+**Three claims to retract if they were repeated anywhere:** their pipeline does
+*not* produce zero skills — tuned to 0.45 it drafted a good SKILL.md and
+independently named it `bootstrapping-an-ephemeral-test-runner`, the same name
+this branch chose. `similarity()` does not score 0.00 here; that number came
+from reading a `signature:` key that is derived, not stored. And 0.45 does not
+"work" — it was derived from the ledger it was then tested on.
+
+### Taken from their draft, because it was better
+
+- **Negative triggers.** Their body carries a *"Do not use this skill when…"*
+  list — active virtualenv, project declares its own command, the request is to
+  write a test rather than run one. Ours said only when it applied, and a skill
+  that does that fires on the neighbouring case too. Now requested in
+  `log-session.md`.
+- **`requires_cli`.** `lifecycle.scan` and `skillpp check` have read this field
+  since long before `promote-candidate` existed, and nothing ever wrote it — so
+  every promoted skill claimed no dependencies and `check` could not fail. Now
+  written, via `--requires-cli`.
+
+### What their draft did not have
+
+No mention of `PYTHONPATH`, from the same three transcripts. That rule exists in
+our skill only because `verify` ran it and caught the collection error. It was
+never in the sessions — it was found by *running* the skill, which is a thing
+neither detector can do.
+
+---
+
 ## Dead ends — do not retry
 
 - **`similarity()` on prose** — splits on ` | `, scores **0.00 on every pair**

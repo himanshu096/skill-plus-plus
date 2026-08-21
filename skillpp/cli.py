@@ -258,11 +258,18 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
     # the skill fires -- before the body has loaded at all.
     if args.when_to_use:
         front.append(f"when_to_use: {json.dumps(args.when_to_use, ensure_ascii=False)}")
-    path.write_text("\n".join(front + [
-        "metadata:",
-        '  source: "skill-plus-plus"',
-        f'  seen: {entry.count}',
-        f'  sessions: {json.dumps(entry.sessions)}',
+    # `lifecycle.scan` and `skillpp check` have read requires_cli since before
+    # this path existed, and nothing has ever written it -- so every promoted
+    # skill claimed no dependencies and `check` could not fail. Taken from the
+    # competing branch's draft output, which declares them.
+    requires = [c.strip() for c in (args.requires_cli or "").split(",") if c.strip()]
+    meta = ["metadata:",
+            '  source: "skill-plus-plus"',
+            f'  seen: {entry.count}',
+            f'  sessions: {json.dumps(entry.sessions)}']
+    if requires:
+        meta.append(f'  requires_cli: {json.dumps(requires)}')
+    path.write_text("\n".join(front + meta + [
         "---",
         "",
         entry.body.strip(),
@@ -1196,6 +1203,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--when-to-use",
                    help="trigger phrases or example requests, appended to the "
                         "description in the skill listing")
+    p.add_argument("--requires-cli",
+                   help="comma-separated commands the skill needs on PATH; "
+                        "read by `skillpp check` and `lifecycle`")
     p.add_argument("--skills-dir")
     p.add_argument("--force", action="store_true",
                    help="overwrite an existing SKILL.md")

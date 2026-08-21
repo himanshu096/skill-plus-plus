@@ -50,6 +50,13 @@ number only when the number *is* the rule — a required flag, a URL suffix, a
 threshold. A failure earns a line only as a rule that prevents it recurring,
 never as an account of it happening.
 
+**Say when *not* to use it.** A short list of the situations a reader might
+mistake for this one, and what to do there instead — an active virtualenv, a
+project that already declares its own command, a request to write the thing
+rather than run it. A skill that only says when it applies fires on the
+neighbouring case too, and a wrong skill is worse than a missing one because
+the agent stops reasoning and follows it.
+
 Redact any credential, token or key rather than repeating it.
 
 Name it in the gerund, lowercase and hyphenated — `reconciling-deck-against-article`,
