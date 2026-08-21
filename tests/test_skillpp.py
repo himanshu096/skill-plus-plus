@@ -2853,6 +2853,72 @@ class TestLocalMatching(TempRoot):
                                      "already-here").count, 0)
 
 
+class TestAutoMatchWithinASession(TempRoot):
+    """A second candidate from the same session is not a second sighting.
+
+    Reproduces a real failure: two distinct procedures recorded from one
+    multi-task session, the second call auto-merged into the first at a score
+    the log reported as 0.603 -- below every threshold in similar.py. The
+    session comparison, not the body comparison, made the call.
+
+    `nearest_session` is handed `prepared.new_messages` joined -- the whole
+    session's new text, not the individual candidate. Both `record-candidate`
+    calls in one `/log-session` run embed the *same* text, because the
+    session's messages do not change between them. So the second call is
+    compared against an exemplar this same call sequence just wrote from
+    identical text, and it cannot help but match -- independent of whether the
+    two procedures share anything at all.
+    """
+
+    def test_a_second_candidate_from_the_same_session_stays_separate(self):
+        import io
+        from skillpp import similar
+        from skillpp.cli import main
+
+        transcript = write_transcript(
+            self.root,
+            *[rec(f"u{n}", content=f"step {n}") for n in range(30)],
+            name="two-chores.jsonl")
+
+        # Session text is identical across both calls, exactly as the real CLI
+        # produces it -- that collision is the point. Body text differs, so the
+        # mock has to tell them apart or a body-comparison collision would mask
+        # whether the session fix actually worked.
+        def fake_embed(text, **_kw):
+            if "weekly" in text:
+                return [0.0, 1.0, 0.0]
+            if "expenses" in text:
+                return [0.0, 0.0, 1.0]
+            return [1.0, 0.0, 0.0]  # the (identical) session text itself
+
+        with unittest.mock.patch.object(similar, "embed",
+                                        side_effect=fake_embed):
+            with unittest.mock.patch("sys.stdin",
+                                     io.StringIO("Draft the weekly update.")):
+                with unittest.mock.patch.dict(os.environ,
+                                              {"SKILLPP_MIN_NEW": "1"}):
+                    code = main(["--root", str(self.config.root),
+                                 "record-candidate", str(transcript),
+                                 "--name", "drafting-weekly-update",
+                                 "--auto-match"])
+            self.assertEqual(code, 0)
+
+            with unittest.mock.patch("sys.stdin",
+                                     io.StringIO("File the month's expenses.")):
+                with unittest.mock.patch.dict(os.environ,
+                                              {"SKILLPP_MIN_NEW": "1"}):
+                    code = main(["--root", str(self.config.root),
+                                 "record-candidate", str(transcript),
+                                 "--name", "filing-expenses",
+                                 "--auto-match"])
+            self.assertEqual(code, 0)
+
+        names = sorted(e.name for e in memory.load(self.config))
+        self.assertEqual(names, ["drafting-weekly-update", "filing-expenses"],
+                         "the second candidate was merged into the first "
+                         "purely because they came from the same session")
+
+
 class TestSessionExemplars(TempRoot):
     """Matching a session against previous sessions, not against a body.
 

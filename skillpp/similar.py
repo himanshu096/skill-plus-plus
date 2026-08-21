@@ -220,14 +220,27 @@ def exemplars(config) -> list[Exemplar]:
     return out
 
 
-def nearest_session(config, text: str, *, model: str = MODEL) -> Nearest | None:
-    """The recorded procedure whose sessions most resemble this one.
+def nearest_session(config, text: str, *, model: str = MODEL,
+                    exclude_session: str | None = None) -> Nearest | None:
+    """The recorded procedure whose *other* sessions most resemble this one.
 
     Scored against the *best* exemplar of each procedure rather than the mean:
     the question is whether this session looks like any previous run of that
     work, and averaging a good match with an unusual one hides it.
+
+    ``exclude_session`` matters whenever a session yields more than one
+    candidate. Every ``record-candidate`` call in one ``/log-session`` run
+    embeds the same text -- the session's new messages do not change between
+    them -- so a second candidate compared against an exemplar this same
+    sequence just wrote scores as a near-perfect match regardless of what the
+    two candidates actually are. Measured: a real multi-task session, second
+    candidate auto-merged into the first at a score reported as 0.603, on text
+    identical to what had just been stored. Excluding the current session is
+    the whole fix; the embedding and the three zones were never wrong.
     """
     stored = exemplars(config)
+    if exclude_session:
+        stored = [item for item in stored if item.session != exclude_session]
     if not stored:
         return None
     chosen = (config.embed_model or model) if config is not None else model

@@ -152,17 +152,19 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
         try:
             prepared_peek = prepare(args.target, config=config)
             near = nearest_session(
-                config, "\n".join(m.text for m in prepared_peek.new_messages))
+                config, "\n".join(m.text for m in prepared_peek.new_messages),
+                exclude_session=prepared_peek.session)
         except (_Unavailable, Exception):  # noqa: BLE001
             near = None
+        session_reason = ""
         if near is not None:
             if near.matches:
                 matches = near.name
-                decided_locally = (f" [session {near.score:.3f} vs "
-                                   f"{near.sessions} sighting(s) of {near.name}]")
+                session_reason = (f"session {near.score:.3f} vs "
+                                  f"{near.sessions} sighting(s) of {near.name}")
             elif near.unsure:
-                decided_locally = (f" [session {near.score:.3f} vs {near.name} "
-                                   f"— too close to call locally]")
+                session_reason = (f"session {near.score:.3f} vs {near.name} "
+                                  f"— too close to call locally")
 
         # Local, and an embedding rather than a judgement. This is the only
         # decision here that scaled with the store: passing every candidate to
@@ -180,9 +182,18 @@ def cmd_record_candidate(args: argparse.Namespace) -> int:
                   file=sys.stderr)
             best = None
         if best is not None:
-            decided_locally = f" [{best.score:.3f} vs {best.name}]"
+            body_reason = f"body {best.score:.3f} vs {best.name}"
             if best.confident:
                 matches = best.name
+        else:
+            body_reason = ""
+        # Both are kept rather than one clobbering the other: a wrong merge is
+        # otherwise reported under whichever reason ran second, hiding the one
+        # that actually made the call. Measured: a self-match at session score
+        # 1.000 was logged as "0.603 vs" -- the body score, for a merge the
+        # session comparison had already decided.
+        reasons = " · ".join(r for r in (session_reason, body_reason) if r)
+        decided_locally = f" [{reasons}]" if reasons else ""
 
     try:
         prepared = prepare(args.target, config=config)
