@@ -779,6 +779,75 @@ promotion.
 
 ---
 
+## Start here: what could still improve detection
+
+Asked and checked directly, at the end of 2026-08-21, before running out of
+turn budget. Not implemented — this is the next agent's starting list, ranked.
+
+### 1. Detection is non-deterministic, and that was never investigated
+
+Measured today, four runs each, same input, same code — see *What 2026-08-21
+established, part two*:
+
+```
+two-tasks-one-sitting:      2 ✓, 1, 1, 2 ✓
+three-tasks-one-morning:    3 ✓, 2, 3 ✓, 2
+```
+
+Nowhere else in this document until now. It matters more than any single
+accuracy number, because every score in the branch comparison above was one
+run each — a result reported as 3/4 could as easily have been 2/4 or 4/4 on a
+different draw.
+
+**Untested hypothesis, cheapest to try:** trim leading exploration before the
+model sees the session (the one thing taken from the other branch's own
+finding — `secrets` flipped from dropped to kept once 9 steps became 3,
+*"the filter had been judging a procedure outnumbered two to one by the greps
+that found it"*). Less marginal material, less room for the judgement to land
+differently. Same session, n runs, before/after, compare spread. A same-
+afternoon experiment, not a build.
+
+### 2. A whole subsystem for the above-budget problem exists, unwired
+
+`skillpp/window.py`, `skillpp/local.py`, `skillpp/reconcile.py`. Not
+abandoned by accident — `reconcile.py`'s own docstring: *"Nothing imports this
+module yet — it was built to join up what a local writer would report per
+window, and there is no local writer."*
+
+What is already measured, in `docs/windowing.md`: real extracts run 60k–128k
+tokens on twelve real sessions; segment sizes (median 290 tokens, p95 2,248);
+`BUDGET = 8,000` derived from that distribution; the carry problem solved
+(1,500-token carry duplicates 12% of segments, a 2-segment carry duplicates
+48%). `local.py` is the cheap span-boundary layer, already working, requires
+Ollama.
+
+**What is missing is one piece: the local writer** — something that reads a
+window and reports what it found, so `reconcile.py` has something to merge.
+That is the concrete next step, not a redesign. The doc's own caveat, worth
+re-reading before starting: *"Not established at all: that this pipeline
+detects the procedures the current whole-session prompt detects."* Unproven
+end to end. This is the only concrete answer this document has to *"Above the
+budget"* below, which has sat open since before 2026-08-21.
+
+### 3. `MIN_NEW_MESSAGES = 25` has never been checked for false negatives
+
+Hard floor in `config.py`. Below it, a session is never reviewed at all —
+`prepare.py` says so and stops. Nobody has measured how many real procedures
+on this machine live in sessions under 25 messages and are silently skipped
+before the model ever sees them. Cheap to check: lower the floor via
+`SKILLPP_MIN_NEW` on a batch of real short sessions and see what, if anything,
+was being missed.
+
+### Ruled out, do not re-attempt
+
+Fingerprint or embedding-based matching as a replacement for the frontier
+judgement — measured to exhaustion on 2026-08-21 (see the branch comparison
+above), independently confirmed dead. Not a different frontier model — every
+miss traced to matching, the review floor, or the token budget, never to the
+model failing to recognise a procedure it could actually see in full.
+
+---
+
 ## Open
 
 **No rejection.** Decided: reject means delete, and the procedure gets a fresh
