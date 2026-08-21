@@ -440,6 +440,40 @@ def _seed_queue(config: Config) -> None:
             add_occurrence(config, name=name, session=f"{name}-{n}")
 
 
+def _multitask(which: str, out: Path) -> Path:
+    import multitask
+    return multitask.ALL[which][0](out)
+
+
+def _counted(want: int):
+    """Exactly `want` distinct procedures, and none of them a duplicate.
+
+    The count is the whole point of these cases, so the check reports what it
+    found rather than only that it was wrong — a run that banks 1 and a run
+    that banks 4 fail for opposite reasons and want different fixes.
+    """
+    def check(entries: list[dict]) -> str | None:
+        if len(entries) != want:
+            return (f"banked {len(entries)}, expected {want}: "
+                    f"{[e['name'] for e in entries]}")
+        thin = [e["name"] for e in entries
+                if len(e["body"].splitlines()) < 3]
+        if thin:
+            return f"recorded but not written as instructions: {thin}"
+        # Two entries naming the same work is the failure the self-match fix
+        # was about, and it can recur without the count changing.
+        for i, a in enumerate(entries):
+            for b in entries[i + 1:]:
+                first = set(a["body"].lower().split())
+                second = set(b["body"].lower().split())
+                overlap = len(first & second) / len(first | second)
+                if overlap > 0.5:
+                    return (f"{a['name']} and {b['name']} are {overlap:.0%} the "
+                            f"same words — one procedure split, not two found")
+        return None
+    return check
+
+
 def _cold(which: str, out: Path) -> Path:
     import cold
     return cold.ALL[which](out)
@@ -1018,6 +1052,52 @@ CASES = [
          denials_expected=False, bookmarks=False,
          check_stream=_worked_as_written,
          check_run=_kept_its_promise),
+    # ---- more than one procedure in a session, and the same prompt twice ----
+    # Ported from the other branch's benchmark, where this branch's detection
+    # was measured as non-deterministic: 2, 1, 1, 2 and 3, 2, 3, 2 over four
+    # runs of identical input. Every accuracy number in either branch
+    # comparison was a single run, so that spread matters more than any of them.
+    #
+    # The paired `-nostore` arms exist to test one hypothesis about why. Half the
+    # prompt is a listing of recorded candidates, complete with their section
+    # structure, immediately before the model is asked how many procedures are
+    # in this session. `--auto-match` means the model no longer uses it. If it is
+    # anchoring the count, removing it should tighten the spread — and if the
+    # spread is unchanged, the cause is elsewhere and the next suspect is the
+    # command file's own wording.
+    #
+    # `min_messages` is set because `two-tasks-one-sitting` is 16 messages and
+    # sits below the floor. It holds two real procedures, which makes it the
+    # first concrete instance of a question the handover lists as unchecked:
+    # how many procedures live in sessions too short to be reviewed at all.
+    Case("multi-two",
+         asks="one session holding 2 unrelated finished procedures",
+         breaks="two procedures collapse into one entry, or one splits into "
+                "several, and the count a person is asked about is wrong",
+         transcripts=lambda out: [_multitask("two-tasks-one-sitting", out)],
+         min_messages=1,
+         check=_counted(2)),
+    Case("multi-two-nostore",
+         asks="the same session with the recorded candidates withheld",
+         breaks="two procedures collapse into one entry, or one splits into "
+                "several, and the count a person is asked about is wrong",
+         transcripts=lambda out: [_multitask("two-tasks-one-sitting", out)],
+         min_messages=1, args="--no-store",
+         check=_counted(2)),
+    Case("multi-three",
+         asks="one session holding 3 unrelated finished procedures",
+         breaks="two procedures collapse into one entry, or one splits into "
+                "several, and the count a person is asked about is wrong",
+         transcripts=lambda out: [_multitask("three-tasks-one-morning", out)],
+         min_messages=1,
+         check=_counted(3)),
+    Case("multi-three-nostore",
+         asks="the same session with the recorded candidates withheld",
+         breaks="two procedures collapse into one entry, or one splits into "
+                "several, and the count a person is asked about is wrong",
+         transcripts=lambda out: [_multitask("three-tasks-one-morning", out)],
+         min_messages=1, args="--no-store",
+         check=_counted(3)),
     Case("barren",
          asks="a long session of ordinary git work",
          breaks="the store fills with 'running-the-test-suite' and stops "
