@@ -53,12 +53,74 @@ PROMOTED = "promoted"
 THRESHOLD = 3
 
 
+# Shell builtins and navigation, which say nothing about what a procedure
+# needs installed.
+_NOT_A_DEPENDENCY = {"cd", "ls", "echo", "cat", "true", "false", "export",
+                     "source", "pwd", "set", "unset", "exit", "read", "test",
+                     "which", "command", "eval", "printf", "sleep", "time"}
+
+
+# A program name, and nothing that is really a fragment of embedded code.
+_PROGRAM = re.compile(r"\A[a-z][a-z0-9._+-]*\Z", re.I)
+
+
+def requires_cli(body: str) -> list[str]:
+    """The programs a procedure's own instructions invoke.
+
+    Read from the **body**, not from the session trace. The trace was tried
+    first and is the wrong source twice over: without segmentation it covers
+    the whole session rather than this one procedure, and raw commands carry
+    embedded code -- `python3 -c "print(f\"...\")"` splits on `;` into tokens
+    like `print(f"` and `opt.step()`. The body is already scoped to the
+    procedure and already written as instructions, which is what a reader
+    would have to install.
+
+    Only fenced blocks and inline code are considered, and only the leading
+    token of each line, so prose naming a tool in passing does not become a
+    declared dependency.
+    """
+    commands: list[str] = []
+    fenced = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            commands.append(stripped)
+        else:
+            commands += re.findall(r"`([^`]+)`", stripped)
+
+    found: set[str] = set()
+    for command in commands:
+        # A fenced block is not necessarily shell. `x = y` with spaces is a
+        # Python assignment; a shell assignment never has them. Without this,
+        # a body showing Python declared `fixed`, `mock` and `original_shape`
+        # as programs to install.
+        if " = " in command:
+            continue
+        for chunk in command.replace("&&", ";").replace("||", ";").split(";"):
+            tokens = chunk.strip().split()
+            if not tokens:
+                continue
+            program = tokens[0]
+            # A path-invoked script is a file in the repo, not something to
+            # install; `NAME=value` is an environment prefix, not a program.
+            if "/" in program or "=" in program:
+                continue
+            if program in _NOT_A_DEPENDENCY or not _PROGRAM.match(program):
+                continue
+            found.add(program)
+    return sorted(found)
+
+
 @dataclass
 class Candidate:
     """One procedure, assembled from its entry file and the logs."""
 
     name: str
     body: str = ""
+
     sessions: list[str] = field(default_factory=list)
     dates: list[str] = field(default_factory=list)
     status: str = CANDIDATE
@@ -96,6 +158,50 @@ def _slug(name: str) -> str:
     """A filename that cannot escape the store directory."""
     keep = [c if (c.isalnum() or c in "-_") else "-" for c in name.strip()]
     return "".join(keep).strip("-") or "unnamed"
+
+
+def steps_path(config: Config, session: str) -> Path:
+    """Beside the session's review, keyed by session rather than by candidate.
+
+    Keyed that way because that is the truth: without segmentation the trace
+    covers everything the session did, not one procedure inside it. Writing a
+    copy per candidate was tried and gave three entries the same 712 steps,
+    which says nothing about any of them.
+
+    Not a section inside a file, either. An ambiguous delimiter has destroyed
+    this store twice -- once on ``##`` and once on ``---``. A separate file
+    needs no delimiter.
+    """
+    return config.reviews_dir / f"{session}.steps.jsonl"
+
+
+def add_steps(config: Config, *, session: str, steps: list[dict]) -> Path | None:
+    """Write a session's trace once. Never reopened."""
+    if not steps or not session:
+        return None
+    path = steps_path(config, session)
+    if path.exists():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(s) + "\n" for s in steps),
+                    encoding="utf-8")
+    return path
+
+
+def read_steps(config: Config, session: str) -> list[dict]:
+    path = steps_path(config, session)
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue          # one bad line, not the whole trace
+    return out
 
 
 def entry_path(config: Config, name: str) -> Path:

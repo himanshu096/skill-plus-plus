@@ -227,7 +227,7 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
     claiming a skill exists when the file was never written is worse than a
     file with no record, because nothing will ever propose the procedure again.
     """
-    from .memory import PROMOTED, find, load, record_decision
+    from .memory import PROMOTED, find, load, record_decision, requires_cli
 
     config = Config(args.root)
     entry = find(load(config), args.name)
@@ -262,7 +262,11 @@ def cmd_promote_candidate(args: argparse.Namespace) -> int:
     # this path existed, and nothing has ever written it -- so every promoted
     # skill claimed no dependencies and `check` could not fail. Taken from the
     # competing branch's draft output, which declares them.
-    requires = [c.strip() for c in (args.requires_cli or "").split(",") if c.strip()]
+    # Derived from the body's own commands; the flag only overrides. A model
+    # asked to list dependencies either guesses or forgets, and this is the one
+    # field `skillpp check` reads.
+    requires = ([c.strip() for c in args.requires_cli.split(",") if c.strip()]
+                if args.requires_cli else requires_cli(entry.body))
     meta = ["metadata:",
             '  source: "skill-plus-plus"',
             f'  seen: {entry.count}',
@@ -1204,8 +1208,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="trigger phrases or example requests, appended to the "
                         "description in the skill listing")
     p.add_argument("--requires-cli",
-                   help="comma-separated commands the skill needs on PATH; "
-                        "read by `skillpp check` and `lifecycle`")
+                   help="override the commands derived from the recorded "
+                        "trace; read by `skillpp check` and `lifecycle`")
     p.add_argument("--skills-dir")
     p.add_argument("--force", action="store_true",
                    help="overwrite an existing SKILL.md")

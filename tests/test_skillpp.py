@@ -2853,6 +2853,137 @@ class TestLocalMatching(TempRoot):
                                      "already-here").count, 0)
 
 
+class TestTheStepTrace(TempRoot):
+    """What actually ran, kept beside the body that generalises it.
+
+    Taken from the competing branch, which retains a numbered trace per entry.
+    Measured on four real sessions: its recall was never the problem, and the
+    trace is the one artefact it had that this branch did not.
+
+    Kept per *session* rather than per candidate. Per candidate was tried and
+    gave three entries from one session the same 712 steps -- true of the
+    session, useless about any of the three. Without segmentation the session
+    is the honest granularity, and saying so is better than implying a
+    precision that is not there.
+    """
+
+    STEPS = [{"tool": "Bash", "input": {"command": "uv run --with pytest pytest"}},
+             {"tool": "Write", "input": {"file_path": "/tmp/x.md"}}]
+
+    def test_the_trace_is_not_inside_the_entry_file(self):
+        """A `## Steps` section would need splitting back out on read.
+
+        An ambiguous delimiter has destroyed this store twice -- once on `##`,
+        once on `---`. A separate file needs no delimiter at all.
+        """
+        memory.add_entry(self.config, name="filing", body="Intro.\n\n## Rule\n\nDo it.")
+        memory.add_steps(self.config, session="s1", steps=self.STEPS)
+        entry = (self.config.patterns_dir / "filing.md").read_text()
+        self.assertNotIn("uv run", entry)
+        self.assertIn("## Rule", memory.find(memory.load(self.config), "filing").body)
+
+    def test_a_body_containing_a_steps_heading_still_round_trips(self):
+        body = "Intro.\n\n## Steps\n\n1. `do the thing`\n\n## Rule\n\nDo it."
+        memory.add_entry(self.config, name="filing", body=body)
+        memory.add_steps(self.config, session="s1", steps=self.STEPS)
+        self.assertEqual(memory.find(memory.load(self.config), "filing").body, body)
+
+    def test_the_trace_is_written_once(self):
+        path = memory.add_steps(self.config, session="s1", steps=self.STEPS)
+        before = path.read_bytes()
+        memory.add_steps(self.config, session="s1",
+                         steps=[{"tool": "Bash", "input": {"command": "rm -rf /"}}])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_a_corrupt_line_does_not_lose_the_trace(self):
+        memory.add_steps(self.config, session="s1", steps=self.STEPS)
+        with memory.steps_path(self.config, "s1").open("a", encoding="utf-8") as fh:
+            fh.write("{not json\n")
+        self.assertEqual(len(memory.read_steps(self.config, "s1")), 2)
+
+    def test_the_trace_file_is_not_mistaken_for_an_entry(self):
+        memory.add_entry(self.config, name="filing", body="b")
+        memory.add_steps(self.config, session="s1", steps=self.STEPS)
+        self.assertEqual([c.name for c in memory.load(self.config)], ["filing"])
+
+
+class TestTraceIsScrubbedBeforeDisk(TempRoot):
+    """Their capture's input whitelist, ported for the reason it exists.
+
+    Storing raw tool input was tried and gave a 621 KB trace holding whole
+    file bodies and both sides of every edit, unscrubbed. A credential in an
+    edited file went to disk verbatim.
+    """
+
+    def make(self, name, **inp):
+        from skillpp.transcript import Block, Message
+        return Message(uuid="u1", role="assistant", timestamp="t",
+                       blocks=(Block(kind="tool_use", name=name, tool_input=inp),))
+
+    def test_a_write_keeps_its_path_and_drops_its_contents(self):
+        from skillpp.prepare import trace
+        secret = "export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY"
+        steps = trace([self.make("Write", file_path="/tmp/x.sh", content=secret)])
+        self.assertEqual(steps[0]["input"], {"file_path": "/tmp/x.sh"})
+
+    def test_an_edit_keeps_neither_side_of_the_change(self):
+        from skillpp.prepare import trace
+        steps = trace([self.make("Edit", file_path="/tmp/x.py",
+                                 old_string="token = 'abc'",
+                                 new_string="token = 'def'")])
+        self.assertEqual(steps[0]["input"], {"file_path": "/tmp/x.py"})
+
+    def test_a_command_is_kept_because_the_argument_is_the_step(self):
+        from skillpp.prepare import trace
+        steps = trace([self.make("Bash", command="uv run --with pytest pytest")])
+        self.assertIn("uv run", steps[0]["input"]["command"])
+
+    def test_a_long_argument_is_truncated(self):
+        from skillpp.prepare import trace
+        steps = trace([self.make("Bash", command="echo " + "x" * 5000)],
+                      max_chars=100)
+        self.assertLess(len(steps[0]["input"]["command"]), 200)
+
+    def test_a_read_contributes_nothing_but_its_name(self):
+        from skillpp.prepare import trace
+        steps = trace([self.make("Read", file_path="/tmp/secrets.env")])
+        self.assertEqual(steps[0], {"tool": "Read", "input": {}})
+
+
+class TestDerivedDependencies(TempRoot):
+    """`skillpp check` reads requires_cli, and nothing ever wrote it."""
+
+    def test_only_commands_count_not_prose(self):
+        body = ("Run the suite.\n\n```\nuv run --with pytest pytest tests/\n```\n\n"
+                "Then `git status --short`. Mention docker in passing only.")
+        self.assertEqual(memory.requires_cli(body), ["git", "uv"])
+
+    def test_embedded_code_does_not_become_a_dependency(self):
+        """The reason this reads the body and not the raw trace.
+
+        Deriving from captured commands produced `print(f\"`, `opt.step()` and
+        `§4.2.3` as declared dependencies, because splitting on `;` walks into
+        the Python inside `python3 -c`.
+        """
+        body = '```\npython3 -c "print(f\'x\'); opt.step(); print(1)"\n```'
+        self.assertEqual(memory.requires_cli(body), ["python3"])
+
+    def test_python_in_a_fence_is_not_a_list_of_programs(self):
+        """A fenced block is not necessarily shell.
+
+        Measured on a real body: a Python snippet declared `fixed`, `mock` and
+        `original_shape` as commands to install.
+        """
+        body = "```\nfixed = compute(x)\nmock = Mock()\n```\n\n`python3 -m pytest`"
+        self.assertEqual(memory.requires_cli(body), ["python3"])
+
+    def test_a_repo_script_is_not_something_to_install(self):
+        self.assertEqual(memory.requires_cli("```\n./scripts/run.sh\n```"), [])
+
+    def test_an_environment_prefix_is_not_a_program(self):
+        self.assertEqual(memory.requires_cli("```\nPYTHONPATH=. pytest -q\n```"), [])
+
+
 class TestAutoMatchWithinASession(TempRoot):
     """A second candidate from the same session is not a second sighting.
 

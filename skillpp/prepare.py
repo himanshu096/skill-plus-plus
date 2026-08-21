@@ -319,6 +319,55 @@ def _existing_mark(prepared: Prepared) -> tuple[str, str] | None:
     return (uuid, stamp) if uuid or stamp else None
 
 
+# Which arguments are worth keeping, per tool. Taken from the competing
+# branch, where the same table is why its captured commands stay parseable.
+# Storing raw input was tried here and produced a 621 KB trace holding whole
+# file bodies -- `Write.content`, both sides of every `Edit` -- and no
+# scrubbing, so a credential in an edited file landed on disk verbatim.
+#
+# For `Bash` the argument *is* the step, so the command is kept. For a write
+# the argument is the *product*, and the path is the whole of what a later
+# reader needs.
+_KEEP_INPUT = {
+    "Bash": ("command", "description"),
+    "Write": ("file_path",),
+    "Edit": ("file_path",),
+    "NotebookEdit": ("file_path",),
+}
+
+
+def trace(messages, max_chars: int = 2000) -> list[dict]:
+    """Every tool call in the reviewed slice, in order, scrubbed before disk.
+
+    Deliberately not the extractor's output: that is compressed for a prompt
+    and drops what it judges unnecessary. This is the record of what was done,
+    which is a different job -- redrafting a body whose instructions turned out
+    wrong, without going back to the transcript.
+
+    MCP arguments are kept the way the extractor keeps them, since for a
+    remote call the argument is the step. Everything else keeps its name only.
+    """
+    from .sanitize import scrub_obj
+
+    out: list[dict] = []
+    for message in messages:
+        for block in message.blocks:
+            if block.kind != "tool_use":
+                continue
+            raw = dict(block.tool_input or {})
+            keep = _KEEP_INPUT.get(block.name)
+            if keep:
+                kept = {k: raw[k] for k in keep if raw.get(k) is not None}
+            elif block.name.startswith("mcp__"):
+                kept = {k: v for k, v in list(raw.items())[:5]
+                        if isinstance(v, (str, int, float, bool))}
+            else:
+                kept = {}
+            out.append({"tool": block.name,
+                        "input": scrub_obj(kept, max_chars)})
+    return out
+
+
 def record(prepared: Prepared, *, name: str, body: str,
            matches: str | None = None, now: datetime | None = None) -> Path:
     """Fold one proposed skill into the store. Leaves the bookmark alone.
@@ -327,8 +376,8 @@ def record(prepared: Prepared, *, name: str, body: str,
     a session may yield three candidates or none, and the bookmark should move
     exactly once either way.
     """
-    from .memory import (add_entry, add_occurrence, entry_path, find, load,
-                         render as render_store)
+    from .memory import (add_entry, add_occurrence, add_steps, entry_path,
+                         find, load, render as render_store)
 
     config = prepared.config
     if matches:
@@ -347,6 +396,11 @@ def record(prepared: Prepared, *, name: str, body: str,
         verdict = f"another sighting of: {target.name}"
     else:
         written = add_entry(config, name=name, body=body)
+        # What the session actually ran, kept so a body that turns out wrong
+        # can be redrafted without the transcript. Session-scoped, because
+        # without segmentation that is the honest granularity.
+        add_steps(config, session=prepared.session,
+                  steps=trace(prepared.new_messages))
         add_occurrence(config, name=name, session=prepared.session)
         verdict = "new"
 
