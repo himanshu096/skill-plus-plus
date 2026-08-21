@@ -1,7 +1,8 @@
 # Handover — session review (`feat/pattern-detection`)
 
-Branch: `feat/pattern-detection`, clean tree, pushed through `9258fdc`.
-**259 tests pass:** `python3 -m unittest discover -s tests -q`.
+Branch: `feat/pattern-detection`, clean tree, **4 commits ahead of origin and
+not pushed** (origin is at `9258fdc`).
+**275 tests pass:** `python3 -m unittest discover -s tests -q`.
 **40 eval cases.** `python3 tests/evals/run.py` spends a real model call per
 case, so run `--case <name>` unless a full sweep is actually wanted. Which cases
 are verified and which are stale is in *Testing*.
@@ -26,6 +27,112 @@ and `/locate` are that pipeline. Nothing local has been tried yet; the standing
 instruction is not to until the frontier arm is clean.
 
 ---
+
+---
+
+## Fixed 2026-08-21: a session did not need another session to look like itself
+
+`nearest_session` compared this session's text against every stored exemplar
+with no guard against one written earlier **in the same run**. Every
+`record-candidate --auto-match` call in one `/log-session` embeds the same text
+— a session's new messages do not change between calls — so a second candidate
+was compared against an exemplar that same sequence had just written from
+identical text. It could not help but match.
+
+**Detection was never wrong; matching silently undid it.** On
+`two-chores-one-sitting` the model wrote two correct, distinct bodies and the
+merge collapsed them at a score logged as `0.603` — below every threshold in
+`similar.py`. That was the *body* comparison; the *session* comparison, which
+actually decided it, scored **1.000** and was overwritten in the log by
+whichever check ran second.
+
+Fixed by `exclude_session`, and by keeping both reasons rather than one
+clobbering the other. **0 of 3 multi-task cases split correctly before, 3 of 3
+after.** `TestAutoMatchWithinASession` reproduces it end to end.
+
+Found only because a benchmark written by someone else claimed this branch
+banks exactly one candidate per session. It did — for a reason nobody here had
+looked for.
+
+---
+
+## What 2026-08-21 established, part two: run against the other branch
+
+`feat/episode-filter` was run directly — its worktree, its model
+(`gemma3n:e4b`, pulled), its defaults — over **four real sessions from this
+machine**. Scoring **detection only**: both branches hand the body to the same
+frontier model, so draft quality measures Claude, not either design.
+
+| session | this branch | theirs, shipped defaults |
+| --- | --- | --- |
+| three test-runner sessions | 1 skill, promoted, verified firing | **0** — one procedure split into three entries at ×1 |
+| `ac68cada` (UI work, 1028 tools) | 2 candidates | **0** — 32 entries, sift kept 2, draft declined both |
+| `54b0e6cf` (email + doc audit) | 2 candidates | **0** — procedure trimmed before matching ran |
+| `610b2d40` (ROS/ML, 712 tools) | 3 candidates | **0** — 32 entries, 0 ready |
+
+Their **recall was never the problem**: `docker`, `reset --hard` and `EOF` all
+sit in their ledger for the session this branch drew three procedures from.
+Recognition is.
+
+### Two independent failures, both measured on their code
+
+**No viable similarity threshold exists.** Their signature is command-shaped
+(`bash:python3 | bash:ls`) and merges above `SKILLPP_SIMILARITY`, shipped at
+0.85. Two ordinary sessions demand contradictory values:
+
+| session | requires | why |
+| --- | --- | --- |
+| test-runner | **< 0.460** | one procedure, three sightings, scoring 0.460–0.503 against each other |
+| UI work | **> 0.703** | *"I have figured out a new onboarding journey"* scores **0.703** against *"my previous chat was interrupted"* |
+
+`0.460 < 0.703`, so the window is empty. At 0.85 the first splits; at a tuned
+0.45 the second falsely merges three unrelated tasks. Command shape is not
+identity. The same decision by embedding (`similar.py`) separates at
+0.848–0.873 versus 0.513 — a gap of ~0.3 against a window here that is
+negative.
+
+**Read-only work is invisible.** The email procedure is `git log`, `git
+status`, `git diff`, `git branch` — every one classified read-only, so the
+leading-exploration trim removes the whole episode, and with no `git commit`
+there is no completion marker either. Invisible twice over, and unreachable by
+tuning: nothing survives to be matched. A procedure whose product is *prose*
+leaves no mutating command.
+
+### Taken from them, because it was better
+
+- **The step trace** (`ce906df`). They keep what literally ran; this branch
+  kept only the generalised body. That is the missing input for redrafting a
+  body that turns out wrong — the `PYTHONPATH` case — without going back to
+  the transcript.
+- **Their input whitelist**, ported with it, and the reason their commands stay
+  parseable. Raw input gave a 621 KB trace holding whole file bodies and both
+  sides of every edit, **unscrubbed** — a credential in an edited file went to
+  disk verbatim. Now 255 KB, paths only for writes, everything through
+  `scrub_obj`.
+- **Negative triggers and `requires_cli`** (`ad953ca`). Their draft carries a
+  *"do not use this skill when"* list and declares its dependencies. Both are
+  prompt design rather than detection, and worth having regardless.
+
+### Three claims from this comparison that were wrong
+
+Recorded because each was stated with confidence before being checked:
+
+1. *"Their pipeline produces zero skills."* Tuned to 0.45 it drafted a good
+   SKILL.md and independently named it `bootstrapping-an-ephemeral-test-runner`
+   — the same name this branch chose.
+2. *"`similarity()` scores 0.00."* That number came from reading a
+   `signature:` key that is derived, not stored.
+3. *"0.45 works."* Derived from the ledger it was then tested on, and it
+   false-merges on the next session.
+
+### Using their harness correctly
+
+`replay.py` sends one `Stop` per assistant turn. Their dispatcher routes
+`Stop` to the same handler as `SessionEnd`, so every turn ended the session and
+every span folded at one step — nothing banked at all. Their installer
+registers only `("UserPromptSubmit", "PostToolUse", "SessionEnd")`, so no
+`Stop` hook exists in deployment and suppressing it reproduces their real path.
+**A genuine `replay.py` incompatibility, worth telling them about.**
 
 ---
 
@@ -215,6 +322,7 @@ one 440-step blob. Full method in `docs/bakeoff.md`. Treat as settled.
 | `~/.claude/skillpp/patterns/<name>.md` | one candidate, written once, never reopened for writing |
 | `~/.claude/skillpp/occurrences.jsonl` | one line per sighting; the count is how many there are |
 | `~/.claude/skillpp/decisions.jsonl` | one line per human decision; the last one is the status |
+| `~/.claude/skillpp/reviews/<session>.steps.jsonl` | what that session literally ran, scrubbed — the input for redrafting a body |
 | `~/.claude/skillpp/reviews/<session-id>.md` | what a session proposed **and how far it read** |
 | `<repo>/.claude/skills/<name>/SKILL.md` | a promoted skill — the only thing that lands in a repo |
 
