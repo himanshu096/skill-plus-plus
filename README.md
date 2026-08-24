@@ -248,7 +248,7 @@ Claude Code fires hooks — shell commands receiving JSON on stdin — at `PreTo
 | Trace capture | `PostToolUse` / `PreToolUse` hooks |
 | Intent capture | `UserPromptSubmit` hook |
 | Ledger write + review nudge | `SessionEnd` hook |
-| Pull-based review UI | `.claude/commands/skillpp-review.md` → `/skillpp-review` |
+| Pull-based review UI | `.claude/commands/review-candidates.md` → `/review-candidates` |
 | Skill output | `.claude/skills/<name>/SKILL.md` + `scripts/` |
 | Dependency check at pull | Diff declared deps against `.mcp.json` and connected `mcp__<server>__<tool>` names |
 | Progressive disclosure | Native — `name` + `description` indexed, body loaded on demand |
@@ -335,7 +335,7 @@ skillpp/
   lifecycle.py   hot/cold/archived tiering, staleness, usage tracking
   install.py     settings.json wiring (dry run by default)
   cli.py         command dispatch
-commands/skillpp-review.md   /skillpp-review — review captured candidates
+commands/review-candidates.md /review-candidates — decide on waiting candidates
 commands/skillpp-new.md      /skillpp-new    — build a skill from a description
 examples/demo.sh             end-to-end walkthrough on a scratch ledger
 tests/test_skillpp.py        63 tests
@@ -344,7 +344,7 @@ tests/test_skillpp.py        63 tests
 ### Division of labour
 
 The CLI does everything deterministic: capture, scrub, deduplicate, detect
-gaps, summarise effects, manage tiers. The `/skillpp-review` command drives an
+gaps, summarise effects, manage tiers. The `/review-candidates` command drives an
 agent through everything that needs judgement — resolving what the repository
 can answer, asking the developer at most three questions, and writing prose
 worth reading. Neither half is useful alone.
@@ -388,7 +388,7 @@ Deliberately deferred — see §13 for phasing.
 * **Semantic deduplication.** Similarity is lexical — sequence and token
   overlap over normalised step shapes. No embeddings, because this runs inside
   a hook where a network round-trip is unacceptable. Semantic overlap is the
-  reviewing agent's job, and `/skillpp-review` instructs it accordingly.
+  reviewing agent's job, and `/review-candidates` instructs it accordingly.
 * **Script extraction.** The slash command tells the agent to lift
   deterministic pipelines into `scripts/run.sh`; the CLI does not do it
   automatically.

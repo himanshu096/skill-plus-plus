@@ -116,11 +116,15 @@ These are product calls, not cleanup. Each needs an answer before Phase 3.
 | --- | --- | --- | --- |
 | ~~**D1**~~ | ~~ignore / never-propose-again~~ | **Decided 2026-08-24: ported.** `reject-candidate` writes a `rejected` decision with the count at refusal. It is **never re-proposed** — sightings keep accruing as visible evidence (`turned down at 4x · done 9x since`) and `reopen-candidate` is the only way back, deliberately a person's call. An auto-return after three more sightings was built first and reverted: re-asking about something just refused is what gets the tool switched off. | done (`d87aca9`, revised) |
 | ~~**D2**~~ | ~~TTL / expiry~~ | **Decided 2026-08-24: promise dropped, expiry not built.** Age is the wrong signal — a procedure done four times in June beats one done once last week — and D1 covers the real case, which is "this specific thing, not now" rather than "anything old". Six entries on disk after weeks, so there is no volume problem to solve. | done, docs only |
-| **D3** | **`search`** | `cmd_search` reads `Ledger` (`cli.py:839`); README calls it a headline differentiator (`:290`, `:315`). Against an empty ledger it always returns nothing. | repoint at `patterns/` · drop |
+| ~~**D3**~~ | ~~`search`~~ | **Decided 2026-08-24: repointed.** `memory.search` scores query tokens over name (weighted double) and body. Word matching, not the embedding used for candidate matching — a person searching a remembered phrase wants that phrase, and a plausible near-miss is a worse answer than an honest empty one. | done |
 | **D4** | **`dictate`** | Ledger-only end-to-end. No memory equivalent. README sells it (`:76`). | port · drop |
-| **D5** | **`skillpp-review.md` / `skillpp-new.md`** | Superseded by `review-candidates.md`. `skillpp-review.md:78` misdescribes matching as "lexical only" — it is embeddings. Also 10 bare-`skillpp` invocations and no `allowed-tools`. | delete both copies · repoint |
+| **D5** | ~~`skillpp-review.md`~~ / **`skillpp-new.md`** | **Half done 2026-08-24.** `skillpp-review.md` deleted, both copies, README repointed at `/review-candidates`. **`skillpp-new.md` is held: it is the UI for `dictate`, so deleting it decides D4.** The plan paired them; they are not a pair. | `skillpp-new.md` blocked on D4 |
 
-**D1 and D2 are settled.** D3–D5 remain.
+**D1, D2, D3 settled; D5 half done. D4 is the only open decision.**
+
+D5 turned out to depend on D4: `skillpp-new.md` is the only interface to
+`dictate`, so deleting it decides whether a skill can come from a description
+rather than observed work. `skillpp-review.md` had no such tie and is gone.
 
 D1 was the gate, and it turned out to be mostly latent rather than missing:
 `load` sets status from whatever action a decision line carries, so a

@@ -1499,6 +1499,59 @@ class TestSkillsDirRedirect(unittest.TestCase):
                 self.assertEqual(default_skills_dir(tmp), local)
 
 
+class TestSearchingTheStore(TempRoot):
+    """`search` read the ledger, which stopped being written to on 13 August.
+
+    A search that always answers "nothing matches" is worse than no search: it
+    reports absence rather than its own disuse, and a developer takes it at its
+    word.
+    """
+
+    def seed(self):
+        memory.add_entry(self.config, name="auditing-a-handover-doc",
+                         body="Check every claim against the repo.\n\n"
+                              "Grep for what the doc says is missing.")
+        memory.add_occurrence(self.config, name="auditing-a-handover-doc",
+                              session="s1")
+        memory.add_entry(self.config, name="filing-a-bug",
+                         body="Search the tracker before filing a duplicate.")
+        memory.add_occurrence(self.config, name="filing-a-bug", session="s2")
+
+    def names(self, query):
+        return [c.name for _, c in memory.search(memory.load(self.config), query)]
+
+    def test_it_finds_by_words_in_the_name(self):
+        self.seed()
+        self.assertEqual(self.names("handover"), ["auditing-a-handover-doc"])
+
+    def test_it_finds_by_words_in_the_body(self):
+        self.seed()
+        self.assertEqual(self.names("duplicate"), ["filing-a-bug"])
+
+    def test_the_name_outweighs_the_body(self):
+        """A procedure named for what it does is what a person half-remembers."""
+        self.seed()
+        ranked = self.names("filing tracker")
+        self.assertEqual(ranked[0], "filing-a-bug")
+
+    def test_hyphens_in_a_name_are_word_boundaries(self):
+        self.seed()
+        self.assertIn("auditing-a-handover-doc", self.names("auditing doc"))
+
+    def test_a_genuine_miss_says_nothing_rather_than_guessing(self):
+        """Word matching, not the embedding used for candidate matching.
+
+        A plausible near-miss is a worse answer than an honest empty one when
+        somebody is searching for a phrase they remember typing.
+        """
+        self.seed()
+        self.assertEqual(self.names("kubernetes"), [])
+
+    def test_an_empty_query_matches_nothing(self):
+        self.seed()
+        self.assertEqual(self.names("   "), [])
+
+
 class TestRejection(TempRoot):
     """Turned down, and the only thing that brings it back.
 

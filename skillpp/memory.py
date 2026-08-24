@@ -347,6 +347,32 @@ def trace_for(config: Config, candidate: "Candidate") -> list[dict]:
     return out
 
 
+def search(candidates: list[Candidate], query: str) -> list[tuple[float, Candidate]]:
+    """Entries matching a query, best first.
+
+    Substring token scoring over the name and the body, which is all there is
+    to match on — the store keeps a written procedure rather than the parsed
+    intents and steps the ledger held. Deliberately not the embedding used for
+    *matching*: a developer searching for "migration rollback" wants the words
+    they typed, and a near-miss on meaning is a worse answer than nothing.
+
+    The name is weighted double. A procedure named for what it does is the
+    strongest signal in the entry, and it is the thing a person half-remembers.
+    """
+    terms = [t.lower() for t in re.split(r"\W+", query) if t]
+    if not terms:
+        return []
+    found: list[tuple[float, Candidate]] = []
+    for candidate in candidates:
+        name = candidate.name.lower().replace("-", " ")
+        body = candidate.body.lower()
+        score = sum(2.0 for t in terms if t in name)
+        score += sum(1.0 for t in terms if t in body)
+        if score:
+            found.append((score / (2 * len(terms)), candidate))
+    return sorted(found, key=lambda pair: (-pair[0], pair[1].name))
+
+
 def find(candidates: list[Candidate], name: str) -> Candidate | None:
     """By name, then by slug, so a renamed-on-disk entry is still reachable."""
     for candidate in candidates:

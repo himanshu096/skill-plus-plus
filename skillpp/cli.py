@@ -923,15 +923,29 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    """Search the ledger for entries matching the query."""
+    """Find a recorded procedure by words a developer remembers.
+
+    Reads the memory store, not the ledger. It read the ledger until 2026-08-24
+    and the ledger stopped being written to on 13 August, so it answered every
+    query with "nothing matches" — a search that is always empty is worse than
+    no search, because it reports absence rather than its own disuse.
+
+    Word matching rather than the embedding used for matching candidates: a
+    person searching for a phrase wants that phrase, and a plausible near-miss
+    is a worse answer than an honest empty one.
+    """
+    from .memory import PROMOTED, REJECTED, load, search
+
     config = Config(args.root)
-    results = Ledger(config).search(" ".join(args.query))
+    results = search(load(config), " ".join(args.query))
     if not results:
-        print("Nothing in the ledger matches that.")
+        print("Nothing recorded matches that.")
         return 0
     for score, entry in results[: args.limit]:
-        print(f"  {entry.id}  ×{entry.occurrences}  [{score:.2f}]  {entry.title[:60]}")
-        print(f"            last seen {entry.last_seen[:10]} · {len(entry.steps)} steps")
+        mark = {PROMOTED: "✓ ", REJECTED: "✗ "}.get(entry.status, "  ")
+        print(f"{mark}x{entry.count}  [{score:.2f}]  {entry.name}")
+        where = entry.skill_path or f"{config.patterns_dir}/{entry.name}.md"
+        print(f"          last seen {entry.last_seen} · {where}")
     return 0
 
 
