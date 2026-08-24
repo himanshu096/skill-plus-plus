@@ -36,7 +36,7 @@ nothing real. See §12 for what is built and what is not.
 ┌──────────────────────────────────────────────────────────────┐
 │                         THE LEDGER                           │
 │   Compact markdown candidate entries — never raw traces      │
-│   Searchable · local-first · unapproved entries expire 7–14d │
+│   Searchable · local-first · turned-down entries can return   │
 └───────────────────────────────┬──────────────────────────────┘
                                 │
              ┌──────────────────┴──────────────────┐
@@ -90,7 +90,9 @@ The ledger is not just a suggestion queue; it is a searchable record of your own
 * **Recurrence signal:** Workflows recurring **3+ times** across sessions are flagged as proposal candidates.
 * **User query:** Developers can search the ledger directly — *"that migration rollback from last Tuesday"* — and promote a one-off themselves. This matters because value and frequency correlate only weakly: the highest-value procedures (incident response, cert rotation, quarterly release) are often rare by nature.
 
-Unapproved candidates expire and self-delete after 7–14 days.
+Candidates are not expired on a timer. A developer turns one down explicitly,
+and it returns only if the procedure happens three more times than when it was
+refused — see *Turning a candidate down* below.
 
 ### Step 4 — Review & Promotion (pull, never push)
 
@@ -202,9 +204,9 @@ The real cost of an unused skill is index bloat, not disk. So skills are **demot
 | **Archived** | Retained, surfaced only by explicit lookup. |
 
 * **Staleness ≠ disuse.** A skill rots when the script it calls is renamed or the flag it passes is removed. Decay is detected by checking whether referenced paths, commands, and tools still resolve — a cheap, accurate signal that a timer cannot approximate.
-* **Expiry applies to the ledger, not the library.** Unapproved candidates disappear after 7–14 days; anything a human blessed is kept.
+* **Nothing expires on a timer.** A TTL was specified here and never built for the memory store, and the reason it was not is that age is the wrong signal: a procedure done four times in June is worth more than one done once last week. What removes a candidate from the queue is a person turning it down, which is a decision with a reason attached rather than a clock running out.
 * **Deleting a skill is a decision, not an accident.** A deleted skill's workflow is parked in the ignore list, not re-proposed — re-proposing something the developer just deleted is the fastest way to get the whole tool switched off. `skillpp reconcile` reports the drift; `--apply` does the parking.
-* **An ignore means "not now", not "never".** Ignored workflows keep matching and keep counting. Once one has recurred as many times *since* being ignored as it took to propose it originally, it is flagged — the developer parked it and then kept doing the work by hand, which is evidence worth surfacing. It is still never re-proposed automatically: `skillpp ignored` shows the flag, `skillpp reopen` acts on it. The ignore set is listable and reversible throughout — a parking space, not a shredder.
+* **Turning a candidate down means "not now", not "never".** `skillpp reject-candidate <name>` records the count at the moment of refusal. The entry, its body and its provenance all stay; the decision is one appended line. The procedure leaves the review queue and is offered again once it has happened three more times than when it was turned down — the developer said no knowing it had happened N times, and "I have now done this three more" is the one argument that refusal could not have answered. Refusing again moves the bar up from the new count, so a second no is not undone by the sightings that prompted it.
   > Matching ignored entries is load-bearing, not incidental. Entry ids derive from the workflow signature, so an ignored entry that failed to match would be silently overwritten by the next recurrence — resurrecting it as a fresh candidate and erasing the developer's decision. Suppression therefore lives at the surfacing layer, never at the matching layer.
 * **Storage.** Skill files average 1.5–3 KB; a full organizational library stays under 5 MB. The ledger stays in the same range because entries are summarized on write rather than stored as raw traces.
 * **Context cost.** Agents load only the lightweight `name` + `description` index, pulling full instructions into the context window on demand.
@@ -361,7 +363,7 @@ worth reading. Neither half is useful alone.
 | `skillpp promote <id> --skill-path <p>` | Mark a candidate promoted |
 | `skillpp ignore <id>` · `ignored` · `reopen <id>` | Park a workflow so it is never proposed; list the ignore set; put one back in the queue |
 | `skillpp reconcile` | Report promoted skills whose file was deleted (reports only — never decides) |
-| `skillpp expire` | Delete unapproved candidates past TTL |
+| `skillpp reject-candidate <name>` | Turn a candidate down; it returns if the procedure recurs three more times |
 | `skillpp lifecycle` / `tier <name> <tier>` | Inventory and demotion |
 | `skillpp check --name <n>` | Dependency check at pull time (exit 2 if missing) |
 | `skillpp bundle --out <dir> [--format upload\|plugin]` | Package skills: `upload` = one zip per skill for Customize → Skills; `plugin` = `.claude-plugin/` + `skills/` |
@@ -370,7 +372,7 @@ worth reading. Neither half is useful alone.
 ### Built
 
 Capture with intent, sanitize-on-write (typed placeholders that keep
-signatures stable), the ledger with lexical dedup and TTL expiry, all five
+signatures stable), the ledger with lexical dedup, all five
 trace gap signals from §4 with the three-question cap and duplicate
 suppression, the dictation path with its completeness check and threshold
 bypass, effect-first proposals, scaffolding with declared deps and

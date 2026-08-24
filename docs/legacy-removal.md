@@ -114,14 +114,26 @@ These are product calls, not cleanup. Each needs an answer before Phase 3.
 
 | # | gap | evidence | options |
 | --- | --- | --- | --- |
-| **D1** | **ignore / never-propose-again** | `decisions.jsonl` records only `promoted`. `memory.py` has zero ignore support. | port to memory store · rebuild · drop the capability |
-| **D2** | **TTL / expiry** | `memory.py` has no expire. README promises 7–14d. Memory entries are write-once, which fights TTL. | add expiry · drop the promise from docs |
+| ~~**D1**~~ | ~~ignore / never-propose-again~~ | **Decided 2026-08-24: ported.** `reject-candidate` writes a `rejected` decision with the count at refusal; the entry returns to the queue after `THRESHOLD` more sightings. Most of it already worked — `load` took any action string and `reviewable` filtered on `CANDIDATE`. | done (`d87aca9`) |
+| ~~**D2**~~ | ~~TTL / expiry~~ | **Decided 2026-08-24: promise dropped, expiry not built.** Age is the wrong signal — a procedure done four times in June beats one done once last week — and D1 covers the real case, which is "this specific thing, not now" rather than "anything old". Six entries on disk after weeks, so there is no volume problem to solve. | done, docs only |
 | **D3** | **`search`** | `cmd_search` reads `Ledger` (`cli.py:839`); README calls it a headline differentiator (`:290`, `:315`). Against an empty ledger it always returns nothing. | repoint at `patterns/` · drop |
 | **D4** | **`dictate`** | Ledger-only end-to-end. No memory equivalent. README sells it (`:76`). | port · drop |
 | **D5** | **`skillpp-review.md` / `skillpp-new.md`** | Superseded by `review-candidates.md`. `skillpp-review.md:78` misdescribes matching as "lexical only" — it is embeddings. Also 10 bare-`skillpp` invocations and no `allowed-tools`. | delete both copies · repoint |
 
-**D1 is the one that matters.** Detection currently has no way for a developer to
-say "stop proposing this". Losing it silently is worse than the dead code.
+**D1 and D2 are settled.** D3–D5 remain.
+
+D1 was the gate, and it turned out to be mostly latent rather than missing:
+`load` sets status from whatever action a decision line carries, so a
+`rejected` line already dropped an entry out of the queue. What it needed was
+the vocabulary, a command, and two display fixes — `render` had been grouping
+everything non-candidate under "Made into skills", which would have shown a
+turned-down procedure to a model as a skill that exists.
+
+**Phase 3 consequence of D2:** `SKILLPP_TTL_DAYS` and `cmd_expire` go with
+`ledger.py` as planned, and no replacement is written. `README.md` no longer
+promises a TTL. `docs/claude-code.md:348` still shows `skillpp expire`; it is
+left for the Phase 4 rewrite rather than patched, since that file is the
+dormant path end to end.
 
 ---
 
