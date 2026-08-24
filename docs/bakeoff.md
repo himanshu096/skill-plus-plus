@@ -5,6 +5,19 @@ solve the same problem from opposite ends, and both were built far enough to
 test. This records what happened when the second one was run against the first
 one's fixtures.
 
+> **Every score below is one run per session, and detection is now known to be
+> non-deterministic.** Measured 2026-08-21 over 38 runs of a single fixture: 61%
+> pooled, with three honest batches of the same experiment returning 88%, 40%
+> and 60%. A single-run margin therefore carries an interval it does not state,
+> and 5-of-6 against 2-of-6 should be read as an ordering rather than a score.
+>
+> The ordering is probably safe. The other branch returned nothing at all on four
+> real sessions, and its failures were traced to structure — a similarity window
+> that is empty, since one session needs a threshold below 0.460 and another
+> above 0.703, and read-only work trimmed away before matching runs — rather than
+> to an unlucky draw. The margins are not safe. See *Detection is
+> non-deterministic* in `HANDOVER.md`.
+
 | | this branch | the capture branch |
 | --- | --- | --- |
 | When detection happens | at review, over a whole transcript | live, one hook payload at a time |
