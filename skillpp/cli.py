@@ -607,6 +607,47 @@ _REDRAFT_OPEN = "<<<SKILLPP-BODY"
 _REDRAFT_CLOSE = "SKILLPP-BODY>>>"
 
 
+def cmd_dictate_skill(args: argparse.Namespace) -> int:
+    """Record a procedure a developer described rather than one that was watched.
+
+    Named apart from the ledger's `cmd_dictate`, which still exists until Phase
+    3 deletes it. They shared a name for one test run and the later definition
+    silently won -- a shadowing that argparse wires up without complaint.
+
+    Rebuilt for this store rather than ported. The ledger's version parsed the
+    prose into steps and ran a completeness check in code, which was the right
+    split when there was no model in the loop; here the body arrives already
+    written, and asking what the description leaves out is the reviewing
+    agent's job -- see `/dictate-skill`.
+
+    The provenance says `dictated-<date>` instead of a session id, because no
+    session happened. That is also what lets it skip the recurrence threshold:
+    three sightings are a proxy for "worth someone's attention", and a person
+    describing a procedure on purpose has supplied that judgement directly.
+    """
+    from datetime import date as _date
+    from .memory import DICTATED, add_entry, add_occurrence, find, load
+
+    config = Config(args.root)
+    body = sys.stdin.read().strip()
+    if not body:
+        print("nothing on stdin; a dictated skill still needs a body",
+              file=sys.stderr)
+        return 1
+    if find(load(config), args.name) is not None:
+        print(f"{args.name!r} is already recorded. Entries are written once; "
+              f"use `redraft` to propose a new body for it.", file=sys.stderr)
+        return 1
+
+    written = add_entry(config, name=args.name, body=body)
+    session = f"{DICTATED}-{args.on or _date.today().isoformat()}"
+    add_occurrence(config, name=args.name, session=session, today=args.on)
+    print(f"dictated: {args.name} -> {written}")
+    print("It skips the recurrence threshold and is waiting in "
+          "/review-candidates now.")
+    return 0
+
+
 def cmd_reject_candidate(args: argparse.Namespace) -> int:
     """Turn a candidate down. It leaves the queue and can come back.
 
@@ -714,8 +755,12 @@ def cmd_redraft(args: argparse.Namespace) -> int:
         return 0
 
     if not steps:
-        print(f"No trace for {entry.name!r}: it was recorded before traces were "
-              f"kept, so there is nothing to redraft against.", file=sys.stderr)
+        from .memory import dictated
+        why = ("it was described rather than observed, so no session ever ran it"
+               if dictated(entry)
+               else "it was recorded before traces were kept")
+        print(f"No trace for {entry.name!r}: {why}, so there is nothing to "
+              f"redraft against.", file=sys.stderr)
         return 1
 
     argv = [part.replace("{prompt}", f"/skillpp-redraft {entry.name}")
@@ -1393,6 +1438,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open-only", action="store_true",
                    help="only those not yet made into skills")
     p.set_defaults(func=cmd_candidates)
+
+    p = sub.add_parser("dictate-skill",
+                       help="record a described procedure (body on stdin)")
+    p.add_argument("--name", required=True)
+    p.add_argument("--on", help="date to record it under (default: today)")
+    p.set_defaults(func=cmd_dictate_skill)
 
     p = sub.add_parser("reject-candidate",
                        help="turn a candidate down; it stops being proposed")

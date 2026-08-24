@@ -117,14 +117,22 @@ These are product calls, not cleanup. Each needs an answer before Phase 3.
 | ~~**D1**~~ | ~~ignore / never-propose-again~~ | **Decided 2026-08-24: ported.** `reject-candidate` writes a `rejected` decision with the count at refusal. It is **never re-proposed** — sightings keep accruing as visible evidence (`turned down at 4x · done 9x since`) and `reopen-candidate` is the only way back, deliberately a person's call. An auto-return after three more sightings was built first and reverted: re-asking about something just refused is what gets the tool switched off. | done (`d87aca9`, revised) |
 | ~~**D2**~~ | ~~TTL / expiry~~ | **Decided 2026-08-24: promise dropped, expiry not built.** Age is the wrong signal — a procedure done four times in June beats one done once last week — and D1 covers the real case, which is "this specific thing, not now" rather than "anything old". Six entries on disk after weeks, so there is no volume problem to solve. | done, docs only |
 | ~~**D3**~~ | ~~`search`~~ | **Decided 2026-08-24: repointed.** `memory.search` scores query tokens over name (weighted double) and body. Word matching, not the embedding used for candidate matching — a person searching a remembered phrase wants that phrase, and a plausible near-miss is a worse answer than an honest empty one. | done |
-| **D4** | **`dictate`** | Ledger-only end-to-end. No memory equivalent. README sells it (`:76`). | port · drop |
-| **D5** | ~~`skillpp-review.md`~~ / **`skillpp-new.md`** | **Half done 2026-08-24.** `skillpp-review.md` deleted, both copies, README repointed at `/review-candidates`. **`skillpp-new.md` is held: it is the UI for `dictate`, so deleting it decides D4.** The plan paired them; they are not a pair. | `skillpp-new.md` blocked on D4 |
+| ~~**D4**~~ | ~~`dictate`~~ | **Decided 2026-08-24: kept, rebuilt.** Not ported — the ledger's version parsed prose into steps and checked completeness in code, which was right before there was a model in the loop. `dictate-skill` takes a written body and `/dictate-skill` asks what the description leaves out. Provenance reads `dictated-<date>`, and that is what lets it skip the recurrence threshold. | done |
+| ~~**D5**~~ | ~~both command files~~ | **Done 2026-08-24.** `skillpp-review.md` → `/review-candidates`; `skillpp-new.md` → `/dictate-skill`, after D4 settled. They were listed as one item and were two: the second was the only interface to `dictate`, so deleting it would have decided D4 by omission. | done |
 
-**D1, D2, D3 settled; D5 half done. D4 is the only open decision.**
+**All five are settled. Phase 3 is unblocked.**
 
-D5 turned out to depend on D4: `skillpp-new.md` is the only interface to
-`dictate`, so deleting it decides whether a skill can come from a description
-rather than observed work. `skillpp-review.md` had no such tie and is gone.
+Two of them were not the decisions the table described. D1 was mostly already
+built — `load` took any action string, so a `rejected` line already dropped an
+entry from the queue; what was missing was vocabulary, a command and two
+display fixes. And D5 was two items wearing one row: deleting `skillpp-new.md`
+would have decided D4 by omission.
+
+**What Phase 3 must now keep**, beyond the plan's "port, do not delete" list:
+`cmd_search` is repointed at the store and stays; `cmd_dictate` (ledger) is
+replaced by `cmd_dictate_skill` and only the former goes. They shared a name
+for one test run and the later definition silently won, so delete by line
+rather than by name.
 
 D1 was the gate, and it turned out to be mostly latent rather than missing:
 `load` sets status from whatever action a decision line carries, so a

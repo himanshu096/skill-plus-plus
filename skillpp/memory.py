@@ -57,6 +57,17 @@ PROMOTED = "promoted"
 # with `reopen`. The decision to look again stays theirs.
 REJECTED = "rejected"
 
+# A dictated entry has no session, because nobody watched the work -- a person
+# described it. Its provenance says so rather than inventing a session id, and
+# `dictated` reads it back off that rather than off a stored flag, so the two
+# cannot disagree.
+DICTATED = "dictated"
+
+
+def dictated(candidate: "Candidate") -> bool:
+    """Was this described rather than observed?"""
+    return any(s.startswith(DICTATED) for s in candidate.sessions)
+
 # Below this a recorded procedure is an observation, not a proposal. One
 # sighting is a thing that happened; two is a coincidence. Putting either in
 # front of a person spends the only attention the store gets on work that has
@@ -408,8 +419,14 @@ def reviewable(candidates: list[Candidate],
         resolved = THRESHOLD
     # Only candidates. A turned-down entry keeps counting but never reappears
     # here: `reopen` is the way back, and it is a person's call.
+    #
+    # A dictated entry skips the threshold. Recurrence is a proxy for "worth
+    # a person's attention", and dictation is that judgement made directly --
+    # waiting for a described procedure to be observed three times asks for
+    # evidence the developer has already replaced with their own.
     return [c for c in candidates
-            if c.status == CANDIDATE and c.count >= resolved]
+            if c.status == CANDIDATE
+            and (c.count >= resolved or dictated(c))]
 
 
 def order(candidates: list[Candidate]) -> list[Candidate]:

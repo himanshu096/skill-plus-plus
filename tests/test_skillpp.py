@@ -1499,6 +1499,70 @@ class TestSkillsDirRedirect(unittest.TestCase):
                 self.assertEqual(default_skills_dir(tmp), local)
 
 
+class TestDictatedSkills(TempRoot):
+    """A procedure described rather than watched.
+
+    Rebuilt for this store rather than ported from the ledger: the old version
+    parsed prose into steps and checked completeness in code, which was right
+    when no model was in the loop. Here the body arrives written, and asking
+    what a description leaves out is the reviewing agent's job.
+    """
+
+    BODY = "Search before filing.\n\n## Check for a duplicate\n\nBy signature."
+
+    def dictate(self, name="filing-by-hand", body=None, on="2026-08-24"):
+        import io
+        from skillpp.cli import main
+        with unittest.mock.patch("sys.stdin", io.StringIO(body or self.BODY)):
+            return main(["--root", str(self.config.root), "dictate-skill",
+                         "--name", name, "--on", on])
+
+    def test_its_provenance_says_it_was_not_observed(self):
+        """No session id is invented for work nobody watched."""
+        self.dictate()
+        entry = memory.find(memory.load(self.config), "filing-by-hand")
+        self.assertEqual(entry.sessions, ["dictated-2026-08-24"])
+        self.assertTrue(memory.dictated(entry))
+
+    def test_it_skips_the_recurrence_threshold(self):
+        """Three sightings are a proxy for a judgement the developer just made.
+
+        Waiting for a described procedure to be observed three times asks for
+        evidence they have already replaced with their own.
+        """
+        self.dictate()
+        queue = memory.reviewable(memory.load(self.config), config=self.config)
+        self.assertEqual([c.name for c in queue], ["filing-by-hand"])
+
+    def test_an_observed_entry_still_waits_for_the_threshold(self):
+        """The bypass is for dictation, not a hole in the threshold."""
+        memory.add_entry(self.config, name="watched", body="b")
+        memory.add_occurrence(self.config, name="watched", session="s1")
+        self.dictate()
+        queue = memory.reviewable(memory.load(self.config), config=self.config)
+        self.assertEqual([c.name for c in queue], ["filing-by-hand"])
+
+    def test_an_empty_body_is_refused(self):
+        self.assertEqual(self.dictate(body="   "), 1)
+        self.assertEqual(memory.load(self.config), [])
+
+    def test_it_will_not_overwrite_an_existing_entry(self):
+        """Entries are written once, dictated or not."""
+        self.dictate()
+        before = (self.config.patterns_dir / "filing-by-hand.md").read_bytes()
+        self.assertEqual(self.dictate(body="something else"), 1)
+        self.assertEqual((self.config.patterns_dir / "filing-by-hand.md")
+                         .read_bytes(), before)
+
+    def test_a_rejection_still_applies_to_a_dictated_entry(self):
+        """The bypass is of the threshold, not of the developer's decisions."""
+        self.dictate()
+        memory.record_decision(self.config, name="filing-by-hand",
+                               action=memory.REJECTED, at_count=1)
+        self.assertEqual(memory.reviewable(memory.load(self.config),
+                                           config=self.config), [])
+
+
 class TestSearchingTheStore(TempRoot):
     """`search` read the ledger, which stopped being written to on 13 August.
 

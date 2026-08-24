@@ -336,7 +336,7 @@ skillpp/
   install.py     settings.json wiring (dry run by default)
   cli.py         command dispatch
 commands/review-candidates.md /review-candidates — decide on waiting candidates
-commands/skillpp-new.md      /skillpp-new    — build a skill from a description
+commands/dictate-skill.md    /dictate-skill  — build a skill from a description
 examples/demo.sh             end-to-end walkthrough on a scratch ledger
 tests/test_skillpp.py        63 tests
 ```
@@ -394,9 +394,9 @@ Deliberately deferred — see §13 for phasing.
   automatically.
 * **Automatic provisional→trusted promotion.** The tier is recorded and
   readable; usage counts are tracked; nothing promotes on them yet.
-* **Voice input.** Dictation is text-only — `skillpp dictate` and
-  `/skillpp-new`. Speech-to-text is somebody else's job; the parser does not
-  care how the words arrive.
+* **Voice input.** Dictation is text-only — `skillpp dictate-skill` and
+  `/dictate-skill`. Speech-to-text is somebody else's job; nothing downstream
+  cares how the words arrive.
 * **The OS-level shell daemon.** Capture is Claude Code hooks only, which is
   the sequencing argued for in §11.
 
