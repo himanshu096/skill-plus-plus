@@ -16,19 +16,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from .capture import fold_dictation, log_error
+
 from .config import Config, default_skills_dir
-from .ledger import (IGNORED_STATUSES, Ledger, STATUS_CANDIDATE,
-                     STATUS_IGNORED, STATUS_PROMOTED)
+
 from .lifecycle import move_tier, scan
-from .signals import detect
-from .summary import (check_dependencies, questions_for, render_proposal,
-                      scaffold_skill)
 
 
 # --------------------------------------------------------------------------
 # hook — must never fail loudly
 # --------------------------------------------------------------------------
+
+def log_error(config: Config, message: str) -> None:
+    """Append a hook failure to the log instead of raising.
+
+    Inlined from `capture.py` when the ledger half was deleted: `cmd_hook` was
+    its only remaining caller, and a seven-line file-append does not need a
+    module of its own.
+    """
+    try:
+        config.root.mkdir(parents=True, exist_ok=True)
+        with config.log_file.open("a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.now(timezone.utc).isoformat()} {message}\n")
+    except OSError:
+        pass
+
 
 def cmd_hook(args: argparse.Namespace) -> int:
     """Read a hook payload on stdin and queue the session for review.
@@ -896,77 +907,6 @@ def cmd_commit_session(args: argparse.Namespace) -> int:
 # ledger inspection
 # --------------------------------------------------------------------------
 
-def cmd_review(args: argparse.Namespace) -> int:
-    """List ledger candidates ready for review."""
-    config = Config(args.root)
-    ledger = Ledger(config)
-    entries = ledger.candidates(ready_only=not args.all)
-    if args.json:
-        print(json.dumps([{
-            "id": e.id, "title": e.title, "occurrences": e.occurrences,
-            "steps": len(e.steps), "last_seen": e.last_seen,
-            "questions": len(questions_for(e, config)),
-            "deps_cli": e.deps_cli, "deps_mcp": e.deps_mcp,
-        } for e in entries], indent=2))
-        return 0
-    if not entries:
-        scope = "candidates" if args.all else f"candidates at {config.recurrence_threshold}+ occurrences"
-        print(f"No {scope} in the ledger.")
-        return 0
-    print(f"{len(entries)} candidate(s) ready for review:\n")
-    for entry in entries:
-        n_q = len(questions_for(entry, config))
-        flag = f"  {n_q} question(s)" if n_q else "  no open questions"
-        print(f"  {entry.id}  ×{entry.occurrences}  {entry.title[:58]}")
-        print(f"            {len(entry.steps)} steps ·{flag} · last seen {entry.last_seen[:10]}")
-    print(f"\nInspect one:  skillpp show <id>")
-    return 0
-
-
-def cmd_dictate(args: argparse.Namespace) -> int:
-    """Create a candidate from a description instead of an observed trace."""
-    config = Config(args.root)
-    config.ensure_dirs()
-    text = args.text if args.text else sys.stdin.read()
-    result = fold_dictation(config, text, args.title or "")
-    if result["status"] == "empty":
-        print("Nothing to work with — describe the workflow in a sentence or two.",
-              file=sys.stderr)
-        return 1
-    entry = Ledger(config).get(result["id"])
-    if args.json:
-        print(json.dumps({
-            "id": entry.id, "status": result["status"], "title": entry.title,
-            "steps": [s["input"]["text"] for s in entry.steps],
-            "questions": [q.to_dict() for q in questions_for(entry, config)],
-            "total_questions": len(detect(entry)),
-        }, indent=2))
-        return 0
-    if result["status"] == "merged":
-        print(f"That matches an existing dictated candidate: {entry.id}\n")
-    print(render_proposal(entry, config))
-    return 0
-
-
-def cmd_show(args: argparse.Namespace) -> int:
-    """Render a candidate's proposal, evidence and open questions."""
-    config = Config(args.root)
-    entry = Ledger(config).get(args.id)
-    if not entry:
-        print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-        return 1
-    if args.json:
-        print(json.dumps({
-            "id": entry.id, "title": entry.title, "occurrences": entry.occurrences,
-            "intents": entry.intents, "steps": entry.steps,
-            "deps_cli": entry.deps_cli, "deps_mcp": entry.deps_mcp,
-            "questions": [q.to_dict() for q in questions_for(entry, config)],
-        }, indent=2))
-        return 0
-    print(render_proposal(entry, config))
-    return 0
-
-
 def cmd_search(args: argparse.Namespace) -> int:
     """Find a recorded procedure by words a developer remembers.
 
@@ -994,159 +934,9 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stats(args: argparse.Namespace) -> int:
-    """Print ledger size and status counts."""
-    config = Config(args.root)
-    stats = Ledger(config).stats()
-    print(f"ledger      {config.ledger_dir}")
-    print(f"entries     {stats['total']}")
-    print(f"  candidate {stats['candidates']}  (ready: {stats['ready']})")
-    print(f"  promoted  {stats['promoted']}")
-    print(f"  dismissed {stats['dismissed']}")
-    print(f"size        {stats['bytes'] / 1024:.1f} KB")
-    return 0
-
-
 # --------------------------------------------------------------------------
 # promotion
 # --------------------------------------------------------------------------
-
-def cmd_scaffold(args: argparse.Namespace) -> int:
-    """Generate a starting SKILL.md for a candidate."""
-    config = Config(args.root)
-    entry = Ledger(config).get(args.id)
-    if not entry:
-        print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-        return 1
-    answers = json.loads(args.answers) if args.answers else {}
-    text = scaffold_skill(entry, args.name, args.description, answers, args.tier)
-    if args.out:
-        out = Path(args.out).expanduser()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
-        print(f"wrote {out}")
-    else:
-        print(text)
-    return 0
-
-
-def cmd_promote(args: argparse.Namespace) -> int:
-    """Mark a candidate promoted. The SKILL.md itself is written by the agent."""
-    config = Config(args.root)
-    ledger = Ledger(config)
-    entry = ledger.get(args.id)
-    if not entry:
-        print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-        return 1
-    skill_path = Path(args.skill_path).expanduser() if args.skill_path else None
-    if skill_path and not skill_path.exists():
-        print(f"Skill file does not exist: {skill_path}", file=sys.stderr)
-        return 1
-    entry.status = STATUS_PROMOTED
-    entry.skill_path = str(skill_path) if skill_path else ""
-    entry.promoted_at = datetime.now(timezone.utc).replace(
-        microsecond=0).isoformat()
-    if args.note:
-        entry.notes = args.note
-    ledger.save(entry)
-    print(f"promoted {entry.id}" + (f" → {skill_path}" if skill_path else ""))
-    return 0
-
-
-def cmd_ignore(args: argparse.Namespace) -> int:
-    """Park a workflow so it is never proposed again."""
-    config = Config(args.root)
-    ledger = Ledger(config)
-    entry = ledger.get(args.id)
-    if not entry:
-        print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-        return 1
-    was = entry.status
-    entry.status = STATUS_IGNORED
-    entry.ignored_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    entry.ignored_at_occurrences = entry.occurrences
-    if args.note:
-        entry.notes = args.note
-    ledger.save(entry)
-    print(f"ignored {entry.id} (was {was}) — {entry.title[:50]}")
-    print("Reverse with:  skillpp reopen " + entry.id)
-    return 0
-
-
-def cmd_ignored(args: argparse.Namespace) -> int:
-    """List the ignore set — the category is only useful if it is visible."""
-    config = Config(args.root)
-    entries = [e for e in Ledger(config).all() if e.status in IGNORED_STATUSES]
-    threshold = config.recurrence_threshold
-    if args.json:
-        print(json.dumps([{
-            "id": e.id, "title": e.title, "notes": e.notes,
-            "occurrences": e.occurrences, "ignored_at": e.ignored_at,
-            "recurrences_since_ignored": e.recurrences_since_ignored,
-            "ignore_looks_wrong": e.ignore_looks_wrong(threshold),
-        } for e in entries], indent=2))
-        return 0
-    if not entries:
-        print("Nothing ignored.")
-        return 0
-
-    print(f"{len(entries)} ignored workflow(s) — never proposed:\n")
-    nagging = []
-    for entry in entries:
-        since = entry.recurrences_since_ignored
-        mark = "  ⚠" if entry.ignore_looks_wrong(threshold) else ""
-        print(f"  {entry.id}  ×{entry.occurrences}  {entry.title[:52]}{mark}")
-        if entry.ignored_at:
-            tail = f", {since}× since" if since else ""
-            print(f"            ignored {entry.ignored_at[:10]}{tail}")
-        if entry.notes:
-            print(f"            {entry.notes[:70]}")
-        if entry.ignore_looks_wrong(threshold):
-            nagging.append(entry)
-
-    if nagging:
-        print(f"\n⚠ {len(nagging)} of these have recurred {threshold}+ times since "
-              f"you ignored them.\n  You keep doing the work — worth a second look:")
-        for entry in nagging:
-            print(f"    skillpp reopen {entry.id}   {entry.title[:44]}")
-    print("\nBring one back:  skillpp reopen <id>")
-    return 0
-
-
-def cmd_reopen(args: argparse.Namespace) -> int:
-    """Return a workflow to the review queue, from ignored or promoted."""
-    config = Config(args.root)
-    ledger = Ledger(config)
-    entry = ledger.get(args.id)
-    if not entry:
-        print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-        return 1
-    was = entry.status
-    if was == STATUS_CANDIDATE:
-        print(f"{entry.id} is already a candidate")
-        return 0
-    entry.status = STATUS_CANDIDATE
-    entry.skill_path = ""
-    entry.notes = args.note or f"Reopened from {was}."
-    ledger.save(entry)
-    ready = entry.ready(config.recurrence_threshold)
-    print(f"reopened {entry.id} (was {was}) — {entry.title[:50]}")
-    print("  surfaces in `skillpp review` now" if ready
-          else f"  at {entry.occurrences} occurrence(s); needs "
-               f"{config.recurrence_threshold} to surface")
-    return 0
-
-
-def cmd_expire(args: argparse.Namespace) -> int:
-    """Delete unapproved candidates past their TTL."""
-    config = Config(args.root)
-    removed = Ledger(config).expire()
-    print(f"expired {len(removed)} unapproved candidate(s) older than "
-          f"{config.candidate_ttl_days} days")
-    for entry_id in removed:
-        print(f"  {entry_id}")
-    return 0
-
 
 # --------------------------------------------------------------------------
 # lifecycle
@@ -1175,48 +965,44 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
 
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
-    """Match promoted ledger entries against the skills actually on disk."""
+    """Match promoted entries against the skill files actually on disk.
+
+    Reports only. `--apply` used to park a missing skill into the ledger's
+    ignore list; there is no ignore list any more, and the memory store's
+    equivalent -- `reject-candidate` -- is a decision a person makes rather
+    than one drift-detection makes for them. So the flag prints what it would
+    have decided and leaves the deciding.
+    """
     from .lifecycle import reconcile
 
     config = Config(args.root)
-    skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
-    result = reconcile(Ledger(config), skills_dir, config)
+    skills_dir = (Path(args.skills_dir).expanduser() if args.skills_dir
+                  else default_skills_dir())
+    result = reconcile(config, skills_dir)
 
     print(f"{len(result['ok'])} promoted skill(s) present and accounted for")
 
     if result["missing"]:
-        verb = "moved to the ignore list" if args.apply else "would move to the ignore list"
-        print(f"\n{len(result['missing'])} promoted skill(s) no longer on disk — {verb}:")
+        print(f"\n{len(result['missing'])} promoted skill(s) no longer on disk:")
         for entry in result["missing"]:
-            when = f" (promoted {entry.promoted_at[:10]})" if entry.promoted_at else ""
-            print(f"\n  {entry.id}  {entry.title[:52]}{when}")
-            print(f"            gone: {entry.skill_path}")
-            if args.apply:
-                entry.status = STATUS_IGNORED
-                entry.ignored_at = datetime.now(timezone.utc).replace(
-                    microsecond=0).isoformat()
-                entry.ignored_at_occurrences = entry.occurrences
-                entry.notes = (
-                    f"Skill deleted (was {entry.skill_path}). Parked here rather "
-                    f"than re-proposed. If the workflow keeps recurring, "
-                    f"`skillpp ignored` will flag it."
-                )
-                entry.skill_path = ""
-                Ledger(config).save(entry)
-            else:
-                print(f"            skillpp reopen {entry.id}   → propose it again")
+            when = f" (promoted {entry.promoted_on})" if entry.promoted_on else ""
+            print(f"\n  {entry.name}{when}")
+            print(f"      gone: {entry.skill_path}")
+            print(f"      it stays out of the review queue while the file is "
+                  f"missing — `reopen-candidate {entry.name}` to propose it "
+                  f"again, or leave it if the deletion was meant.")
 
     if result["unlinked"]:
         print(f"\n{len(result['unlinked'])} promoted without a recorded path "
               f"(cannot verify):")
         for entry in result["unlinked"]:
-            print(f"  {entry.id}  {entry.title[:60]}")
+            print(f"  {entry.name}")
 
     if result["orphaned"]:
-        print(f"\n{len(result['orphaned'])} skill(s) authored here whose ledger "
-              f"entry is gone (harmless — provenance only):")
+        print(f"\n{len(result['orphaned'])} skill(s) on disk with no promotion "
+              f"recorded here (harmless — written by hand or by something else):")
         for skill in result["orphaned"]:
-            print(f"  {skill.name}  ({skill.provenance})")
+            print(f"  {skill.name}")
 
     return 0
 
@@ -1237,19 +1023,14 @@ def cmd_tier(args: argparse.Namespace) -> int:
 def cmd_check(args: argparse.Namespace) -> int:
     """Dependency check at pull time."""
     config = Config(args.root)
-    if args.id:
-        entry = Ledger(config).get(args.id)
-        if not entry:
-            print(f"No ledger entry matching '{args.id}'", file=sys.stderr)
-            return 1
-        deps_cli, deps_mcp, label = entry.deps_cli, entry.deps_mcp, entry.id
-    else:
-        skills_dir = Path(args.skills_dir).expanduser() if args.skills_dir else default_skills_dir()
-        matches = [s for s in scan(skills_dir, config) if s.name == args.name]
-        if not matches:
-            print(f"No skill named '{args.name}'", file=sys.stderr)
-            return 1
-        deps_cli, deps_mcp, label = matches[0].requires_cli, matches[0].requires_mcp, args.name
+    skills_dir = (Path(args.skills_dir).expanduser() if args.skills_dir
+                  else default_skills_dir())
+    matches = [s for s in scan(skills_dir, config) if s.name == args.name]
+    if not matches:
+        print(f"No skill named '{args.name}'", file=sys.stderr)
+        return 1
+    deps_cli, deps_mcp, label = (matches[0].requires_cli,
+                                 matches[0].requires_mcp, args.name)
 
     result = check_dependencies(deps_cli, deps_mcp, Path.cwd())
     if result["ok"]:
@@ -1498,61 +1279,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="transcript path or session id (default: this session)")
     p.set_defaults(func=cmd_commit_session)
 
-    p = sub.add_parser("review", help="list candidates ready for review")
-    p.add_argument("--all", action="store_true", help="include below-threshold candidates")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(func=cmd_review)
-
-    p = sub.add_parser("dictate", help="describe a workflow instead of performing it")
-    p.add_argument("--text", help="the description (reads stdin if omitted)")
-    p.add_argument("--title")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(func=cmd_dictate)
-
-    p = sub.add_parser("show", help="effect summary, evidence and open questions")
-    p.add_argument("id")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(func=cmd_show)
-
     p = sub.add_parser("search", help="search the ledger of your own past work")
     p.add_argument("query", nargs="+")
     p.add_argument("--limit", type=int, default=10)
     p.set_defaults(func=cmd_search)
-
-    p = sub.add_parser("stats", help="ledger size and status counts")
-    p.set_defaults(func=cmd_stats)
-
-    p = sub.add_parser("scaffold", help="generate a starting SKILL.md for a candidate")
-    p.add_argument("id")
-    p.add_argument("--name", required=True)
-    p.add_argument("--description", default="")
-    p.add_argument("--answers", help="JSON object of answered questions")
-    p.add_argument("--tier", default="provisional", choices=["provisional", "trusted"])
-    p.add_argument("--out", help="write to this path instead of stdout")
-    p.set_defaults(func=cmd_scaffold)
-
-    p = sub.add_parser("promote", help="mark a candidate promoted")
-    p.add_argument("id")
-    p.add_argument("--skill-path")
-    p.add_argument("--note")
-    p.set_defaults(func=cmd_promote)
-
-    p = sub.add_parser("ignore", help="never propose this workflow again")
-    p.add_argument("id")
-    p.add_argument("--note")
-    p.set_defaults(func=cmd_ignore)
-
-    p = sub.add_parser("ignored", help="list ignored workflows")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(func=cmd_ignored)
-
-    p = sub.add_parser("reopen", help="return a workflow to the review queue")
-    p.add_argument("id")
-    p.add_argument("--note")
-    p.set_defaults(func=cmd_reopen)
-
-    p = sub.add_parser("expire", help="delete unapproved candidates past their TTL")
-    p.set_defaults(func=cmd_expire)
 
     p = sub.add_parser("lifecycle", help="inventory skills, tiers and staleness")
     p.add_argument("--skills-dir")

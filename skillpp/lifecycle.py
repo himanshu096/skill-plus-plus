@@ -189,43 +189,86 @@ def scan(skills_dir: Path, config: Config,
     return found
 
 
-def reconcile(ledger, skills_dir: Path, config: Config) -> dict:
-    """Report drift between the ledger's promoted entries and the skills on disk.
+# Moved here from `summary.py` when the ledger half was removed. It is
+# about skills on disk, which is what the rest of this module is about;
+# it only lived beside the proposal renderer because that is where the
+# ledger happened to call it from.
+def check_dependencies(deps_cli: list[str], deps_mcp: list[str],
+                       cwd: Path | None = None) -> dict:
+    """Dependency check at pull time, not at run time (README 5).
 
-    **Reports only — never changes status.** A promoted entry whose skill file
-    has been deleted is a real dead end (it keeps matching future occurrences
-    while never surfacing for review), but reopening it automatically would
-    second-guess a deletion that was almost certainly deliberate, and would
-    re-propose the same workflow every time the user declines. Deciding is the
-    developer's job: `skillpp reopen <id>` or `skillpp ignore <id>`.
+    Failing at install is cheap; failing halfway through a deploy is not.
     """
-    from .ledger import STATUS_PROMOTED
+    cwd = Path(cwd or Path.cwd())
+    missing_cli = [d for d in deps_cli if shutil.which(d) is None]
 
-    on_disk = {s.name: s for s in scan(skills_dir, config)}
-    by_provenance = {
-        s.provenance.split(":", 1)[1]: s
-        for s in on_disk.values()
-        if s.provenance.startswith("ledger:")
+    configured: set[str] = set()
+    for candidate in (cwd / ".mcp.json", Path.home() / ".claude.json",
+                      cwd / ".claude" / "settings.json"):
+        if not candidate.exists():
+            continue
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        servers = data.get("mcpServers") or {}
+        if isinstance(servers, dict):
+            configured.update(servers.keys())
+
+    missing_mcp = []
+    for tool in deps_mcp:
+        parts = tool.split("__")
+        server = parts[1] if len(parts) > 2 else tool
+        if server not in configured:
+            missing_mcp.append(tool)
+
+    return {
+        "ok": not missing_cli and not missing_mcp,
+        "missing_cli": missing_cli,
+        "missing_mcp": missing_mcp,
+        "known_servers": sorted(configured),
     }
 
-    result: dict[str, list] = {"ok": [], "missing": [], "unlinked": [], "orphaned": []}
 
-    for entry in ledger.all():
-        if entry.status != STATUS_PROMOTED:
-            continue
+def reconcile(config: Config, skills_dir: Path) -> dict:
+    """Report drift between promoted entries and the skill files on disk.
+
+    **Reports only — never changes status.** A promoted entry whose skill file
+    has been deleted is a real dead end: it stays out of the review queue while
+    the file it points at is gone. Reopening it automatically would second-guess
+    a deletion that was almost certainly deliberate, and re-propose the same
+    procedure every time the developer declined. Deciding is theirs.
+
+    Rewritten for the memory store rather than ported. It used to read the
+    ledger and match on a `provenance: ledger:<id>` string written into each
+    skill's frontmatter; `decisions.jsonl` already records `skill_path` on the
+    promotion itself, so the link is stored once by the thing that created it
+    instead of being reconstructed from two places that could disagree.
+    """
+    from .memory import PROMOTED, load
+
+    result: dict[str, list] = {"ok": [], "missing": [], "unlinked": [],
+                               "orphaned": []}
+    promoted = [e for e in load(config) if e.status == PROMOTED]
+    claimed = set()
+
+    for entry in promoted:
         if not entry.skill_path:
+            # Promoted, but the decision never recorded where it was written.
             result["unlinked"].append(entry)
             continue
-        if Path(entry.skill_path).exists():
-            result["ok"].append(entry)
+        path = Path(entry.skill_path)
+        claimed.add(path.parent.name)
+        (result["ok"] if path.is_file() else result["missing"]).append(entry)
+
+    # A skill this tool wrote whose entry is no longer promoted -- or gone.
+    for skill in scan(skills_dir, config):
+        if skill.name in claimed:
             continue
-
-        result["missing"].append(entry)
-
-    # A skill this tool authored whose ledger entry has since gone.
-    for entry_id, skill in by_provenance.items():
-        if ledger.get(entry_id) is None:
-            result["orphaned"].append(skill)
+        if str(skill.provenance).startswith("skill-plus-plus") or \
+                (skill.path.parent / "SKILL.md").is_file():
+            if not any(e.name == skill.name for e in promoted):
+                result["orphaned"].append(skill)
 
     return result
 

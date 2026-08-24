@@ -352,7 +352,7 @@ _KEEP_INPUT = {
 }
 
 
-def trace(messages, max_chars: int = 2000) -> list[dict]:
+def trace(messages, max_chars: int | None = None, config=None) -> list[dict]:
     """Every tool call in the reviewed slice, in order, scrubbed before disk.
 
     Deliberately not the extractor's output: that is compressed for a prompt
@@ -364,6 +364,11 @@ def trace(messages, max_chars: int = 2000) -> list[dict]:
     remote call the argument is the step. Everything else keeps its name only.
     """
     from .sanitize import scrub_obj
+
+    # The cap lives in config as `SKILLPP_MAX_FIELD`; it was duplicated here as
+    # a bare 2000, which is the same number written down twice.
+    if max_chars is None:
+        max_chars = (config or Config()).max_field_chars
 
     out: list[dict] = []
     for message in messages:
@@ -416,7 +421,7 @@ def record(prepared: Prepared, *, name: str, body: str,
         # can be redrafted without the transcript. Session-scoped, because
         # without segmentation that is the honest granularity.
         add_steps(config, session=prepared.session,
-                  steps=trace(prepared.new_messages))
+                  steps=trace(prepared.new_messages, config=config))
         add_occurrence(config, name=name, session=prepared.session)
         verdict = "new"
 

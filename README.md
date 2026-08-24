@@ -5,12 +5,12 @@
 Capture is passive. Promotion is always deliberate.
 
 ```bash
-./examples/demo.sh
+python3 bin/skillpp candidates          # what has been recorded so far
+python3 bin/skillpp drain               # sessions that ended unreviewed (dry run)
 ```
 
-That runs the whole loop against a scratch ledger — three captured sessions, a
-redacted credential, generated questions, a scaffolded skill — and touches
-nothing real. See §12 for what is built and what is not.
+Neither writes anything. `drain --apply` is what spends a model call. See §12
+for what is built and what is not.
 
 ---
 
@@ -337,8 +337,7 @@ skillpp/
   cli.py         command dispatch
 commands/review-candidates.md /review-candidates — decide on waiting candidates
 commands/dictate-skill.md    /dictate-skill  — build a skill from a description
-examples/demo.sh             end-to-end walkthrough on a scratch ledger
-tests/test_skillpp.py        63 tests
+tests/test_skillpp.py        254 tests
 ```
 
 ### Division of labour
@@ -353,16 +352,16 @@ worth reading. Neither half is useful alone.
 
 | Command | Purpose |
 | --- | --- |
-| `skillpp hook --event <E>` | Hook entry point; reads JSON on stdin, always exits 0 |
-| `skillpp dictate --text "…"` | Create a candidate from a description instead of a trace |
-| `skillpp review [--all]` | Candidates at or above the recurrence threshold |
-| `skillpp show <id>` | Effect summary, evidence, open questions |
-| `skillpp search <words>` | Search the ledger of your own past work |
-| `skillpp scaffold <id> --name <n>` | Generate a starting `SKILL.md` |
-| `skillpp promote <id> --skill-path <p>` | Mark a candidate promoted |
-| `skillpp ignore <id>` · `ignored` · `reopen <id>` | Park a workflow so it is never proposed; list the ignore set; put one back in the queue |
-| `skillpp reconcile` | Report promoted skills whose file was deleted (reports only — never decides) |
+| `skillpp hook --event SessionEnd` | Hook entry point; queues an ended session, always exits 0 |
+| `skillpp drain [--apply]` | Review the sessions that ended unreviewed; dry run without `--apply` |
+| `skillpp candidates [--open-only]` | What has been recorded, and what is waiting on a decision |
+| `skillpp search <words>` | Search recorded procedures by name and body |
+| `skillpp record-candidate` · `commit-session` | What `/log-session` calls; body on stdin |
+| `skillpp dictate-skill --name <n>` | Record a procedure described rather than observed; body on stdin |
+| `skillpp promote-candidate <name>` | Write a candidate out as a skill and record the decision |
 | `skillpp reject-candidate <name>` · `reopen-candidate <name>` | Turn a candidate down so it stops being proposed; put it back |
+| `skillpp redraft <name> [--apply]` | Rewrite a body against the trace of what its sessions ran |
+| `skillpp reconcile` | Report promoted skills whose file was deleted (reports only — never decides) |
 | `skillpp lifecycle` / `tier <name> <tier>` | Inventory and demotion |
 | `skillpp check --name <n>` | Dependency check at pull time (exit 2 if missing) |
 | `skillpp bundle --out <dir> [--format upload\|plugin]` | Package skills: `upload` = one zip per skill for Customize → Skills; `plugin` = `.claude-plugin/` + `skills/` |

@@ -48,15 +48,7 @@ class Config:
 
         # A workflow must recur this many times before it is proposed (README 3.3).
         self.recurrence_threshold = _int_env("SKILLPP_RECURRENCE", 3)
-        # Lexical similarity above which two traces are considered the same workflow.
-        self.similarity_threshold = _float_env("SKILLPP_SIMILARITY", 0.85)
-        # Unapproved candidates self-delete after this long (README 5).
-        self.candidate_ttl_days = _int_env("SKILLPP_TTL_DAYS", 14)
-        # Hard caps so a runaway session cannot bloat the ledger.
-        self.max_steps_per_session = _int_env("SKILLPP_MAX_STEPS", 500)
         self.max_field_chars = _int_env("SKILLPP_MAX_FIELD", 2000)
-        # Never ask the developer more than this many questions (README 4).
-        self.max_questions = _int_env("SKILLPP_MAX_QUESTIONS", 3)
         # How to invoke the developer's own agent when draining a queue of
         # ended sessions. A template rather than a binary name, because the
         # flags are as host-specific as the command: --no-session-persistence

@@ -151,6 +151,33 @@ dormant path end to end.
 
 ## Phase 3 — the deletion
 
+**Done, 2026-08-24.** −2,574 / +141 across 13 files. 315 tests → 254, all
+green; the estimate here was ~253. Six modules, ten commands and
+`examples/demo.sh` gone.
+
+Four things the plan did not anticipate, kept below as the record:
+
+- **`check_dependencies` had to move, not die.** It lived in `summary.py` but
+  is about skills on disk, which is `lifecycle.py`'s subject; it only sat there
+  because the ledger called it from nearby.
+- **`reconcile` was a rewrite, not a port.** It matched on a
+  `provenance: ledger:<id>` string written into each skill's frontmatter.
+  `decisions.jsonl` already records `skill_path` on the promotion itself, so
+  the link is now stored once by the thing that created it. `--apply` used to
+  park a missing skill into the ignore list; there is no ignore list, and the
+  memory store's equivalent is a decision a person makes, so the flag reports
+  and leaves the deciding.
+- **`log_error` was inlined.** `cmd_hook` was its only surviving caller and a
+  seven-line file append does not need a module.
+- **`SKILLPP_MAX_FIELD` was kept, not deleted.** It read as dead, but
+  `prepare.trace` hardcoded `2000` — the same number written down twice. The
+  knob now drives it. The other four went: `SKILLPP_SIMILARITY`,
+  `SKILLPP_TTL_DAYS`, `SKILLPP_MAX_STEPS`, `SKILLPP_MAX_QUESTIONS`.
+
+Kept below as the plan it was.
+
+
+
 **Gated on Phase 2.** One commit, tests included.
 
 ### Delete outright
