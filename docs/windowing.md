@@ -14,10 +14,14 @@
 > illustrations rather than rates.
 >
 > **Not established at all:** that this pipeline detects the procedures the
-> current whole-session prompt detects. There is no end-to-end measurement,
-> because nothing calls `window.py` or `reconcile.py` yet. The direction being
-> right does not make this implementation of it work, and the numbers below
-> should not be read as saying it does.
+> current whole-session prompt detects. There is no end-to-end measurement.
+> `window.py` has five production callers — `cli.py:95,312,393,515` and
+> `local.py:31` — so it is exercised, but only by `segments` and `locate`,
+> which print and inspect. **Nothing routes a windowed prompt into detection,
+> and `reconcile.py` still has no caller at all**, so the join-up half is
+> untested by anything. The direction being right does not make this
+> implementation of it work, and the numbers below should not be read as saying
+> it does.
 
 A session does not fit a local model. Measured on twelve real transcripts, the
 extract runs 60k–128k tokens *after* a 47× reduction, and every remaining
@@ -609,5 +613,8 @@ finds as the labels, then run the windowed version and compare. Both arms use
 the same judge, so the difference is the windowing. That is the honest number
 this document approximates at 90.3%, and it costs about twenty model calls.
 
-Nothing here has been run against a model. `skillpp/window.py` has no caller
-yet, so no eval was needed for any of it.
+Nothing here has been run against a model end to end. `window.py` is called by
+`segments` and `locate` (`cli.py:95,312,393,515`, `local.py:31`), so the
+splitting itself runs; what has never run is a *detection* pass over windows
+whose findings `reconcile.py` then merges — that module has no caller. The eval
+above is what would settle it, and it is still unspent.

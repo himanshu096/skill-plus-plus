@@ -23,12 +23,19 @@ one's fixtures.
 | When detection happens | at review, over a whole transcript | live, one hook payload at a time |
 | What decides | a frontier model reading the session | span logic — prompt boundaries, closing-step regex, budgets |
 | Cost per session | one model call | none |
-| Runs unattended | no — someone types `/log-session` | yes |
+| Runs unattended | yes — `drain --apply` spawns the agent | yes |
 | Needs an API key | yes | no |
 | Shortest session it will look at | 25 new messages | any size |
 
-The last three rows are the capture branch's case, and they are not small. What
+The last two rows are the capture branch's case, and they are not small. What
 follows is only about accuracy.
+
+The unattended row said *no* here until 2026-08-24, and was wrong when written:
+`drain --apply` reads the `SessionEnd` queue and spawns the agent by
+subprocess through `config.agent_command` (`cli.py:595`), whose default carries
+`--no-session-persistence`. A comparison table that scores its own side below
+reality is worse than one that scores it above — nobody checks a number that
+flatters the other column.
 
 ## How the comparison was made runnable
 
@@ -225,14 +232,15 @@ procedure. One mechanical job the span logic does better, and no amount of
 prompt work makes a model reliably decline work it has just seen finish.
 
 **What that branch wins, and it is not small:** no model call, no latency, no
-API key, it runs unattended, and it will look at a session of any length. This
-branch declines anything under 25 new messages, because a small increment is
-not worth a model call — the messages are not lost, but they wait. On a real
-session that rarely bites; on a short one, that branch covers ground this one
-does not. This branch costs one frontier call per
-session and only runs when a person types `/log-session`. The end state that
-follows from both columns is that branch's trigger with this branch's judgement
-— not a merge of two detectors.
+API key, and it will look at a session of any length. This branch declines
+anything under 25 new messages, because a small increment is not worth a model
+call — the messages are not lost, but they wait. On a real session that rarely
+bites; on a short one, that branch covers ground this one does not. This branch
+costs one frontier call per session.
+
+Both run unattended: `drain --apply` is this branch's trigger, and it was
+already built when this was written. What separates the columns is cost and the
+floor, not whether a person has to type anything.
 
 ## Two caveats, before quoting any of this
 
