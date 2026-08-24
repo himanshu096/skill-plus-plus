@@ -64,7 +64,7 @@ person can usefully correct, and they cannot correct what they cannot see.
 
 - **Write the skill** — promote it with the drafted fields
 - **Change the wording** — take their edit, show it again, ask again
-- **Turn it down** — leaves the queue; returns only if it recurs
+- **Turn it down** — leaves the queue for good; nothing is deleted
 - **Leave it for now** — stays a candidate; comes up again next time
 
 ## On acceptance
@@ -96,9 +96,11 @@ python3 bin/skillpp reject-candidate "<name>"
 ```
 
 Nothing is deleted. The body and its provenance stay, and the decision is one
-appended line like any other. The procedure leaves the queue and is offered
-again only once it has happened three more times than when it was turned down
-— which is the one argument the refusal could not have answered, since it was
-made without that evidence.
+appended line like any other. Sightings keep counting, so `skillpp candidates`
+can later show "turned down at 4x · done 9x since" — but it is never
+re-proposed. Re-asking about something the developer just refused is the
+fastest way to get the whole tool switched off, and a count is not an argument
+they have not already heard. `skillpp reopen-candidate <name>` is the way back,
+and it is theirs to make.
 
 Read back what the command prints, then stop. Do not argue for the candidate.

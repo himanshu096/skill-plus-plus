@@ -1500,12 +1500,13 @@ class TestSkillsDirRedirect(unittest.TestCase):
 
 
 class TestRejection(TempRoot):
-    """Turned down, and what brings it back.
+    """Turned down, and the only thing that brings it back.
 
-    A rejection is neither a delete nor a permanent ignore. The developer said
-    no knowing the procedure had happened N times; doing it three more is the
-    one argument that refusal could not have answered, so that is what reopens
-    it.
+    A rejection is not a delete: the entry, its body and its provenance stay,
+    and sightings keep accruing. It is also not automatic to undo. Nothing
+    reopens itself -- re-proposing what a developer just refused is the fastest
+    way to get the tool switched off, so the count that builds up afterwards is
+    shown to them rather than acted on.
     """
 
     def seen(self, name, times):
@@ -1528,31 +1529,44 @@ class TestRejection(TempRoot):
         self.reject("noisy")
         self.assertEqual(self.queue(), [])
 
-    def test_two_more_sightings_are_not_enough(self):
+    def test_recurrence_does_not_bring_it_back(self):
+        """However often it happens again, it is not re-proposed.
+
+        The developer refused it. A count is not an argument they have not
+        already heard, and re-asking is what gets the tool switched off.
+        """
         self.seen("noisy", 3)
         self.reject("noisy")
-        for n in range(2):
+        for n in range(20):
             memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
         self.assertEqual(self.queue(), [])
+        self.assertEqual(memory.find(memory.load(self.config), "noisy").count, 23)
 
-    def test_three_more_bring_it_back(self):
+    def test_the_sightings_since_are_still_visible(self):
+        """Counting continues so a person can see it kept happening."""
         self.seen("noisy", 3)
         self.reject("noisy")
-        for n in range(3):
+        for n in range(5):
             memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
+        entry = memory.find(memory.load(self.config), "noisy")
+        self.assertEqual(entry.decided_at_count, 3)
+        self.assertEqual(entry.count - entry.decided_at_count, 5)
+
+    def test_reopening_is_the_way_back(self):
+        from skillpp.cli import main
+        self.seen("noisy", 3)
+        self.reject("noisy")
+        self.assertEqual(self.queue(), [])
+        main(["--root", str(self.config.root), "reopen-candidate", "noisy"])
         self.assertEqual(self.queue(), ["noisy"])
 
-    def test_rejecting_again_moves_the_bar_up(self):
-        """Otherwise a second no would be undone by the sightings that caused it."""
-        self.seen("noisy", 3)
-        self.reject("noisy")
-        for n in range(3):
-            memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
-        self.assertEqual(self.queue(), ["noisy"])
-        self.reject("noisy")                     # now turned down at 6
-        self.assertEqual(self.queue(), [])
-        memory.add_occurrence(self.config, name="noisy", session="later")
-        self.assertEqual(self.queue(), [])
+    def test_reopening_something_never_rejected_changes_nothing(self):
+        from skillpp.cli import main
+        self.seen("fine", 3)
+        main(["--root", str(self.config.root), "reopen-candidate", "fine"])
+        entry = memory.find(memory.load(self.config), "fine")
+        self.assertEqual(entry.status, memory.CANDIDATE)
+        self.assertEqual(self.queue(), ["fine"])
 
     def test_nothing_is_deleted_by_a_rejection(self):
         self.seen("noisy", 3)

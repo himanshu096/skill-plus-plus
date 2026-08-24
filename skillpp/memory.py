@@ -45,11 +45,16 @@ _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 CANDIDATE = "candidate"
 PROMOTED = "promoted"
-# A rejection is not a deletion and not a permanent ignore. The procedure
-# leaves the queue, and comes back only if it happens THRESHOLD more times
-# than it had when it was turned down. Recurrence is the one argument a
-# rejection cannot answer: "I have now done this three more times" is new
-# evidence, and the earlier "no" was cast without it.
+# A rejection is not a deletion. The entry, its body and its provenance stay,
+# and sightings keep accruing against it -- but it never returns to the queue
+# on its own. Re-proposing something a developer just turned down is the
+# fastest way to get the whole tool switched off, and a count is not an
+# argument they have not already heard.
+#
+# What the continued counting buys is *evidence*, not a trigger: `candidates`
+# shows how often the procedure has happened since it was refused, so "turned
+# down at 4x, seen 9 times since" is visible to a person who can act on it
+# with `reopen`. The decision to look again stays theirs.
 REJECTED = "rejected"
 
 # Below this a recorded procedure is an observation, not a proposal. One
@@ -375,15 +380,10 @@ def reviewable(candidates: list[Candidate],
         resolved = config.recurrence_threshold
     if resolved is None:
         resolved = THRESHOLD
-    ready = [c for c in candidates
-             if c.status == CANDIDATE and c.count >= resolved]
-    # A rejected procedure that has since happened `resolved` more times is
-    # asked about again. The developer turned it down knowing it had been seen
-    # `decided_at_count` times; doing it three more is the one thing that
-    # was not on the table when they decided.
-    return order(ready + [c for c in candidates
-                          if c.status == REJECTED
-                          and c.count - c.decided_at_count >= resolved])
+    # Only candidates. A turned-down entry keeps counting but never reappears
+    # here: `reopen` is the way back, and it is a person's call.
+    return [c for c in candidates
+            if c.status == CANDIDATE and c.count >= resolved]
 
 
 def order(candidates: list[Candidate]) -> list[Candidate]:

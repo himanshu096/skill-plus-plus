@@ -634,10 +634,38 @@ def cmd_reject_candidate(args: argparse.Namespace) -> int:
 
     record_decision(config, name=entry.name, action=REJECTED,
                     at_count=entry.count)
-    again = entry.count + (config.recurrence_threshold or 3)
     print(f"turned down: {entry.name} (at {entry.count}x)")
-    print(f"It leaves the review queue and returns at {again}x — the body and "
-          f"its provenance are kept, nothing was deleted.")
+    print("It leaves the review queue for good — nothing was deleted, and "
+          "sightings keep counting so you can see if it keeps happening.")
+    print(f"Put it back with:  skillpp reopen-candidate {entry.name}")
+    return 0
+
+
+def cmd_reopen_candidate(args: argparse.Namespace) -> int:
+    """Put a turned-down candidate back in the queue.
+
+    The only way back, and deliberately a person's call. Nothing reopens
+    itself: re-proposing what a developer just refused is the fastest way to
+    get the tool switched off, so the count that accrues after a rejection is
+    shown to them rather than acted on.
+    """
+    from .memory import CANDIDATE, REJECTED, find, load, record_decision
+
+    config = Config(args.root)
+    entry = find(load(config), args.name)
+    if entry is None:
+        print(f"No candidate named {args.name!r}", file=sys.stderr)
+        return 1
+    if entry.status != REJECTED:
+        print(f"{entry.name} is {entry.status}, not turned down; "
+              f"nothing to reopen.")
+        return 0
+
+    record_decision(config, name=entry.name, action=CANDIDATE,
+                    at_count=entry.count)
+    since = entry.count - entry.decided_at_count
+    print(f"reopened: {entry.name} — turned down at {entry.decided_at_count}x, "
+          f"seen {since} time(s) since, now {entry.count}x.")
     return 0
 
 
@@ -779,16 +807,21 @@ def cmd_candidates(args: argparse.Namespace) -> int:
             mark = "  "
         print(f"{mark}x{entry.count}  {entry.name}")
         if entry.status == REJECTED:
-            back = entry.decided_at_count + (config.recurrence_threshold or THRESHOLD)
-            print(f"        turned down at {entry.decided_at_count}x"
-                  f" · returns at {back}x")
+            since = entry.count - entry.decided_at_count
+            note = f"        turned down at {entry.decided_at_count}x"
+            if since > 0:
+                # The one thing worth saying about a rejection afterwards: it
+                # kept happening. Shown, never acted on.
+                note += f" · done {since}x since"
+            print(note)
         if entry.skill_path:
             print(f"        {entry.skill_path}")
         # Not truncated. Shortening a session id for display is what once hid
         # a collision that froze a count at 1 with no error.
         print(f"        {', '.join(entry.sessions)}")
     print(f"\n▸  waiting on /review-candidates."
-          + ("  ✗  turned down; returns if it recurs." if turned_down else ""))
+          + ("  ✗  turned down; still counting, never re-proposed."
+             if turned_down else ""))
     print(f"Read one in full:  less {store}/<name>.md")
     return 0
 
@@ -1348,9 +1381,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_candidates)
 
     p = sub.add_parser("reject-candidate",
-                       help="turn a candidate down; it returns if it recurs")
+                       help="turn a candidate down; it stops being proposed")
     p.add_argument("name")
     p.set_defaults(func=cmd_reject_candidate)
+
+    p = sub.add_parser("reopen-candidate",
+                       help="put a turned-down candidate back in the queue")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_reopen_candidate)
 
     p = sub.add_parser("redraft",
                        help="rewrite a body against what its sessions ran")

@@ -114,7 +114,7 @@ These are product calls, not cleanup. Each needs an answer before Phase 3.
 
 | # | gap | evidence | options |
 | --- | --- | --- | --- |
-| ~~**D1**~~ | ~~ignore / never-propose-again~~ | **Decided 2026-08-24: ported.** `reject-candidate` writes a `rejected` decision with the count at refusal; the entry returns to the queue after `THRESHOLD` more sightings. Most of it already worked — `load` took any action string and `reviewable` filtered on `CANDIDATE`. | done (`d87aca9`) |
+| ~~**D1**~~ | ~~ignore / never-propose-again~~ | **Decided 2026-08-24: ported.** `reject-candidate` writes a `rejected` decision with the count at refusal. It is **never re-proposed** — sightings keep accruing as visible evidence (`turned down at 4x · done 9x since`) and `reopen-candidate` is the only way back, deliberately a person's call. An auto-return after three more sightings was built first and reverted: re-asking about something just refused is what gets the tool switched off. | done (`d87aca9`, revised) |
 | ~~**D2**~~ | ~~TTL / expiry~~ | **Decided 2026-08-24: promise dropped, expiry not built.** Age is the wrong signal — a procedure done four times in June beats one done once last week — and D1 covers the real case, which is "this specific thing, not now" rather than "anything old". Six entries on disk after weeks, so there is no volume problem to solve. | done, docs only |
 | **D3** | **`search`** | `cmd_search` reads `Ledger` (`cli.py:839`); README calls it a headline differentiator (`:290`, `:315`). Against an empty ledger it always returns nothing. | repoint at `patterns/` · drop |
 | **D4** | **`dictate`** | Ledger-only end-to-end. No memory equivalent. README sells it (`:76`). | port · drop |
