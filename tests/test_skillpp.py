@@ -2598,6 +2598,84 @@ class TestTheWholeLoop(TempRoot):
                          "a recurrence after promotion filed a second entry")
 
 
+class TestTheInstalledHookCommand(unittest.TestCase):
+    """The command in `.claude/settings.json`, run as a shell would run it.
+
+    Every other queue test calls `enqueue` or `cmd_hook` directly, which is the
+    Python API rather than the thing Claude Code actually executes. That gap
+    hid a real failure: the command was `python3 bin/skillpp …`, a *relative*
+    path, so it worked only when the hook happened to run from the repository
+    root. Anywhere else the shell exited 2 before Python started -- so
+    `cmd_hook`'s "always exit 0, never disrupt a session" never applied, nothing
+    was queued, and `drain` reported "Nothing has ended yet", which is
+    indistinguishable from a machine where no session has ended.
+    """
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def command(self) -> str:
+        settings = json.loads((self.REPO / ".claude" / "settings.json")
+                              .read_text(encoding="utf-8"))
+        entries = settings["hooks"]["SessionEnd"]
+        return entries[0]["hooks"][0]["command"]
+
+    def fire(self, cwd, env_extra):
+        """Run the tracked command from *cwd*, and report what it queued."""
+        import subprocess
+        with tempfile.TemporaryDirectory() as project:
+            transcript = Path(project) / "t.jsonl"
+            transcript.write_text("{}\n", encoding="utf-8")
+            payload = json.dumps({"session_id": "installed-cmd",
+                                  "transcript_path": str(transcript),
+                                  "cwd": project,
+                                  "hook_event_name": "SessionEnd"})
+            done = subprocess.run(
+                ["sh", "-c", self.command()], input=payload, text=True,
+                capture_output=True, cwd=str(cwd),
+                env={**os.environ, **env_extra})
+            queue = (Path(project) / ".claude" / "skillpp" / "memory"
+                     / "ended-sessions.jsonl")
+            rows = (queue.read_text(encoding="utf-8").splitlines()
+                    if queue.is_file() else [])
+            return done.returncode, rows
+
+    def test_it_queues_when_run_from_the_project_root(self):
+        code, rows = self.fire(self.REPO, {"CLAUDE_PROJECT_DIR": str(self.REPO)})
+        self.assertEqual(code, 0)
+        self.assertEqual(len(rows), 1)
+
+    def test_it_queues_when_run_from_somewhere_else_entirely(self):
+        """The case the relative path got wrong.
+
+        A hook is not promised the project root as its working directory, and a
+        wrong guess here fails silently rather than loudly.
+        """
+        with tempfile.TemporaryDirectory() as elsewhere:
+            code, rows = self.fire(elsewhere,
+                                   {"CLAUDE_PROJECT_DIR": str(self.REPO)})
+        self.assertEqual(code, 0, "the shell could not find the entry point")
+        self.assertEqual(len(rows), 1, "nothing was queued, and nothing said so")
+
+    def test_it_still_works_where_the_project_dir_is_not_set(self):
+        """The fallback keeps the previous behaviour rather than replacing it."""
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+        import subprocess
+        with tempfile.TemporaryDirectory() as project:
+            transcript = Path(project) / "t.jsonl"
+            transcript.write_text("{}\n", encoding="utf-8")
+            payload = json.dumps({"session_id": "no-var",
+                                  "transcript_path": str(transcript),
+                                  "cwd": project,
+                                  "hook_event_name": "SessionEnd"})
+            done = subprocess.run(["sh", "-c", self.command()], input=payload,
+                                  text=True, capture_output=True,
+                                  cwd=str(self.REPO), env=env)
+            queue = (Path(project) / ".claude" / "skillpp" / "memory"
+                     / "ended-sessions.jsonl")
+            self.assertEqual(done.returncode, 0)
+            self.assertTrue(queue.is_file())
+
+
 class TestTheQueueTheHookWrites(unittest.TestCase):
     """What `SessionEnd` banks, and that `drain` can read it back.
 

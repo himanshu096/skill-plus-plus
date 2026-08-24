@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 bin/skillpp hook --event SessionEnd"
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/bin/skillpp\" hook --event SessionEnd"
           }
         ]
       }
