@@ -16,8 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from .capture import (fold_dictation, handle_prompt, handle_session_end,
-                      handle_tool, log_error)
+from .capture import fold_dictation, log_error
 from .config import Config, default_skills_dir
 from .ledger import (IGNORED_STATUSES, Ledger, STATUS_CANDIDATE,
                      STATUS_IGNORED, STATUS_PROMOTED)
@@ -32,24 +31,27 @@ from .summary import (check_dependencies, questions_for, render_proposal,
 # --------------------------------------------------------------------------
 
 def cmd_hook(args: argparse.Namespace) -> int:
-    """Read a hook payload on stdin and record it.
+    """Read a hook payload on stdin and queue the session for review.
 
-    Always exits 0. A capture failure must never disrupt the developer's
-    session; errors go to the log instead.
+    Always exits 0. A hook failure must never disrupt the developer's session;
+    errors go to the log instead.
+
+    Queueing is *all* this does. Detection reads the transcript itself
+    (``prepare.trace``), so there is nothing for a hook to capture live — an
+    earlier design recorded every prompt and tool call into a second store, and
+    the review path never read any of it. ``Stop`` is accepted as well as
+    ``SessionEnd`` for anyone who wired it, and costs nothing extra: ``drain``
+    dedupes by session id.
     """
     config = Config(args.root)
     try:
         raw = sys.stdin.read()
         payload = json.loads(raw) if raw.strip() else {}
         event = args.event or payload.get("hook_event_name", "")
-        config.ensure_dirs()
 
-        if event == "UserPromptSubmit":
-            handle_prompt(config, payload)
-        elif event == "PostToolUse":
-            handle_tool(config, payload)
-        elif event in ("SessionEnd", "Stop"):
-            result = handle_session_end(config, payload)
+        if event in ("SessionEnd", "Stop"):
+            from .queue import enqueue
+            result = enqueue(payload)
             if args.verbose:
                 print(json.dumps(result))
         elif args.verbose:
@@ -451,9 +453,10 @@ def cmd_drain(args: argparse.Namespace) -> int:
     import subprocess
     from .prepare import project_slug
 
+    from .queue import queue_path
+
     config = Config(args.root)
-    queue = Path(args.queue).expanduser() if args.queue else (
-        Path.cwd() / ".claude" / "skillpp" / "memory" / "ended-sessions.jsonl")
+    queue = Path(args.queue).expanduser() if args.queue else queue_path()
     if not queue.is_file():
         print(f"No queue at {queue}. Nothing has ended yet, or the SessionEnd "
               f"hook is not installed.")

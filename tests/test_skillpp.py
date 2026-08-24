@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -608,19 +609,33 @@ class TestInstall(unittest.TestCase):
         self.assertNotIn("--root", cmd)
 
     def test_plan_preserves_existing_hooks(self):
+        """Append to the event we install; leave every other event alone.
+
+        `PostToolUse` here is somebody else's hook, not a stale one of ours —
+        skillpp stopped installing that event once detection began reading the
+        transcript directly, so touching it would be destroying a stranger's
+        configuration.
+        """
         from skillpp.install import plan_settings
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "settings.json"
             path.write_text(json.dumps({
                 "model": "opus",
-                "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
-                    {"type": "command", "command": "existing.sh"}]}]}}))
+                "hooks": {
+                    "PostToolUse": [{"matcher": "Bash", "hooks": [
+                        {"type": "command", "command": "someone-elses.sh"}]}],
+                    "SessionEnd": [{"matcher": "*", "hooks": [
+                        {"type": "command", "command": "existing.sh"}]}]}}))
             merged, changes = plan_settings(path)
             on_disk = json.loads(path.read_text())
         self.assertEqual(merged["model"], "opus", "unrelated settings survive")
-        self.assertIn("existing.sh", json.dumps(merged["hooks"]["PostToolUse"]))
-        self.assertEqual(len(merged["hooks"]["PostToolUse"]), 2)
-        self.assertEqual(len(on_disk["hooks"]["PostToolUse"]), 1, "planning must not write")
+        self.assertIn("existing.sh", json.dumps(merged["hooks"]["SessionEnd"]))
+        self.assertEqual(len(merged["hooks"]["SessionEnd"]), 2, "appends, not replaces")
+        self.assertEqual(merged["hooks"]["PostToolUse"],
+                         [{"matcher": "Bash", "hooks": [
+                             {"type": "command", "command": "someone-elses.sh"}]}],
+                         "an event skillpp does not install is left untouched")
+        self.assertEqual(len(on_disk["hooks"]["SessionEnd"]), 1, "planning must not write")
 
     def test_bundle_matches_the_plugin_layout_desktop_uses(self):
         from skillpp.install import build_plugin_bundle
@@ -2581,6 +2596,99 @@ class TestTheWholeLoop(TempRoot):
         self.assertEqual(again.status, memory.PROMOTED)
         self.assertEqual(len(list(self.config.patterns_dir.glob("*.md"))), 1,
                          "a recurrence after promotion filed a second entry")
+
+
+class TestTheQueueTheHookWrites(unittest.TestCase):
+    """What `SessionEnd` banks, and that `drain` can read it back.
+
+    These two halves used to name the queue path independently — the reader in
+    `cmd_drain`, the writer in a hand-typed one-liner in `.claude/settings.json`.
+    A writer and reader that disagree produce an empty queue that looks exactly
+    like "no sessions ended yet", so the shared path is the thing under test.
+    """
+
+    def payload(self, project: Path, session: str = "s-1",
+                transcript: str | None = None) -> dict:
+        return {"hook_event_name": "SessionEnd", "session_id": session,
+                "transcript_path": transcript if transcript is not None
+                else str(project / "t.jsonl"),
+                "cwd": str(project)}
+
+    def test_the_hook_writes_where_drain_looks(self):
+        from skillpp.queue import enqueue, queue_path
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "t.jsonl").write_text('{"type":"user"}\n')
+            result = enqueue(self.payload(project))
+            self.assertEqual(result["status"], "queued")
+            self.assertEqual(Path(result["queue"]), queue_path(project))
+            rows = [json.loads(l) for l
+                    in queue_path(project).read_text().splitlines()]
+        self.assertEqual(len(rows), 1)
+        # The two fields cmd_drain reads off every row.
+        self.assertEqual(rows[0]["session_id"], "s-1")
+        self.assertTrue(rows[0]["transcript_path"].endswith("t.jsonl"))
+
+    def test_a_session_with_no_transcript_is_not_banked(self):
+        from skillpp.queue import enqueue, queue_path
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            gone = self.payload(project, transcript=str(project / "absent.jsonl"))
+            self.assertEqual(enqueue(gone)["status"], "no-transcript")
+            self.assertEqual(enqueue(self.payload(project, transcript=""))[
+                "status"], "no-transcript")
+            self.assertFalse(queue_path(project).exists(),
+                             "an unusable row created the queue file anyway")
+
+    def test_the_queue_appends_rather_than_overwrites(self):
+        from skillpp.queue import enqueue, queue_path
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "t.jsonl").write_text('{"type":"user"}\n')
+            for session in ("s-1", "s-2", "s-2"):
+                enqueue(self.payload(project, session=session))
+            rows = queue_path(project).read_text().strip().splitlines()
+        self.assertEqual(len(rows), 3, "a repeated session is banked, not merged")
+
+    def test_the_queue_is_project_local_not_store_local(self):
+        """Two projects draining separately must not read each other's queue."""
+        from skillpp.queue import enqueue, queue_path
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / "a", Path(tmp) / "b"
+            for p in (a, b):
+                p.mkdir()
+                (p / "t.jsonl").write_text('{"type":"user"}\n')
+            enqueue(self.payload(a, session="in-a"))
+            self.assertNotEqual(queue_path(a), queue_path(b))
+            self.assertFalse(queue_path(b).exists())
+            self.assertIn("in-a", queue_path(a).read_text())
+
+    def test_the_hook_only_queues_on_session_end(self):
+        """PostToolUse used to be captured. Nothing reads that, so it is ignored."""
+        from skillpp.cli import main
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "t.jsonl").write_text('{"type":"user"}\n')
+            from skillpp.queue import queue_path
+            for event in ("PostToolUse", "UserPromptSubmit"):
+                payload = dict(self.payload(project), hook_event_name=event)
+                stdin, sys.stdin = sys.stdin, io.StringIO(json.dumps(payload))
+                try:
+                    self.assertEqual(main(["--root", tmp, "hook"]), 0)
+                finally:
+                    sys.stdin = stdin
+            self.assertFalse(queue_path(project).exists(),
+                             "a non-SessionEnd event reached the queue")
+
+    def test_a_hook_failure_never_breaks_the_session(self):
+        """Exit 0 whatever happens — a hook that fails must not disrupt work."""
+        from skillpp.cli import main
+        with tempfile.TemporaryDirectory() as tmp:
+            stdin, sys.stdin = sys.stdin, io.StringIO("not json at all")
+            try:
+                self.assertEqual(main(["--root", tmp, "hook"]), 0)
+            finally:
+                sys.stdin = stdin
 
 
 class TestDrain(TempRoot):

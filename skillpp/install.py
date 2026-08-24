@@ -14,7 +14,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HOOK_EVENTS = ("UserPromptSubmit", "PostToolUse", "SessionEnd")
+# One event, because one is all detection needs: `SessionEnd` queues the session
+# and `drain` reads the transcript later. `UserPromptSubmit` and `PostToolUse`
+# were wired here for a capture path that the review flow never read from, so
+# installing them cost every session two hook invocations and bought nothing.
+HOOK_EVENTS = ("SessionEnd",)
 MARKER = "skillpp hook"
 
 
@@ -22,8 +26,9 @@ def hook_command(python: str | None = None, package_root: Path | None = None) ->
     """The shell command Claude Code will run for each hook event.
 
     ``PYTHONPATH`` makes ``-m skillpp`` importable from a checkout without
-    installing the package. The ledger root is deliberately *not* passed, so it
-    defaults to ``~/.claude/skillpp`` rather than landing inside the repo.
+    installing the package. The store root is deliberately *not* passed, so it
+    defaults to ``~/.claude/skillpp`` rather than landing inside the repo. The
+    queue is project-local regardless of root — see :mod:`skillpp.queue`.
     """
     python = python or sys.executable
     root = package_root or Path(__file__).resolve().parent.parent

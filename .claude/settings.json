@@ -2,10 +2,11 @@
   "hooks": {
     "SessionEnd": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import json,sys,pathlib; d=json.load(sys.stdin); t=d.get('transcript_path') or ''; sys.exit(0) if not (t and pathlib.Path(t).is_file()) else None; p=pathlib.Path(d.get('cwd') or '.')/'.claude/skillpp/memory'; p.mkdir(parents=True,exist_ok=True); f=p/'ended-sessions.jsonl'; f.open('a',encoding='utf-8').write(json.dumps(d)+chr(10))\""
+            "command": "python3 bin/skillpp hook --event SessionEnd"
           }
         ]
       }
