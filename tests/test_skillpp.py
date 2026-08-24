@@ -1849,7 +1849,7 @@ class TestTheTwoLocatePrompts(unittest.TestCase):
         # install.py copies from commands/, so a fix applied only to
         # .claude/commands/ ships the old prompt.
         for name in ("locate.md", "locate-one.md", "log-session.md",
-                     "review-candidates.md"):
+                     "review-candidates.md", "dictate-skill.md", "redraft.md"):
             with self.subTest(name):
                 self.assertEqual(
                     (self.ROOT / ".claude" / "commands" / name).read_text(),

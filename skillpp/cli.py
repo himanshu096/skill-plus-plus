@@ -774,7 +774,7 @@ def cmd_redraft(args: argparse.Namespace) -> int:
               f"redraft against.", file=sys.stderr)
         return 1
 
-    argv = [part.replace("{prompt}", f"/skillpp-redraft {entry.name}")
+    argv = [part.replace("{prompt}", f"/redraft {entry.name}")
             for part in shlex.split(config.agent_command)]
     if not args.apply:
         print(f"candidate  {entry.name}  (seen {entry.count}x, {len(steps)} steps)")

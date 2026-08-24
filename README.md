@@ -348,7 +348,7 @@ skillpp/
 commands/log-session.md       /log-session       — review a session for skills
 commands/review-candidates.md /review-candidates — decide on waiting candidates
 commands/dictate-skill.md     /dictate-skill     — build a skill from a description
-commands/skillpp-redraft.md   /skillpp-redraft   — rewrite a body against its trace
+commands/redraft.md           /redraft           — rewrite a body against its trace
 tests/test_skillpp.py         254 tests
 ```
 

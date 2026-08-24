@@ -70,7 +70,7 @@ person can usefully correct, and they cannot correct what they cannot see.
 ## On acceptance
 
 - `--requires-cli` — the commands the body actually invokes, comma-separated.
-  `skillpp check` reads these to tell a developer why a skill will not work on
+  `python3 bin/skillpp check` reads these to tell a developer why a skill will not work on
   their machine; without them it reports every skill as dependency-free.
 
 ```bash
@@ -96,11 +96,11 @@ python3 bin/skillpp reject-candidate "<name>"
 ```
 
 Nothing is deleted. The body and its provenance stay, and the decision is one
-appended line like any other. Sightings keep counting, so `skillpp candidates`
+appended line like any other. Sightings keep counting, so `python3 bin/skillpp candidates`
 can later show "turned down at 4x · done 9x since" — but it is never
 re-proposed. Re-asking about something the developer just refused is the
 fastest way to get the whole tool switched off, and a count is not an argument
-they have not already heard. `skillpp reopen-candidate <name>` is the way back,
+they have not already heard. `python3 bin/skillpp reopen-candidate <name>` is the way back,
 and it is theirs to make.
 
 Read back what the command prints, then stop. Do not argue for the candidate.

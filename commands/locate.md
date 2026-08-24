@@ -6,6 +6,12 @@ allowed-tools: Bash(python3 bin/skillpp *)
 
 # Where did the work land?
 
+> **Not part of the review loop.** `/log-session` and `/review-candidates` are
+> the daily path and neither calls this. This measures whether a *local* model
+> can say where work resolved, which is the cheap half of detection described
+> in `docs/windowing.md` — a component that is built and measured but not yet
+> wired into the pipeline. Ten `locate-*` eval cases keep it honest.
+
 ## The session, one request at a time
 
 !`python3 bin/skillpp segments $ARGUMENTS`

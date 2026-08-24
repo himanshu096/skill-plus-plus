@@ -54,7 +54,7 @@ someone's attention", and the developer has just supplied that judgement
 directly — so it is waiting in `/review-candidates` immediately. Promotion is
 still theirs.
 
-Note there is no trace behind it, so `skillpp redraft` cannot rewrite it later:
+Note there is no trace behind it, so `skillpp redraft` (`python3 bin/skillpp redraft`) cannot rewrite it later:
 nothing was observed. If the body turns out wrong, the procedure has to be
 described again.
 
