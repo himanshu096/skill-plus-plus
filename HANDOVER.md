@@ -784,28 +784,96 @@ promotion.
 Asked and checked directly, at the end of 2026-08-21, before running out of
 turn budget. Not implemented — this is the next agent's starting list, ranked.
 
-### 1. Detection is non-deterministic, and that was never investigated
+### 1. Detection is non-deterministic — measured, 38 runs
 
-Measured today, four runs each, same input, same code — see *What 2026-08-21
-established, part two*:
+Investigated 2026-08-21. The finding stands and is worse than the original note
+suggested, because it now has an interval rather than a single reading.
 
-```
-two-tasks-one-sitting:      2 ✓, 1, 1, 2 ✓
-three-tasks-one-morning:    3 ✓, 2, 3 ✓, 2
-```
+`multi-three` (`three-tasks-one-morning`), identical input, same code, arm A:
 
-Nowhere else in this document until now. It matters more than any single
-accuracy number, because every score in the branch comparison above was one
-run each — a result reported as 3/4 could as easily have been 2/4 or 4/4 on a
-different draw.
+| batch | correct | rate |
+| --- | --- | --- |
+| 8 runs | 7/8 | 88% |
+| 10 runs | 4/10 | 40% |
+| 20 runs | 12/20 | 60% |
+| **pooled** | **23/38** | **61%** |
 
-**Untested hypothesis, cheapest to try:** trim leading exploration before the
-model sees the session (the one thing taken from the other branch's own
-finding — `secrets` flipped from dropped to kept once 9 steps became 3,
-*"the filter had been judging a procedure outnumbered two to one by the greps
-that found it"*). Less marginal material, less room for the judgement to land
-differently. Same session, n runs, before/after, compare spread. A same-
-afternoon experiment, not a build.
+**Read the swing, not the pooled figure.** Three honest batches of the same
+experiment on the same input returned 88%, 40% and 60%. Any one of them, reported
+alone, would have been believed — the 88% was, briefly, in this document's own
+earlier draft as evidence that the instability did not reproduce.
+
+`multi-two` is 18/18 in the same conditions, so this is not detection-wide. One
+session is stable and one is not, and the unstable one is the three-procedure
+case.
+
+**What this does to every score in this document.** Both branch comparisons
+reported one run per session. `docs/bakeoff.md` says 5 of 6 against 2 of 6; part
+two above says three of four against none. At the spread measured here, a
+single-run 3-of-4 is consistent with anything from 2 to 4. The rank ordering of
+the two branches is probably safe — theirs returned 0 on four sessions and the
+failures were structural, traced to a threshold window that is empty and to
+read-only work being trimmed away, not to a draw. The margins are not safe.
+
+### Two hypotheses tested, neither survives
+
+**Trimming leading exploration cannot apply here.** It was this document's
+"cheapest to try", and neither fixture has leading exploration to trim — one
+grep mid-session inside the third task is not the leading run that finding was
+about. Checked before spending a call.
+
+**The recorded-candidates block is not the cause.** Half a real prompt is a
+listing of stored candidates, and since `--auto-match` the model is told not to
+use it, so it was the obvious anchor. `SKILLPP_NO_STORE` exists to test that:
+
+| | arm A | arm B (no store) |
+| --- | --- | --- |
+| first 10 pairs | 4/10 | 8/10 |
+| next 20 pairs | 12/20 | 16/20 |
+
+McNemar exact went **0.125 to 0.344 as data was added**, and the first batch's
+4–0 direction became 7–3. Adding runs made it less significant, which is what
+noise does. No effect established. The flag is worth keeping on its own terms —
+it removes 53% of the prompt the model was told to ignore — but not as a
+variance fix.
+
+### The expectation these cases assert is wrong
+
+`multi-three` scores a run correct at 3 procedures. The benchmark it was ported
+from marks that same case `methods=1`, and separately classifies
+`grep → edit → test → commit` as no procedure at all. The model banks 2 every
+time it fails, and says why: *"grep/edit/test/commit is the generic debug loop,
+no distinctive shape to encode."* It is agreeing with their benchmark and
+disagreeing with the port.
+
+So `arm A correct` above means *banked 3*, which is probably not the right
+answer. **The variance is real regardless** — it measures spread, and spread does
+not care which label is right — but any accuracy number from these two cases is
+measuring against a contested expectation. Settling it is a judgement about what
+a skill is, not a measurement: their 1, the model's consistent 2, or the port's
+3. Two is the defensible reading — a signed release tag and a locked dependency
+bump each carry rules, and the bug fix carries none.
+
+### One harness bug found on the way
+
+`Case.args` puts a flag into `$ARGUMENTS`, which a command template substitutes
+into **every** command it runs. `log-session.md` runs three, and two of them
+reject `--no-store`, so a whole batch of arm B measured argparse rather than
+anchoring — twice banking zero candidates because the model correctly refused to
+run commands that fail, and saying so exactly: *"template baked it in wrongly."*
+
+`Case.env` exists for this now. `args` is safe only for single-command templates
+like `/locate`.
+
+### What is still unknown
+
+Where the variance lives. Every failure in both arms is the same one — the third
+procedure skipped as too generic — so it is not a merge collapsing distinct
+bodies, and not the self-match bug returning. It is one marginal judgement landing
+differently on repeat, which suggests the next thing to try is the wording that
+governs that judgement rather than anything about the input.
+
+Whether 61% generalises. It is one fixture, and the stable one sat at 18/18.
 
 ### 2. A whole subsystem for the above-budget problem exists, unwired
 
