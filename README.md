@@ -60,9 +60,8 @@ for what is built and what is not.
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                  DISTRIBUTION & LIFECYCLE                    │
-│   provisional → trusted (earned through successful use)      │
-│   hot → cold → archived (demoted, never auto-deleted)        │
-│   Local `.claude/skills/` · team PR · dep check at pull time │
+│   hot → cold → archived · dependency check at pull time      │
+│   Local `.claude/skills/` · team PR · bundle for upload      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -77,11 +76,18 @@ for what is built and what is not.
 
 ### Step 2 — Summarize on Write (not on read)
 
-Raw traces are **never persisted**. At capture time each observation is compressed into a compact markdown ledger entry and scrubbed in the same pass:
+Raw traces are **never persisted**. Nothing is written while a session runs —
+the transcript Claude Code already keeps is read afterwards, and what lands in
+the store is a written procedure plus a scrubbed trace of what ran:
 
-* **Compression** keeps the ledger the same order of magnitude as the skill library itself, rather than the tens of megabytes raw MCP payloads and file diffs would consume.
-* **Sanitization happens once, on write.** An AST/regex scan strips API keys, tokens, credentials, internal URLs, and customer PII before anything touches disk — so the ledger is never a liability sitting in a buffer waiting to be cleaned later.
-* **Searchability comes for free**, because entries are already text.
+* **Compression** keeps the store the same order of magnitude as the skill
+  library rather than the transcripts behind it. Measured: 324 MB of real
+  transcripts extract to 12.3 MB, a 26× reduction.
+* **Sanitization happens before anything touches disk.** A regex and entropy
+  scan strips API keys, tokens, credentials and internal URLs, and writes for
+  `Write`/`Edit` keep the path only — never the file contents.
+* **Searchability comes for free**, because entries are already text —
+  `skillpp search` scores over name and body.
 
 ### Step 3 — Candidate Surfacing (two entry points)
 
@@ -110,8 +116,8 @@ Nothing is written to the skill library without passing this gate.
 Only after approval is a `SKILL.md` generated.
 
 * **Parameterization:** Local paths (`/Users/dev/project/...`) and environment-specific values become template variables (`${PROJECT_PATH}`).
-* **Deduplication:** Semantic similarity check against the existing library; matches above 85% expand an existing skill's `v1.x` rather than spawning a near-duplicate.
-* **Hierarchical composition:** Atomic sub-routines (e.g. `git-commit`) are extracted once and invoked as sub-skills by higher-level orchestrators, forming a DAG rather than a flat pile of prompts.
+* **Deduplication:** Built. An embedding call decides whether a proposal is a repeat, and a match logs a sighting rather than rewriting the stored body.
+* **Hierarchical composition:** *Not built, and not planned.* Sub-skills invoked by orchestrators as a DAG has no implementing code and never has. It is here as an idea, not a description.
 
 ---
 
@@ -324,29 +330,37 @@ to import a third-party package is a hook that breaks somebody's session.
 
 ```
 skillpp/
-  config.py      paths and thresholds, all env-overridable
-  sanitize.py    secret/PII scrubbing, applied on write
-  normalize.py   parameterisation + workflow signatures
-  ledger.py      candidate entries: markdown body, JSON payload
-  recurrence.py  lexical similarity and merge
-  signals.py     gap detection, question generation, effect summaries
-  capture.py     hook handlers (fail-safe: always exit 0)
-  summary.py     review surface, SKILL.md scaffold, dependency check
-  lifecycle.py   hot/cold/archived tiering, staleness, usage tracking
+  transcript.py  JSONL → Message/Block. The only module touching undocumented internals
+  identity.py    messages → conversation id (the first message's uuid, in full)
+  extract.py     messages → compressed text for a prompt (324 MB → 12.3 MB measured)
+  window.py      splitting an extract that will not fit a local model
+  memory.py      the store: entry files, the two logs, derived counts, the threshold
+  similar.py     embedding comparison — is this proposal a repeat?
+  local.py       the cheap half: asking a local model where work landed
+  prepare.py     resolve, slice against the bookmark, floor, record, commit
+  queue.py       the ended-sessions queue: what the hook writes and drain reads
+  sanitize.py    secret/PII scrubbing, applied before anything reaches disk
+  lifecycle.py   skills on disk: tiering, staleness, dependency check, reconcile
+  reconcile.py   joining per-window findings back into one answer (no caller yet)
   install.py     settings.json wiring (dry run by default)
+  config.py      paths and thresholds, all env-overridable
   cli.py         command dispatch
+commands/log-session.md       /log-session       — review a session for skills
 commands/review-candidates.md /review-candidates — decide on waiting candidates
-commands/dictate-skill.md    /dictate-skill  — build a skill from a description
-tests/test_skillpp.py        254 tests
+commands/dictate-skill.md     /dictate-skill     — build a skill from a description
+commands/skillpp-redraft.md   /skillpp-redraft   — rewrite a body against its trace
+tests/test_skillpp.py         254 tests
 ```
 
 ### Division of labour
 
-The CLI does everything deterministic: capture, scrub, deduplicate, detect
-gaps, summarise effects, manage tiers. The `/review-candidates` command drives an
-agent through everything that needs judgement — resolving what the repository
-can answer, asking the developer at most three questions, and writing prose
-worth reading. Neither half is useful alone.
+The CLI does everything with one right answer: slicing a transcript against its
+bookmark, scrubbing, counting, ordering, comparing embeddings, writing files
+atomically. The slash commands drive an agent through everything that needs
+judgement — whether a session contains a procedure worth keeping, whether a
+proposal repeats one already recorded, and what the instructions should say.
+Neither half is useful alone, and the split is the whole design: code for what
+fails silently, the model for what needs reading.
 
 ### Commands
 
@@ -384,10 +398,14 @@ Deliberately deferred — see §13 for phasing.
 
 * **Team PR sync.** Phase 2. Only the receiving half exists today: declared
   dependencies and `skillpp check`.
-* **Semantic deduplication.** Similarity is lexical — sequence and token
-  overlap over normalised step shapes. No embeddings, because this runs inside
-  a hook where a network round-trip is unacceptable. Semantic overlap is the
-  reviewing agent's job, and `/review-candidates` instructs it accordingly.
+* **~~Semantic deduplication.~~** Built, and this entry denied it. Matching is
+  an embedding call (`similar.py`) — session against session first, body
+  against body as a fallback, with thresholds taken from measured gaps. The
+  reason given here for not building it, that a network round-trip inside a
+  hook is unacceptable, stopped applying when detection moved out of the hook:
+  it happens in `drain`, after the session has ended. Lexical similarity was
+  tried and abandoned — it scored 0.00 on every prose pair, including obvious
+  matches.
 * **Script extraction.** The slash command tells the agent to lift
   deterministic pipelines into `scripts/run.sh`; the CLI does not do it
   automatically.
@@ -401,10 +419,15 @@ Deliberately deferred — see §13 for phasing.
 
 ### Verification status
 
-Installed and confirmed firing in a live Claude Code terminal session. All
-three hooks verified against real payloads: `PostToolUse` parses `Bash` and
-`Edit` calls cleanly, `UserPromptSubmit` captures prompts verbatim, and
-`SessionEnd` folds a buffer into a ledger entry.
+**One hook, `SessionEnd`, and it queues.** It appends the ended session to its
+project's queue and does nothing else; `drain` reads the transcript afterwards.
+
+This section previously asserted that three hooks were installed and confirmed
+firing against live payloads. None of them were installed anywhere — not in
+`~/.claude/settings.json`, not in the project's — and the pipeline they fed
+stopped being written to on 13 August 2026. The section a reader trusts as
+empirical was the one furthest from the truth, which is worth remembering when
+writing the next one.
 
 Coverage is narrower than §8 originally claimed, on both axes: chat-surface
 sessions are never captured, and Desktop does not read `~/.claude/skills/` —

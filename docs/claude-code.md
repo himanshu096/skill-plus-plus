@@ -1,392 +1,253 @@
 # Skill Plus Plus on Claude Code
 
-A practical guide to using Skill Plus Plus across Claude's surfaces. Key upfront:
-**passive capture works only in the terminal**; Claude Desktop has no capture
-mechanism, but skills created in the terminal can be uploaded to Desktop for use.
+How the detection loop actually runs: what fires during a session, what you
+type, and what ends up on disk.
 
-For the design rationale, see the [README](../README.md).
+Rewritten 2026-08-24, when the ledger half was deleted. The version before this
+described that half exclusively — three hooks, a capture pipeline and a review
+command that had all stopped being reachable — and asserted in a table that the
+hooks were "confirmed working against live payloads" when none were installed.
+Everything below was checked against the code as it stands.
 
-> Named `claude-code.md`, not `CLAUDE.md` — the latter is Claude Code's own
-> project-instructions file and has nothing to do with this.
+> **Invoke it as `python3 bin/skillpp`.** There is no `pyproject.toml`, so
+> `skillpp` is not on `PATH`.
 
 ---
 
 ## 1. What happens during a session
 
-```
-  you type a prompt
-        │
-        ├──► UserPromptSubmit hook ──► records what you asked for
-        │
-  Claude runs tools (Bash, Edit, MCP calls…)
-        │
-        ├──► PostToolUse hook ──────► records what actually ran,
-        │                              scrubbed before it touches disk
-  session ends
-        │
-        └──► SessionEnd hook ───────► folds the session into one
-                                       ledger candidate, deletes the buffer
-```
+Nothing. That is the design.
 
-Nothing interrupts you. No popup, no proposal mid-task. The candidate sits in
-the ledger until you go looking for it.
+The only hook is `SessionEnd`, and all it does is append one line naming the
+transcript to a queue. No prompt is read while you work, no tool call is
+recorded, nothing decides anything mid-session.
 
-The pairing of the first two hooks is the point: `UserPromptSubmit` captures
-**intent**, `PostToolUse` captures **execution**. A shell-history tool only ever
-gets the second half, which is why its output needs so much more explaining
-afterwards.
+Detection happens later, over the transcript Claude Code already wrote —
+`skillpp drain`, or `/log-session` by hand. An earlier design captured every
+prompt and tool call live into a second store; the review path never read any
+of it.
+
+```
+session ends ─▶ SessionEnd hook ─▶ ended-sessions.jsonl
+                                          │
+                        skillpp drain ────┘   reads the transcript,
+                                              spends one model call,
+                                              records what it found
+```
 
 ---
 
 ## 2. Install
 
 ```bash
-python3 bin/skillpp install
+python3 bin/skillpp install            # dry run: prints the plan, writes nothing
+python3 bin/skillpp install --apply    # writes, after backing up settings.json
 ```
 
-Dry run — prints the exact changes and writes nothing. When it looks right:
+One hook is installed:
+
+| event | what it does |
+| --- | --- |
+| `SessionEnd` | appends the ended session to its project's queue |
+
+A session whose transcript is missing or unreadable is skipped rather than
+queued — `claude -p --no-session-persistence` ends a session and fires the hook
+but writes no transcript, so without that check every automated run left a dead
+row.
+
+### Checking it worked
 
 ```bash
-python3 bin/skillpp install --apply
+python3 -c "import json,pathlib; d=json.loads(pathlib.Path.home().joinpath('.claude/settings.json').read_text()); print(json.dumps(d.get('hooks', {}), indent=2))"
 ```
 
-That does three things:
+`.get("hooks", {})` rather than `["hooks"]`: a settings file with no hooks key
+is normal, and indexing it raises `KeyError` at the one moment you are trying
+to find out whether anything is wired.
 
-1. Adds the three hooks to `~/.claude/settings.json`, **backing up the existing
-   file first** and appending to any hooks already configured rather than
-   replacing them.
-2. Copies `/skillpp-review` into `.claude/commands/`.
-3. Leaves the ledger at `~/.claude/skillpp/`, outside any repo.
-
-Copy `/skillpp-new` across too if you want the dictation command:
+Then end a session and check the queue grew:
 
 ```bash
-cp commands/skillpp-new.md .claude/commands/
+wc -l .claude/skillpp/memory/ended-sessions.jsonl
 ```
-
-**Restart Claude Code afterwards.** Hooks are read at session start, so an
-already-running session will not pick them up.
 
 ---
 
 ## 3. Where everything lives
 
-| Path | What |
-| --- | --- |
-| `~/.claude/settings.json` | The three hook registrations |
-| `~/.claude/skillpp/ledger/` | Candidate workflows, one markdown file each |
-| `~/.claude/skillpp/sessions/` | In-flight session buffers, deleted at session end |
-| `~/.claude/skillpp/cold/`, `archive/` | Demoted skills — moved, never deleted |
-| `~/.claude/skillpp/usage.json` | How often each skill actually gets invoked |
-| `~/.claude/skillpp/skillpp.log` | Hook errors, and the only place they surface |
-| `.claude/skills/<name>/SKILL.md` | The skills themselves — where Claude Code reads them |
-| `.claude/commands/skillpp-*.md` | The slash commands |
+The **store** is global; the **queue** is per project. A queued session names a
+transcript belonging to one repository, and draining is something you do in
+that repository.
 
-Everything is local. Nothing is uploaded anywhere.
+```
+~/.claude/skillpp/
+  patterns/<name>.md          one recorded procedure, written once, never reopened
+  occurrences.jsonl           one line per sighting — the count is how many there are
+  decisions.jsonl             one line per human decision; the last one is the status
+  exemplars.jsonl             embeddings of past sessions, for recognising a repeat
+  reviews/<session>.md        what a session proposed, and how far it was read
+  reviews/<session>.steps.jsonl   what that session literally ran, scrubbed
+  drafts/<name>/SKILL.md      a redrafted body awaiting review; never installed
+
+<project>/.claude/skillpp/memory/
+  ended-sessions.jsonl        the queue `drain` reads
+
+~/.claude/skills/<name>/SKILL.md    a promoted skill — the only thing an agent loads
+```
+
+Everything countable is derived. The count is the number of logged sightings,
+the dates are their range, the status is the last decision — so no two records
+of the same fact can drift apart.
 
 ---
 
 ## 4. Daily use
 
-Two commands, both pull-based — they run when you choose, never on their own.
-
-**`/skillpp-review`** — work through captured candidates. Shows what a proposed
-skill would *do* (commands, writes, destructive steps, network calls), the
-sessions it came from, and at most three questions about the parts the trace
-cannot explain. On approval it writes the `SKILL.md`.
-
-**`/skillpp-new <description>`** — go the other way: describe a process you want
-a skill for, and it checks the description for what is missing (a format you
-referenced but never gave, an absent trigger, unconstrained sources, no failure
-handling), asks up to three questions, confirms, then writes.
-
-Underneath, if you prefer the CLI:
+### Review the sessions that ended while nobody was looking
 
 ```bash
-python3 bin/skillpp review          # what is ready
-python3 bin/skillpp show <id>       # the full proposal
-python3 bin/skillpp search deploy   # your own past work, searchable
-python3 bin/skillpp stats           # ledger size and counts
+python3 bin/skillpp drain              # dry run: what it would spend
+python3 bin/skillpp drain --apply      # one model call per session
 ```
 
-A new skill lands in `.claude/skills/` and Claude Code picks it up
-automatically — no registration step.
+Sessions below the review floor of **25 new messages** are skipped for free,
+without a model call. Already-reviewed sessions are skipped by their bookmark.
+
+### Review one session by hand
+
+```
+/log-session                    # this session
+/log-session <transcript path>  # a specific one
+```
+
+Proposes procedures worth a skill, and records them. Most sessions contain
+nothing, which is the common and correct answer.
+
+### Decide on what is waiting
+
+```
+/review-candidates
+```
+
+Lists everything past the threshold, asks about one, and promotes it if you say
+so. A candidate needs **3 sightings** before it is offered — below that it is a
+log entry, not a question.
+
+### See the store
+
+```bash
+python3 bin/skillpp candidates          # everything, grouped
+python3 bin/skillpp search <words>      # by name and body
+```
+
+```
+▸ x4  kept-procedure          waiting on /review-candidates
+  x1  young-one               still logging
+✓ x3  promoted-one            → ~/.claude/skills/…
+✗ x9  turned-down             turned down at 4x · done 5x since
+```
+
+### Describe a skill instead of doing one
+
+```
+/dictate-skill <what it should do>
+```
+
+Asks what the description leaves out, then records it. It skips the recurrence
+threshold: three sightings are a proxy for "worth someone's attention", and
+describing a procedure on purpose supplies that judgement directly.
 
 ---
 
-## 5. Check that capture is actually working
+## 5. Deciding about a candidate
 
-Worth doing once, because **the failure mode is silent**. Hooks are built to
-never disrupt your session, which means a broken one logs and exits 0 rather
-than complaining.
-
-```bash
-python3 bin/skillpp stats           # note the entry count
-# …use Claude Code normally for a session, then:
-python3 bin/skillpp stats           # the count should have moved
-```
-
-If it has not:
-
-```bash
-cat ~/.claude/skillpp/skillpp.log             # hook errors land here
-ls ~/.claude/skillpp/sessions/                # buffers mid-session
-python3 -c "import json;print(json.load(open('$HOME/.claude/settings.json'))['hooks'].keys())"
-```
-
-Then confirm the hook command runs standalone:
-
-```bash
-echo '{"session_id":"probe","tool_name":"Bash","tool_input":{"command":"echo hi"}}' \
-  | PYTHONPATH=. python3 -m skillpp hook --event PostToolUse -v
-ls ~/.claude/skillpp/sessions/                # probe.json should exist
-```
-
-**Verification status.**
-
-All three hooks are confirmed working against live payloads in a terminal
-session:
-
-| Hook | Status |
+| | |
 | --- | --- |
-| `PostToolUse` | **Confirmed.** `Bash` and `Edit` calls recorded with commands and file paths parsed correctly, zero parse failures. |
-| `UserPromptSubmit` | **Confirmed.** Prompts captured verbatim under the `prompt` field. |
-| `SessionEnd` | Confirmed by direct invocation; folds a buffer into a ledger entry. |
+| **promote** | `/review-candidates`, or `promote-candidate <name>` |
+| **turn down** | `reject-candidate <name>` — leaves the queue for good |
+| **undo that** | `reopen-candidate <name>` |
+
+A rejection is not a deletion. The entry, its body and its provenance stay, and
+sightings keep accruing — but it is **never re-proposed**. Re-asking about
+something you just refused is the fastest way to get the whole tool switched
+off, and a count is not an argument you have not already heard. What the
+continued counting buys is evidence you can look at: `turned down at 4x · done
+9x since`.
+
+### When a body turns out wrong
 
 ```bash
-python3 -c "import json,glob;d=json.load(open(glob.glob('$HOME/.claude/skillpp/sessions/*.json')[0]));print('prompts:',len(d['prompts']),'steps:',len(d['steps']))"
+python3 bin/skillpp redraft <name>            # dry run
+python3 bin/skillpp redraft <name> --apply    # one model call
 ```
 
-Both numbers should climb as you work.
+Rewrites a body against the trace of what its sessions actually ran, and writes
+a **draft** — never the store, never the skills directory. A skill's text
+changing under you without review is the thing this avoids.
 
-## 5a. Capture Coverage: Terminal Only
-
-**Passive capture works only in the terminal.** Hooks fire at `SessionEnd` in
-Claude Code CLI sessions and populate the ledger. No other surface captures work.
-
-**Desktop sessions produce no ledger entries.** Confirmed by direct observation:
-a chat session in Claude Desktop produced no session buffer, no ledger entry,
-and no log entry — the hook was never invoked at all. The desktop app ships its
-own Claude Code runtime under
-`~/Library/Application Support/Claude/claude-code-vm/`, which does not read the
-host's `~/.claude/settings.json` where the hooks are registered.
-
-**This is a hard architectural boundary**, not a configuration matter. It is not
-possible to add passive capture to Desktop without changing how Desktop sources
-its runtime.
-
-**What this means for you:**
-
-If most of your work happens in Desktop chat:
-- Passive capture will never fire — the ledger stays empty.
-- Use `/skillpp-new` in the terminal to create skills from descriptions.
-- Upload them to Desktop via Customize → Skills to use them in chat.
-- Or upload `/skillpp-new` itself to Desktop and invoke it there manually when you want to create a skill.
-
-If you work in the terminal:
-- Hooks fire automatically. Skills build passively as you work.
-- `/skillpp-review` surfaces proposals at 3 occurrences.
-- Skills appear in `~/.claude/skills/` ready to use.
-- Optionally upload to Desktop if you want the same skills available in chat.
-
-## Workflows by Surface
-
-### Terminal (Claude Code CLI)
-
-**End-to-end automated.** Hooks fire automatically at session end.
-
-```
-1. Work normally in a session
-   ↓
-2. SessionEnd hook summarizes into the ledger
-   ↓
-3. After 3 occurrences, /skillpp-review surfaces a proposal
-   ↓
-4. Approve and the skill lands in ~/.claude/skills/
-   ↓
-5. Claude Code picks it up immediately — no additional steps
-```
-
-Or use `/skillpp-new` to describe a skill directly (bypasses the 3-occurrence threshold).
-
-### Claude Desktop
-
-**Neither skills nor capture cross over automatically.**
-
-Skills must be uploaded; hooks never fire at all:
-
-```
-1. Create a skill in the terminal (/skillpp-new or /skillpp-review)
-   ↓
-2. It lands in ~/.claude/skills/<name>/SKILL.md — terminal only
-   ↓
-3. skillpp bundle --format upload --out ~/skill-uploads
-   ↓
-4. Upload via Customize → Skills
-   ↓
-5. Now invocable in Desktop chat
-```
-
-Capture is worse than manual — it is unavailable. Hooks never fire in Desktop
-(§5a), so the ledger only ever fills from terminal sessions.
-
-Two further limits on the authoring skills themselves: `/skillpp-new` and
-`/skillpp-review` shell out to the `skillpp` CLI, and Desktop chat has no shell.
-Uploading them would make Desktop *load* them and then fail at the first command.
-Authoring stays a terminal activity until a shell-free variant exists.
+It refuses on an entry with no trace: dictated procedures were never observed,
+and entries recorded before traces were kept have nothing to rewrite against.
 
 ---
 
-### Getting skills into Claude Desktop
+## 6. Getting skills somewhere else
 
-**Claude Desktop does not read `~/.claude/skills/`. Skills reach it by upload.**
-
-Established by controlled test: two skills were written to `~/.claude/skills/`
-with identical bodies, differing only in whether the frontmatter carried a
-`when_to_use` key. After a full Desktop restart, a fresh chat listed **neither**
-— while continuing to list a skill that had been uploaded through
-Customize → Skills. Desktop's skill list is account-level (uploaded plus
-Anthropic-managed), not a read of the local directory.
-
-> Two earlier readings of this were wrong and are recorded here because the
-> mistakes are instructive. First, the conclusion that upload was required was
-> reached by *inference* from the managed-skills plugin cache, without a test.
-> Then a single successful Desktop invocation of a local skill was taken as
-> proof of local reading — when the real explanation was that the same skill had
-> also been uploaded. A skill working in Desktop says nothing about *why* it
-> works. Only a skill that exists in exactly one place is evidence.
-
-**The upload route: one ZIP per skill.**
-[Custom skills](https://support.claude.com/en/articles/12512198-how-to-create-custom-skills)
-are uploaded through **Customize → Skills**, as one ZIP per skill with the skill
-folder at the archive root:
-
-```
-weekly-manager-update.zip
-└── weekly-manager-update/
-    └── SKILL.md
-```
-
-`skillpp bundle --format upload` produces exactly that, and validates against
-the published limits first — `name` ≤ 64 characters, `description` ≤ 200 —
-because a description that reads well is easy to write past the limit and the
-failure would otherwise surface at upload time:
+A promoted skill is a directory under `~/.claude/skills/`. Claude Code loads it
+automatically in every project — `description` and `when_to_use` are read at
+startup, before the body, and decide whether it ever fires.
 
 ```bash
-python3 bin/skillpp bundle --format upload --out ~/skill-uploads \
-  --skills-dir ~/.claude/skills
+python3 bin/skillpp bundle --out ./dist --format upload   # one zip per skill
+python3 bin/skillpp bundle --out ./dist --format plugin   # .claude-plugin/ + skills/
 ```
 
-Available on Free, Pro, Max, Team and Enterprise, and in Claude Code (beta).
-
-> **This means skills leave your machine.** Uploaded skills are account-level,
-> not local files. The ledger stays local, but a skill you upload does not —
-> which turns sanitize-on-write from hygiene into the only thing standing
-> between a captured trace and a cloud upload. Read a generated skill before
-> uploading it.
-
-> The support article writes the filename as `skill.md`; every skill on disk
-> here — Anthropic's own included — uses `SKILL.md`, which is what the bundler
-> emits. If an upload is rejected, try renaming.
-
-**Capture is a different matter, and does not reach Desktop at all.** The
-desktop app ships its own Claude Code runtime under `claude-code-vm/`, which
-never invoked the hooks registered in the host's `~/.claude/settings.json`. No
-buffer, no ledger entry, no error. Passive capture is terminal-only.
-
-**Nor can skills be sideloaded into Desktop's cache.** It provisions its
-managed skills into a per-session directory:
-
-```
-~/Library/Application Support/Claude/local-agent-mode-sessions/
-  skills-plugin/<plugin-id>/<session-id>/
-    .claude-plugin/plugin.json     → {"name": "anthropic-skills", …}
-    skills/{docx,pptx,schedule,…}/SKILL.md
-```
-
-The manifest names it *"Anthropic-managed skills for Claude Desktop"*, the
-contents differ between sessions, and the path is keyed by session id. Writing
-a skill in there reaches one stale session and is gone at the next. It is a
-cache of managed content, not an extension point.
-
-That cache holds Anthropic's *managed* skills. It is not where your own skills
-go, and writing into it would reach one stale session directory — but that is
-irrelevant, because `~/.claude/skills/` already works (see above). The cache's
-existence is what led to the earlier incorrect conclusion that Desktop had no
-local skills path.
-
-### The two bundle formats
-
-```bash
-# One <name>.zip per skill — Customize → Skills
-python3 bin/skillpp bundle --format upload --out ~/skill-uploads
-
-# .claude-plugin/ + skills/ — Claude Code, team distribution (README §13)
-python3 bin/skillpp bundle --format plugin --out ~/my-skills \
-  --plugin-name my-skills --with-commands --zip
-```
-
-| | `upload` | `plugin` |
-| --- | --- | --- |
-| Shape | `<name>.zip` → `<name>/SKILL.md` | `.claude-plugin/` + `skills/` |
-| Consumer | Customize → Skills (Desktop) | Claude Code terminal, team PRs (Phase 2) |
-| Scope | Account-level, syncs across devices | Local files or a git repo |
-| Manual step | Customize → Skills UI | None (available in Claude Code immediately) |
-| Validated | name ≤ 64, description ≤ 200 | — |
-
-Two thresholds explain most "nothing appeared" cases, and both are working as
-designed: a session needs at least **2 substantive steps** to be recorded at
-all, and a workflow needs **3 occurrences** before it is proposed. Check
-progress with `skillpp review --all`, which includes below-threshold
-candidates.
+`upload` is for Claude Desktop → Customize → Skills. `plugin` is for sharing
+with a team through Claude Code.
 
 ---
 
-## 6. Housekeeping
+## 7. Housekeeping
 
 ```bash
-python3 bin/skillpp expire                # drop unapproved candidates past TTL
-python3 bin/skillpp lifecycle -v          # tiers, usage, stale references
-python3 bin/skillpp tier <name> cold      # demote out of the loaded index
-python3 bin/skillpp check --name <name>   # dependencies present? (exit 2 if not)
+python3 bin/skillpp lifecycle -v     # tiers and stale references
+python3 bin/skillpp reconcile        # promoted skills whose file is gone
+python3 bin/skillpp check --name <n> # dependencies present? exit 2 if not
+python3 bin/skillpp tier <n> cold    # move out of the loaded index
 ```
 
-Demotion moves a skill to `~/.claude/skillpp/cold/`. Claude Code indexes
-everything under the skills directory, so getting something out of the index
-means moving the file — there is no flag for it. Nothing is ever deleted.
+`reconcile` reports and never decides. A promoted skill whose file was deleted
+stays out of the review queue while the file is missing; whether to propose it
+again is yours.
 
-Skills are never expired on disuse: the runbook you need twice a year is
-exactly the one a disuse timer would remove. Staleness is judged by whether the
-paths and commands a skill references still resolve.
+Nothing expires on a timer. Age is the wrong signal — a procedure done four
+times in June is worth more than one done once last week.
 
 ---
 
-## 7. Turning it off
+## 8. Turning it off
 
-Delete the three `skillpp` entries from `hooks` in `~/.claude/settings.json`, or
-restore the backup the installer left beside it. Capture stops immediately at
-the next session; skills already written keep working, since they are ordinary
-`SKILL.md` files with no dependency on this tool.
-
-To remove the data as well:
-
-```bash
-rm -rf ~/.claude/skillpp/
-```
+Remove the `SessionEnd` hook from `~/.claude/settings.json` (or
+`.claude/settings.json`) and nothing runs at all. The store stays where it is;
+promoted skills keep working, because they are ordinary Claude Code skills and
+do not depend on this tool once written.
 
 ---
 
-## 8. What is on disk
+## 9. Facts about Claude Code this depends on
 
-Every captured string is scrubbed **before** it is written, not before it is
-read — API keys, tokens, connection strings, JWTs, private keys, emails and
-internal hostnames become typed placeholders like `[REDACTED:github-token]`.
-There is no window in which an unscrubbed trace exists on disk.
+Verified here, and worth knowing before changing any of it.
 
-Raw traces are never persisted at all. A session becomes one compact markdown
-summary, which is why the ledger stays in the same size range as the skill
-library rather than the tens of megabytes raw tool output would take.
-
-The scrubber is pattern-based, with a conservative high-entropy fallback for
-credentials it has no rule for. It is a good net, not a guarantee — read a
-generated skill before opening a pull request with it.
+- **`` !`command` `` in a `.claude/commands/` file runs *before* the model sees
+  the prompt**, and its output replaces the placeholder. There is no exit-code
+  branching, so "nothing to do" has to be a sentence in the output.
+- **`${CLAUDE_PROJECT_DIR}` is not substituted** inside those shell
+  injections — the permission checker sees a live expansion and refuses. It
+  *is* available to hook commands in `settings.json`.
+- **`allowed-tools` globs are literal about whitespace.**
+  `Bash(python3 * skillpp *)` does not match `python3 bin/skillpp …`.
+- **The transcript JSONL format is documented nowhere.** Only
+  `transcript_path` is specified, which is why `transcript.py` raises rather
+  than returning `[]` when a file has records but nothing recognisable.
+- **A model will report a tool call it did not make.** Asked to write a file
+  with `Write` unavailable, it printed "Wrote SKILL.md" and wrote nothing.
+  Constrain with `--allowed-tools` rather than trusting the narration.

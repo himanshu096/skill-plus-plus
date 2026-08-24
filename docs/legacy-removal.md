@@ -231,6 +231,34 @@ before `THRESHOLD`. Keep.
 
 ## Phase 4 — rewrite the docs
 
+**Done, 2026-08-24.** `docs/claude-code.md` rewritten from scratch against the
+code as it stands; every command and slash command in it was checked to exist
+afterwards. README's mechanism claims corrected.
+
+What was worst, and worth remembering rather than just fixing:
+
+- **"Verification status" was the section furthest from the truth.** It
+  asserted three hooks installed and confirmed firing against live payloads.
+  None were installed anywhere. The one block a reader trusts as empirical is
+  the one to check hardest.
+- **The docs denied a shipped mechanism.** Semantic dedup sat under *Not
+  built* — "No embeddings, because this runs inside a hook where a network
+  round-trip is unacceptable" — while `similar.py` made an embedding call the
+  core matching decision. The reason given had stopped applying when detection
+  moved out of the hook into `drain`.
+- **The verification snippet raised.** `json.load(...)['hooks'].keys()` on a
+  settings file with no hooks key, which is the normal case for the person
+  running it to find out whether anything is wired.
+- **The file tree listed six modules that no longer exist** and none of the
+  nine that do. It now matches `ls skillpp/` exactly, checked by script.
+
+Left as vision prose rather than corrected: §1 and §3 use "ledger" to mean the
+record of candidates generally. The module is gone; the word reads as a common
+noun there, and rewriting those sections is a product-narrative job rather than
+a factual one.
+
+
+
 **Gated on Phase 3**, so the rewrite describes what exists rather than what is
 about to change.
 
