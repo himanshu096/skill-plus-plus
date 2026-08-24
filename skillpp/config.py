@@ -72,14 +72,28 @@ class Config:
                                    "http://127.0.0.1:11434")
         self.local_model = _str_env("SKILLPP_LOCAL_MODEL", "qwen2.5:7b")
         self.embed_model = _str_env("SKILLPP_EMBED_MODEL", "nomic-embed-text")
-        # Whether the recorded candidates go into the prompt. An environment
-        # variable rather than a flag: `$ARGUMENTS` in a command template is
-        # substituted into *every* command it contains, and `log-session.md`
-        # runs three. A `--no-store` passed that way reached `record-candidate`
-        # and `commit-session`, which reject it — so the arm meant to test
-        # anchoring measured argparse instead, twice returning zero candidates
-        # because the model correctly refused to run commands that fail.
-        self.include_store = _str_env("SKILLPP_NO_STORE", "") == ""
+        # Whether the recorded candidates go into the prompt. **Off by
+        # default.** They were there so the model could answer "is this one we
+        # already have"; `--auto-match` answers it now, and `log-session.md`
+        # tells the model in as many words not to second-guess the listing. So
+        # the block was pasted in and then declared irrelevant by the same
+        # prompt.
+        #
+        # Removing it cannot change a match. `nearest_session` and `closest`
+        # read `exemplars.jsonl` and the stored bodies from disk; neither ever
+        # sees the prompt, so there is no path between the two. That is a
+        # stronger guarantee than the measurement that preceded it, which only
+        # found no *detectable* difference.
+        #
+        # The cost is why it is off rather than merely optional: the block is
+        # linear in store size, about 2,300 characters per entry. Six entries
+        # is ~3.4k tokens; fifty would be ~29k on every single review, before
+        # the session itself appears.
+        #
+        # `SKILLPP_STORE=1` puts it back. Kept, not deleted, because if
+        # matching ever returns to the model's judgement it will need to see
+        # the store again -- and this is the switch that does it.
+        self.include_store = _str_env("SKILLPP_STORE", "") != ""
         # Below this many new messages a review is not worth its fixed cost.
         # Overridable because it is a cost guard rather than a judgement: an
         # eval deliberately pays that cost on a small session, and until this

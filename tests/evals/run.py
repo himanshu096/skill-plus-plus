@@ -1081,13 +1081,17 @@ CASES = [
          transcripts=lambda out: [_multitask("two-tasks-one-sitting", out)],
          min_messages=1,
          check=_counted(2)),
-    Case("multi-two-nostore",
-         asks="the same session with the recorded candidates withheld",
+    Case("multi-two-withstore",
+         # The paired arm, inverted 2026-08-24 when withholding the store
+         # became the default. It set SKILLPP_NO_STORE, which is now a no-op --
+         # so both arms measured the same condition while appearing to compare
+         # two. This one asks for the block back.
+         asks="the same session with the recorded candidates put back",
          breaks="two procedures collapse into one entry, or one splits into "
                 "several, and the count a person is asked about is wrong",
          transcripts=lambda out: [_multitask("two-tasks-one-sitting", out)],
          min_messages=1,
-         env={"SKILLPP_NO_STORE": "1"},
+         env={"SKILLPP_STORE": "1"},
          check=_counted(2)),
     Case("multi-three",
          asks="one session holding 3 unrelated finished procedures",
@@ -1096,13 +1100,17 @@ CASES = [
          transcripts=lambda out: [_multitask("three-tasks-one-morning", out)],
          min_messages=1,
          check=_counted(3)),
-    Case("multi-three-nostore",
-         asks="the same session with the recorded candidates withheld",
+    Case("multi-three-withstore",
+         # The paired arm, inverted 2026-08-24 when withholding the store
+         # became the default. It set SKILLPP_NO_STORE, which is now a no-op --
+         # so both arms measured the same condition while appearing to compare
+         # two. This one asks for the block back.
+         asks="the same session with the recorded candidates put back",
          breaks="two procedures collapse into one entry, or one splits into "
                 "several, and the count a person is asked about is wrong",
          transcripts=lambda out: [_multitask("three-tasks-one-morning", out)],
          min_messages=1,
-         env={"SKILLPP_NO_STORE": "1"},
+         env={"SKILLPP_STORE": "1"},
          check=_counted(3)),
     Case("barren",
          asks="a long session of ordinary git work",

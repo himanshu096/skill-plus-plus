@@ -817,14 +817,23 @@ read-only work being trimmed away, not to a draw. The margins are not safe.
 
 ### Two hypotheses tested, neither survives
 
+**Withholding the store is now the default** (2026-08-24), for cost rather
+than for variance. The block is linear in store size — ~2,300 characters per
+entry, so ~3.4k tokens at six and ~29k at fifty, on every review, before the
+session appears — and nothing in `log-session.md` uses it. Removing it *cannot*
+change a match, which is firmer than the measurement below: `nearest_session`
+and `closest` read `exemplars.jsonl` and the stored bodies from disk and never
+see the prompt. `SKILLPP_STORE=1` puts it back, kept for the day matching
+returns to the model's judgement.
+
 **Trimming leading exploration cannot apply here.** It was this document's
 "cheapest to try", and neither fixture has leading exploration to trim — one
 grep mid-session inside the third task is not the leading run that finding was
 about. Checked before spending a call.
 
-**The recorded-candidates block is not the cause.** Half a real prompt is a
-listing of stored candidates, and since `--auto-match` the model is told not to
-use it, so it was the obvious anchor. `SKILLPP_NO_STORE` exists to test that:
+**The recorded-candidates block is not the cause** — but it is gone anyway.
+Since `--auto-match` the model is told not to use the listing, so it was the
+obvious anchor for the variance, and it was not:
 
 | | arm A | arm B (no store) |
 | --- | --- | --- |

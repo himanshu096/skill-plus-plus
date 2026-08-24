@@ -1164,8 +1164,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?",
                    help="transcript path or session id (default: this session)")
     p.add_argument("--no-store", action="store_true",
-                   help="omit the recorded candidates. Since --auto-match the "
-                        "model does not use them, and they are half the prompt")
+                   help="omit the recorded candidates (already the default; "
+                        "set SKILLPP_STORE=1 to include them)")
     p.add_argument("--window", type=int, metavar="N",
                    help="print only window N instead of the whole session")
     p.add_argument("--windows", action="store_true",

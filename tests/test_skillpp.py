@@ -3082,19 +3082,23 @@ class TestTheKnobsActuallyReachSomething(TempRoot):
 
 
 class TestRenderWithoutTheStore(TempRoot):
-    """Omitting the recorded candidates from the prompt.
+    """The recorded candidates are **off by default** since 2026-08-24.
 
     They were there so the model could decide whether a proposal matched
-    something already recorded. Since `--auto-match` that decision is an
-    embedding and `log-session.md` tells the model not to make it, but the block
-    stayed — measured on the real store, 53% of the prompt, growing with the
-    store while the session does not.
+    something already recorded. `--auto-match` decides that now, and
+    `log-session.md` tells the model in as many words not to second-guess the
+    listing — so the block was pasted in and then declared irrelevant by the
+    same prompt.
 
-    A flag rather than a deletion: the block shows several procedures with their
-    full section structure immediately before the model is asked how many
-    procedures are in *this* session, which is a plausible source of the
-    run-to-run variance in that count. The flag exists so that can be tested
-    rather than assumed.
+    Removing it cannot change a match, which is a stronger guarantee than the
+    measurement that preceded the change. `nearest_session` and `closest` read
+    `exemplars.jsonl` and the stored bodies from disk; neither ever sees the
+    prompt.
+
+    Kept switchable rather than deleted: if matching ever returns to the
+    model's judgement it will need the store again, and this is the switch.
+    The variance hypothesis it was originally built to test did not survive —
+    McNemar went from 0.125 to 0.344 as pairs were added.
     """
 
     def prepared(self):
@@ -3108,9 +3112,18 @@ class TestRenderWithoutTheStore(TempRoot):
         memory.add_occurrence(self.config, name="already-stored", session="old")
         return prepare(str(path), config=self.config)
 
-    def test_the_default_still_carries_the_store(self):
+    def test_the_default_omits_the_store(self):
+        """Flipped 2026-08-24. It was pasted in and then told to be ignored."""
         from skillpp.prepare import render
-        text = render(self.prepared())
+        text = render(self.prepared(), store=Config(self.root).include_store)
+        self.assertNotIn("# Candidates recorded so far", text)
+        self.assertNotIn("already-stored", text)
+
+    def test_asking_for_it_puts_it_back(self):
+        from skillpp.prepare import render
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_STORE": "1"}):
+            text = render(self.prepared(),
+                          store=Config(self.root).include_store)
         self.assertIn("# Candidates recorded so far", text)
         self.assertIn("already-stored", text)
 
@@ -3131,19 +3144,19 @@ class TestRenderWithoutTheStore(TempRoot):
         self.assertIn("conversation", text)
         self.assertIn("transcript", text)
 
-    def test_the_environment_can_withhold_the_store(self):
+    def test_the_environment_is_how_it_is_asked_for(self):
         """A variable, not a flag, and the reason is the command template.
 
         `$ARGUMENTS` is substituted into every command a template runs, and
         `log-session.md` runs three. A `--no-store` passed that way reached
-        `record-candidate` and `commit-session`, which reject it — so the eval
+        `record-candidate` and `commit-session`, which reject it — so an eval
         arm meant to test anchoring measured argparse instead, twice banking
         zero candidates because the model correctly refused to run commands
         that fail.
         """
-        with unittest.mock.patch.dict(os.environ, {"SKILLPP_NO_STORE": "1"}):
-            self.assertFalse(Config(self.root / "x").include_store)
-        self.assertTrue(Config(self.root / "y").include_store)
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_STORE": "1"}):
+            self.assertTrue(Config(self.root / "x").include_store)
+        self.assertFalse(Config(self.root / "y").include_store)
 
     def test_withholding_the_store_leaves_other_commands_alone(self):
         # The failure mode this replaced: a mechanism that reaches commands it
@@ -3155,7 +3168,7 @@ class TestRenderWithoutTheStore(TempRoot):
                    for n in range(MIN_NEW_MESSAGES + 2)]
         path = write_transcript(self.root, *records, name="e.jsonl")
         buf = io.StringIO()
-        with unittest.mock.patch.dict(os.environ, {"SKILLPP_NO_STORE": "1",
+        with unittest.mock.patch.dict(os.environ, {"SKILLPP_STORE": "1",
                                                    "SKILLPP_MIN_NEW": "1"}):
             with unittest.mock.patch("sys.stdin", io.StringIO("a body\n\n## s\n\nrun")):
                 with contextlib.redirect_stdout(buf):
