@@ -1499,6 +1499,93 @@ class TestSkillsDirRedirect(unittest.TestCase):
                 self.assertEqual(default_skills_dir(tmp), local)
 
 
+class TestRejection(TempRoot):
+    """Turned down, and what brings it back.
+
+    A rejection is neither a delete nor a permanent ignore. The developer said
+    no knowing the procedure had happened N times; doing it three more is the
+    one argument that refusal could not have answered, so that is what reopens
+    it.
+    """
+
+    def seen(self, name, times):
+        memory.add_entry(self.config, name=name, body="Do it.")
+        for n in range(times):
+            memory.add_occurrence(self.config, name=name, session=f"{name}-{n}")
+
+    def queue(self):
+        return [c.name for c in memory.reviewable(memory.load(self.config),
+                                                  config=self.config)]
+
+    def reject(self, name):
+        entry = memory.find(memory.load(self.config), name)
+        memory.record_decision(self.config, name=name, action=memory.REJECTED,
+                               at_count=entry.count)
+
+    def test_it_leaves_the_queue(self):
+        self.seen("noisy", 3)
+        self.assertEqual(self.queue(), ["noisy"])
+        self.reject("noisy")
+        self.assertEqual(self.queue(), [])
+
+    def test_two_more_sightings_are_not_enough(self):
+        self.seen("noisy", 3)
+        self.reject("noisy")
+        for n in range(2):
+            memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
+        self.assertEqual(self.queue(), [])
+
+    def test_three_more_bring_it_back(self):
+        self.seen("noisy", 3)
+        self.reject("noisy")
+        for n in range(3):
+            memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
+        self.assertEqual(self.queue(), ["noisy"])
+
+    def test_rejecting_again_moves_the_bar_up(self):
+        """Otherwise a second no would be undone by the sightings that caused it."""
+        self.seen("noisy", 3)
+        self.reject("noisy")
+        for n in range(3):
+            memory.add_occurrence(self.config, name="noisy", session=f"more-{n}")
+        self.assertEqual(self.queue(), ["noisy"])
+        self.reject("noisy")                     # now turned down at 6
+        self.assertEqual(self.queue(), [])
+        memory.add_occurrence(self.config, name="noisy", session="later")
+        self.assertEqual(self.queue(), [])
+
+    def test_nothing_is_deleted_by_a_rejection(self):
+        self.seen("noisy", 3)
+        entry = self.config.patterns_dir / "noisy.md"
+        before = entry.read_bytes()
+        self.reject("noisy")
+        self.assertEqual(entry.read_bytes(), before)
+        self.assertEqual(memory.find(memory.load(self.config), "noisy").count, 3)
+
+    def test_a_rejection_is_not_shown_as_a_skill(self):
+        """`render` grouped everything non-candidate under "Made into skills".
+
+        A model reading that would have been told a turned-down procedure
+        already exists as a skill.
+        """
+        self.seen("noisy", 1)
+        self.reject("noisy")
+        out = memory.render(memory.load(self.config))
+        made = out.index("## Made into skills")
+        self.assertNotIn("noisy", out[made:out.index("## Turned down")])
+        self.assertIn("noisy", out[out.index("## Turned down"):])
+
+    def test_a_promotion_still_wins_after_a_rejection(self):
+        """Last decision wins, and the two must not be confused for each other."""
+        self.seen("noisy", 3)
+        self.reject("noisy")
+        memory.record_decision(self.config, name="noisy",
+                               action=memory.PROMOTED, skill_path="/tmp/x")
+        entry = memory.find(memory.load(self.config), "noisy")
+        self.assertEqual(entry.status, memory.PROMOTED)
+        self.assertEqual(self.queue(), [])
+
+
 class TestReviewThreshold(TempRoot):
     """What is recorded and what is asked about are different questions."""
 

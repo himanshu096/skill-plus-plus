@@ -45,6 +45,12 @@ _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 CANDIDATE = "candidate"
 PROMOTED = "promoted"
+# A rejection is not a deletion and not a permanent ignore. The procedure
+# leaves the queue, and comes back only if it happens THRESHOLD more times
+# than it had when it was turned down. Recurrence is the one argument a
+# rejection cannot answer: "I have now done this three more times" is new
+# evidence, and the earlier "no" was cast without it.
+REJECTED = "rejected"
 
 # Below this a recorded procedure is an observation, not a proposal. One
 # sighting is a thing that happened; two is a coincidence. Putting either in
@@ -124,6 +130,9 @@ class Candidate:
     sessions: list[str] = field(default_factory=list)
     dates: list[str] = field(default_factory=list)
     status: str = CANDIDATE
+    # What the count was when a person last decided about this. Zero for an
+    # entry nobody has decided on.
+    decided_at_count: int = 0
     skill_path: str = ""
     promoted_on: str = ""
     path: Path | None = None
@@ -239,10 +248,22 @@ def add_occurrence(config: Config, *, name: str, session: str,
 
 
 def record_decision(config: Config, *, name: str, action: str,
-                    skill_path: str = "", today: str | None = None) -> None:
-    """Record what a person decided. The only thing that changes status."""
+                    skill_path: str = "", at_count: int = 0,
+                    today: str | None = None) -> None:
+    """Record what a person decided. The only thing that changes status.
+
+    ``at_count`` is the count *when the decision was made*, and it is stored
+    rather than derived on purpose -- unlike the count itself, which is always
+    the length of the provenance. It is a historical fact about a past moment,
+    and the logs carry dates rather than timestamps, so which occurrences
+    preceded a same-day decision cannot be recovered afterwards.
+
+    It exists for rejection: "three more sightings than when you said no"
+    needs to know what the number was then.
+    """
     _append(config.decisions_file,
             {"name": name, "action": action, "skill_path": skill_path,
+             "at_count": at_count,
              "date": today or date.today().isoformat()})
 
 
@@ -294,6 +315,10 @@ def load(config: Config) -> list[Candidate]:
         entry.status = str(record.get("action") or CANDIDATE)
         entry.skill_path = str(record.get("skill_path") or "")
         entry.promoted_on = str(record.get("date") or "")
+        try:
+            entry.decided_at_count = int(record.get("at_count") or 0)
+        except (TypeError, ValueError):
+            entry.decided_at_count = 0
 
     return order(list(entries.values()))
 
@@ -350,8 +375,15 @@ def reviewable(candidates: list[Candidate],
         resolved = config.recurrence_threshold
     if resolved is None:
         resolved = THRESHOLD
-    return [c for c in candidates
-            if c.status == CANDIDATE and c.count >= resolved]
+    ready = [c for c in candidates
+             if c.status == CANDIDATE and c.count >= resolved]
+    # A rejected procedure that has since happened `resolved` more times is
+    # asked about again. The developer turned it down knowing it had been seen
+    # `decided_at_count` times; doing it three more is the one thing that
+    # was not on the table when they decided.
+    return order(ready + [c for c in candidates
+                          if c.status == REJECTED
+                          and c.count - c.decided_at_count >= resolved])
 
 
 def order(candidates: list[Candidate]) -> list[Candidate]:
@@ -360,7 +392,9 @@ def order(candidates: list[Candidate]) -> list[Candidate]:
     The count does not decide whether an entry belongs; a person's decision
     did that. It decides what gets read first.
     """
-    return sorted(candidates, key=lambda c: (c.status != CANDIDATE, -c.count, c.name))
+    order_of = {CANDIDATE: 0, PROMOTED: 1, REJECTED: 2}
+    return sorted(candidates,
+                  key=lambda c: (order_of.get(c.status, 1), -c.count, c.name))
 
 
 def render_entry(candidate: Candidate) -> str:
@@ -382,10 +416,16 @@ def render(candidates: list[Candidate]) -> str:
     Derived on demand. There is no rendered document on disk to fall out of
     step with the entry files, and nothing reads this back.
     """
-    groups = ((CANDIDATE, "## Skill candidates"), (PROMOTED, "## Made into skills"))
+    groups = ((CANDIDATE, "## Skill candidates"),
+              (PROMOTED, "## Made into skills"),
+              (REJECTED, "## Turned down"))
     parts: list[str] = []
     for status, heading in groups:
-        picked = [c for c in candidates if (c.status == CANDIDATE) == (status == CANDIDATE)]
+        # Matched on the status itself rather than "is or is not a candidate":
+        # that older test put everything non-candidate under "Made into
+        # skills", so a rejection would have been shown to the model as a
+        # skill that exists.
+        picked = [c for c in candidates if c.status == status]
         parts.append(heading + "\n")
         parts.append("\n".join(render_entry(c) for c in picked) if picked
                      else "_None yet._\n")

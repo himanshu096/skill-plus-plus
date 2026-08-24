@@ -64,7 +64,8 @@ person can usefully correct, and they cannot correct what they cannot see.
 
 - **Write the skill** — promote it with the drafted fields
 - **Change the wording** — take their edit, show it again, ask again
-- **Leave it for now** — stays a candidate; comes up again when it recurs
+- **Turn it down** — leaves the queue; returns only if it recurs
+- **Leave it for now** — stays a candidate; comes up again next time
 
 ## On acceptance
 
@@ -83,7 +84,21 @@ Read back the path it wrote, then stop. Do not open the file, tidy it, or move
 to the next candidate unprompted — deciding on one is the whole job, and a
 queue that promotes itself is not a queue anyone controls.
 
-## On refusal
+## On "leave it for now"
 
-Say nothing further about it. It stays as it is and comes up again when the
-procedure recurs — intended behaviour, not a thing to work around.
+Say nothing further about it. It stays as it is and comes up again next time —
+intended behaviour, not a thing to work around.
+
+## On "turn it down"
+
+```bash
+python3 bin/skillpp reject-candidate "<name>"
+```
+
+Nothing is deleted. The body and its provenance stay, and the decision is one
+appended line like any other. The procedure leaves the queue and is offered
+again only once it has happened three more times than when it was turned down
+— which is the one argument the refusal could not have answered, since it was
+made without that evidence.
+
+Read back what the command prints, then stop. Do not argue for the candidate.

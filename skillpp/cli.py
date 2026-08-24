@@ -607,6 +607,40 @@ _REDRAFT_OPEN = "<<<SKILLPP-BODY"
 _REDRAFT_CLOSE = "SKILLPP-BODY>>>"
 
 
+def cmd_reject_candidate(args: argparse.Namespace) -> int:
+    """Turn a candidate down. It leaves the queue and can come back.
+
+    Not a deletion: the entry, its body and its provenance all stay, and the
+    decision is one appended line like any other. Nothing is rewritten, so a
+    rejection cannot damage what it rejects.
+
+    Not permanent either. The count when the decision was made is recorded, and
+    the procedure is offered again once it has happened `THRESHOLD` more times.
+    That is the one argument a rejection cannot have answered: the developer
+    said no knowing it had happened N times, and "it has now happened three
+    more" is evidence they did not have.
+    """
+    from .memory import REJECTED, find, load, record_decision
+
+    config = Config(args.root)
+    entry = find(load(config), args.name)
+    if entry is None:
+        print(f"No candidate named {args.name!r}", file=sys.stderr)
+        return 1
+    if entry.status == REJECTED:
+        print(f"{entry.name} was already turned down at {entry.decided_at_count}x; "
+              f"it is at {entry.count}x now.")
+        return 0
+
+    record_decision(config, name=entry.name, action=REJECTED,
+                    at_count=entry.count)
+    again = entry.count + (config.recurrence_threshold or 3)
+    print(f"turned down: {entry.name} (at {entry.count}x)")
+    print(f"It leaves the review queue and returns at {again}x — the body and "
+          f"its provenance are kept, nothing was deleted.")
+    return 0
+
+
 def cmd_redraft(args: argparse.Namespace) -> int:
     """Rewrite a body against the trace of what its sessions actually ran.
 
@@ -695,7 +729,8 @@ def cmd_redraft(args: argparse.Namespace) -> int:
 
 def cmd_candidates(args: argparse.Namespace) -> int:
     """List what has been recorded, most-seen first."""
-    from .memory import CANDIDATE, PROMOTED, THRESHOLD, load, reviewable
+    from .memory import (CANDIDATE, PROMOTED, REJECTED, THRESHOLD, load,
+                         reviewable)
 
     config = Config(args.root)
     store = config.patterns_dir
@@ -720,25 +755,40 @@ def cmd_candidates(args: argparse.Namespace) -> int:
         } for e in entries], indent=2))
         return 0
 
+    waiting = {e.name for e in ready}
     logged = [e for e in entries
-              if e.status == CANDIDATE and e.count < THRESHOLD]
+              if e.status == CANDIDATE and e.name not in waiting]
     done = [e for e in entries if e.status == PROMOTED]
-    print(f"{len(ready)} ready to review, {len(logged)} still logging, "
-          f"{len(done)} promoted — {store}\n")
+    turned_down = [e for e in entries if e.status == REJECTED]
+    counts = (f"{len(ready)} ready to review, {len(logged)} still logging, "
+              f"{len(done)} promoted")
+    if turned_down:
+        counts += f", {len(turned_down)} turned down"
+    print(f"{counts} — {store}\n")
     for entry in entries:
+        # Marked by what the entry *is*, not by whether its count clears the
+        # threshold: a turned-down entry can sit well above it and still not be
+        # in the queue, and marking that one "ready" is how a listing lies.
         if entry.status == PROMOTED:
             mark = "✓ "
-        elif entry.count >= THRESHOLD:
+        elif entry.status == REJECTED:
+            mark = "✗ "
+        elif entry.name in waiting:
             mark = "▸ "
         else:
             mark = "  "
         print(f"{mark}x{entry.count}  {entry.name}")
+        if entry.status == REJECTED:
+            back = entry.decided_at_count + (config.recurrence_threshold or THRESHOLD)
+            print(f"        turned down at {entry.decided_at_count}x"
+                  f" · returns at {back}x")
         if entry.skill_path:
             print(f"        {entry.skill_path}")
         # Not truncated. Shortening a session id for display is what once hid
         # a collision that froze a count at 1 with no error.
         print(f"        {', '.join(entry.sessions)}")
-    print(f"\n▸  seen {THRESHOLD}× or more — /review-candidates asks about these.")
+    print(f"\n▸  waiting on /review-candidates."
+          + ("  ✗  turned down; returns if it recurs." if turned_down else ""))
     print(f"Read one in full:  less {store}/<name>.md")
     return 0
 
@@ -1296,6 +1346,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open-only", action="store_true",
                    help="only those not yet made into skills")
     p.set_defaults(func=cmd_candidates)
+
+    p = sub.add_parser("reject-candidate",
+                       help="turn a candidate down; it returns if it recurs")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_reject_candidate)
 
     p = sub.add_parser("redraft",
                        help="rewrite a body against what its sessions ran")
