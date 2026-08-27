@@ -1,0 +1,477 @@
+{
+  "tag": "1c3c9422",
+  "name": "desk-booking-eval-case",
+  "captured": "2026-08-27",
+  "procedure": "add a walkthrough-card eval case to Concept Buddy",
+  "target": "desk_booking",
+  "truth": {
+    "episodes": 1,
+    "title": "add walkthrough-card case for Desk Booking",
+    "must_contain": [
+      "mcp__adk-docs",
+      "book.py"
+    ]
+  },
+  "why": "Six natural turns, one task: fetch the ADK docs, write the case, regenerate the generated evalset, verify the TOPICS decision record in book.py, commit. The doc lookup and the decision check are the two steps a person would follow this again for, so a run that files them separately has not captured the procedure.",
+  "history": "Banked 6 fragments before `_absorb_before_commit`. One fragment was the documentation lookup alone; the commit episode was titled 'Looks good — commit'.",
+  "shape": {
+    "steps": 61,
+    "prompts": 7,
+    "markers": 1
+  },
+  "current": {
+    "episodes": 1
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "We're missing eval coverage for the desk-booking walkthrough card — I don't see a case for it in eval/cases.json. Can you check how ADK eval cases are structured?"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "List eval directory"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n -i \"desk\\|booking\\|hotdesk\\|hot_desk\\|book_desk\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -40",
+        "description": "Search desk-booking in cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {},
+      "failed": true
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"wk_\\|walkthrough\\|walk_\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -60",
+        "description": "Find walkthrough refs"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n '\"variant\"\\|walkthrough\\|\"topic\"' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -60",
+        "description": "Find variant/topic keys"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n -B2 -A6 '\"variant\": \"walkthrough\"' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -80",
+        "description": "Find walkthrough variant refs"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n -i \"bench.time\\|it.support\\|assistance\\|absence\\|collaboration.rules\\|benefits\\|events\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | grep -v '\"label\"\\|\"id\": \"wk_' | head -40",
+        "description": "Find working-section walkthrough queries"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"walkthrough\\|working_walk\\|book desk\\|desk_walk\\|show_topic\\|walk_\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -30",
+        "description": "All walkthrough mentions"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"walkthrough\\|WALKTHROUGH\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/ 2>/dev/null | head -20",
+        "description": "Find walkthrough definitions in skills"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -c '\"variant\": \"walkthrough\"' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json && wc -l ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Count walkthrough variant occurrences"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -c \"desk\\|booking\\|walkthrough\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json && head -30 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+        "description": "Check ADK evalset for desk"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "did you call MCP for this?"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Use the adk-docs MCP tool to look up how ADK eval cases and evalsets are structured — don't answer from memory, actually fetch the docs first."
+      },
+      "failed": false
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__list_doc_sources",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "dd a case with query 'How do I book a desk in the office?' asserting expect_any: [\\\"desk\\\", \\\"book\\\"], forbidding the generic fallbacks, and expecting a walkthrough card with body_contains: \\\"desk-booking\\\" — match the format of the other card-staging cases."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"show_overview_card\\|def show_overview\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/*.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools/ 2>/dev/null | head -20",
+        "description": "Find show_overview_card definition"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n '\"require_tools_any\"\\|\"expect_card\"' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -30",
+        "description": "Find require_tools_any + expect_card patterns"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); print('valid')\"",
+        "description": "Validate cases.json JSON"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Regenerate concept_buddy.evalset.json from that"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 backend/concept_buddy_agent/eval/generate_evalset.py 2>&1 | tail -30",
+        "description": "Run generator"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"wk_desk_booking_card\\|desk_booking_local\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+        "description": "Confirm new case in evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Before you commit — check the docstring in concept_buddy_agent/book.py. It says TOPICS is the single source of truth for KB cards. Confirm desk_booking still only lives there, cards.stage is still the only writer, and nothing crept back into a skill prompt."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"TOPICS\\|source of truth\\|desk_booking\\|desk-booking\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -30",
+        "description": "Check book.py for TOPICS + desk_booking"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"desk[_-]booking\\|Desk Booking\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ 2>/dev/null | grep -v \".pyc\\|__pycache__\\|/eval/\\|book.py\\|references/working.md\"",
+        "description": "Find desk-booking outside book.py + references"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"cards\\.stage\\|def stage\\|stage_cards\\|stage_card\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/*.py 2>/dev/null | grep -v \".pyc\\|__pycache__\" | head -30",
+        "description": "Find cards.stage callers"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn 'state\\[\"stage_cards\"\\]\\|state\\[.stage_cards.\\]\\|\\.stage_cards =\\|stage_cards\\s*=' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/*.py 2>/dev/null | grep -v \".pyc\\|__pycache__\"",
+        "description": "Find stage_cards direct writers"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn -i \"desk.booking\\|desk_booking\\|deskbird\\|deskbooking\\|book.*desk\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/ 2>/dev/null | head -20",
+        "description": "Skill prompts scan for desk-booking"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-onboarding/references/working.md"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/ 2>/dev/null",
+        "description": "List skills dirs"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Looks good — commit"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git status",
+        "description": "git status"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git diff -- backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json | head -100",
+        "description": "Diff eval files"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -10",
+        "description": "Recent commits style"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"cases.json\\|json.dump\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py",
+        "description": "Check if generator rewrites cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git show HEAD:backend/concept_buddy_agent/eval/cases.json | head -20",
+        "description": "HEAD version of cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git show HEAD:backend/concept_buddy_agent/eval/concept_buddy.evalset.json | head -5 && echo \"---CURRENT---\" && head -5 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+        "description": "HEAD vs current evalset indent"
+      },
+      "failed": false
+    },
+    {
+      "tool": "AskUserQuestion",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git checkout HEAD -- backend/concept_buddy_agent/eval/cases.json && git diff --stat backend/concept_buddy_agent/eval/cases.json",
+        "description": "Restore cases.json to HEAD"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"desk_booking_local\\|mandatory_holidays_local\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Locate anchor in restored file"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; d=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); print('valid, cases:', len(d['cases']))\" && python3 backend/concept_buddy_agent/eval/generate_evalset.py 2>&1 | tail -5",
+        "description": "Validate + regen evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git status backend/concept_buddy_agent/eval/ && echo \"---\" && git diff --stat backend/concept_buddy_agent/eval/",
+        "description": "Status + stat eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git show HEAD:backend/concept_buddy_agent/eval/concept_buddy.evalset.json | grep -c '\"eval_id\"'",
+        "description": "Case count in HEAD evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -5 -- backend/concept_buddy_agent/eval/concept_buddy.evalset.json backend/concept_buddy_agent/eval/cases.json",
+        "description": "Recent history on both files"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -1 --format=\"%h %s\" -- backend/concept_buddy_agent/eval/concept_buddy.evalset.json && echo \"---\" && git log --oneline -1 --format=\"%h %s\" -- backend/concept_buddy_agent/eval/cases.json",
+        "description": "Last touch each file"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add walkthrough-card case for Desk Booking\n\nSibling to desk_booking_local (which covers the Q&A/answer path). This one\nasserts the walkthrough card is staged with the correct body key\n(`desk-booking`) — previously no positive walkthrough-card assertion\nexisted anywhere in cases.json.\n\nRegenerates concept_buddy.evalset.json (also brings 12 stale cases into\nsync with cases.json).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>\nEOF\n)\" && echo \"---\" && git status backend/concept_buddy_agent/eval/",
+        "description": "Stage + commit + verify"
+      },
+      "failed": false
+    }
+  ]
+}
