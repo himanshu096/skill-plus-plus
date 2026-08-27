@@ -1,0 +1,210 @@
+{
+  "tag": "71448e61",
+  "name": "absence-eval-case",
+  "captured": "2026-08-27",
+  "procedure": "add a walkthrough-card eval case to Concept Buddy",
+  "target": "absence",
+  "truth": {
+    "episodes": 1,
+    "title": "add walkthrough-card case for absence.io",
+    "must_contain": [
+      "mcp__adk-docs",
+      "book.py"
+    ]
+  },
+  "why": "The third run of this procedure and the first captured entirely by a fixed pipeline — no replay, no tuning. One episode straight from the live hooks, titled from its own commit. The two before it banked six and five fragments respectively.",
+  "history": "With the other two, this is what first carried a real procedure past the recurrence threshold: replayed together they merge to one entry at x3 with three variants and ready=True. Three variants also showed that `step_shape` cannot find the method — it keeps 31 of 36 steps, 21 of them undifferentiated `bash:grep` — while a shape that preserves command arguments keeps exactly the six the three runs agree on: the adk-docs fetch, the read, and the edit.",
+  "shape": {
+    "steps": 26,
+    "prompts": 5,
+    "markers": 1
+  },
+  "current": {
+    "episodes": 1
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Use the adk-docs MCP tool to look up how ADK eval cases and evalsets are structured — don't answer from memory, actually fetch the docs first."
+      },
+      "failed": false
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__list_doc_sources",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "We have no coverage for the absence.io walkthrough card. TOPICS[\"absence\"] in book.py stages a walkthrough card with body absence, and no case asserts it. Add one to eval/cases.json — expect_card with variant walkthrough and body_contains: \"absence\" — matching the format of geco_timesheet_card_staged."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy -name \"cases.json\" -not -path \"*/node_modules/*\" 2>/dev/null",
+        "description": "Locate cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"geco_timesheet_card_staged\\|TOPICS\\[.absence.\\]\\|absence\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 2>/dev/null | head -40",
+        "description": "Find absence topic in book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"geco_timesheet_card_staged\\|geco_timesheet\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Locate geco case in cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Regenerate concept_buddy.evalset.json from that."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ && grep -rn \"concept_buddy.evalset\\|evalset.json\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ 2>/dev/null | head -20",
+        "description": "List eval dir + find generator"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy/backend && python concept_buddy_agent/eval/generate_evalset.py",
+        "description": "Regenerate evalset from cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Before you commit — check the docstring in concept_buddy_agent/book.py. It says the TOPICS table is the single source of truth for KB cards, moved out of the skill prompt so staging is deterministic. Confirm that still holds: absence is only in TOPICS, cards.stage is still the only writer, nothing crept back into a skill prompt"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"cards.stage\\|cards\\.stage\\|stage_card\\|stage(\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" 2>/dev/null | grep -v __pycache__ | grep -v /eval/",
+        "description": "Find all card staging callsites"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rniE \"absence\\.io|absence \" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" --include=\"*.md\" 2>/dev/null | grep -v __pycache__ | grep -v /eval/",
+        "description": "Find all absence mentions in agent"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-onboarding/references/tools.md"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Commit. If regenerating left indent churn in cases.json, leave it — do not git checkout the file, just commit what's there."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy && git status --short backend/concept_buddy_agent/eval/",
+        "description": "Check eval dir status"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git diff --stat backend/concept_buddy_agent/eval/",
+        "description": "Diff stat eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -6",
+        "description": "Recent commit style"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add walkthrough-card case for absence.io\n\nGuards book.TOPICS[\"absence\"] staging a walkthrough card with body=\"absence\"\n(the absence.io click-through). Sibling to geco_timesheet_card_staged and\nwk_desk_booking_card; the KB-path card was previously uncovered.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git status --short",
+        "description": "Commit absence eval case"
+      },
+      "failed": false
+    }
+  ]
+}
