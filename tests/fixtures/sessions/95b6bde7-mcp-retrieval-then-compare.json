@@ -1,0 +1,167 @@
+{
+  "tag": "95b6bde7",
+  "name": "mcp-retrieval-then-compare",
+  "captured": "2026-09-03",
+  "procedure": "pull the reference docs through MCP, compare them against the local implementation, report",
+  "truth": {
+    "episodes": 1,
+    "markers": 0,
+    "title": null,
+    "must_contain": [
+      "mcp__adk-docs",
+      "generate_evalset"
+    ]
+  },
+  "why": "Sessions 1-4 are all coding sessions that end in a commit. Work done through tools has no marker by nature, and this is the shape the pipeline claims to support: `trim_leading_exploration`'s docstring argues that an MCP retrieval is step one of a method, not the search that found the task, and exempts it from trimming for exactly this reason. One task — pull the docs, compare, report — so the ground truth is one episode and no markers.\n\nRecorded with `adk-docs` rather than Confluence: Confluence MCP is wired into the backend agent, not exposed to Claude Code, which the session established itself. The server does not matter to what is under test — `is_read_only` classifies MCP by verb prefix and the trim exempts any `mcp__` call.",
+  "history": "The MCP exemption does not hold, and it is a second rule that defeats it:\n\n  ep0  4 work steps, all MCP retrieval, ended_by=prompt, flagged=True   DROPPED\n  ep1  6 work steps, no MCP,            ended_by=session-end            banked\n\n`trim_leading_exploration` never gets to apply its exemption, because the flagging rule at segment.py:374 discards an episode whose every substantive step only looked at things — and a pure retrieval is exactly that. The banked entry, `bf8bb31758f7`, is the comparison alone, titled after the second prompt, with nothing recording where the reference material came from. The half the procedure exists for is the half that was thrown away.\n\nThis is the failure the trim's own docstring describes and believes it prevented: 'pull the docs, build the agenda, share it is a procedure whose first two steps are reads'.",
+  "shape": {
+    "steps": 16,
+    "prompts": 3,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Use the Confluence MCP tools to find what the onboarding pages say about desk booking."
+      },
+      "failed": false
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "No Confluence then — use the adk-docs MCP tools instead, same shape. Look up what the ADK docs say about how eval cases and evalsets are structured."
+      },
+      "failed": false
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__list_doc_sources",
+      "input": {},
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/llms.txt"
+      },
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/evaluate/index.md"
+      },
+      "failed": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/evaluate/criteria/index.md"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Compare that against how cases.json and generate_evalset.py actually do it in this repo. Just tell me — don't write or commit anything."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy -type f \\( -name \"cases.json\" -o -name \"generate_evalset.py\" -o -name \"concept_buddy.evalset.json\" -o -name \"_cases.py\" -o -name \"live_eval.py\" \\) -not -path \"*/node_modules/*\" -not -path \"*/.venv/*\" 2>/dev/null",
+        "description": "Find eval-related files"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "List eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; c=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json'))['cases']; keys=set(); [keys.update(x.keys()) for x in c]; print(sorted(keys)); print('n=',len(c))\"",
+        "description": "List cases.json field keys + count"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))\nprint('top keys:', list(ev.keys()))\nprint('n cases:', len(ev['eval_cases']))\nc=ev['eval_cases'][0]\nprint('case keys:', list(c.keys()))\ninv=c['conversation'][0]\nprint('inv keys:', list(inv.keys()))\n\"",
+        "description": "Peek generated evalset shape"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls -la ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/test_config.json",
+        "description": "Check mtimes"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/test_config.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\ncj=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json'))['cases']\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))['eval_cases']\ncids={c['id'] for c in cj}\neids={e['eval_id'] for e in ev}\nprint('in cases only:', sorted(cids-eids))\nprint('in evalset only:', sorted(eids-cids))\n\"",
+        "description": "Diff case ids between the two files"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))['eval_cases']\nwith_final=sum(1 for e in ev for inv in e['conversation'] if inv.get('final_response'))\nwith_session=sum(1 for e in ev if e.get('session_input'))\nprint('invocations w/ final_response:', with_final)\nprint('cases w/ session_input:', with_session)\nprint('sample fss:', ev[0].get('final_session_state'))\n\"",
+        "description": "Count final_response & session_input"
+      },
+      "failed": false
+    }
+  ],
+  "target": "welcome_book_topics",
+  "expected_fail": "Segments into 2 episodes against a ground truth of 1, and drops the MCP half. `must_contain` names an `mcp__adk-docs` step precisely so the loss is an assertion rather than a note. The exemption in `trim_leading_exploration` is not enough while the all-read-only flagging rule can discard the episode first.",
+  "current": {
+    "episodes": 2,
+    "banked": 1,
+    "entry": "bf8bb31758f7",
+    "mcp_steps_banked": 0,
+    "mcp_steps_captured": 4
+  }
+}
