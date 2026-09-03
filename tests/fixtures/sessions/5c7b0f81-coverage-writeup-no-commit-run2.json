@@ -1,0 +1,120 @@
+{
+  "tag": "5c7b0f81",
+  "name": "coverage-writeup-no-commit-run2",
+  "captured": "2026-08-31",
+  "procedure": "find the gaps in eval coverage and write them up",
+  "target": "welcome_book_topics",
+  "truth": {
+    "episodes": 1,
+    "markers": 0,
+    "title": null,
+    "must_contain": [
+      "COVERAGE.md"
+    ]
+  },
+  "expected_fail": "Same markerless gap as fb505861 — no commit, so the prompt rule cuts at 'Write that list' and strands the deliverable.",
+  "why": "A second run of the same commitless procedure, recorded because the pair is the evidence, not either run alone.",
+  "history": "The pair exposes a second defect beyond fragmentation. The two investigation episodes score cosine 0.966 — the embedding is certain they are one procedure — but lexical 0.331 falls under the 0.40 near-miss floor, so they are never handed to the embedding: `pairs_considered=0`. Meanwhile the two meaningless 2-step 'Write that list' fragments DID merge lexically. The wrong halves recurred. This is the shape `config.py` already documents ('one procedure done three times scored 0.46-0.50 against itself'), still under the floor after it was lowered from 0.70 to 0.40.",
+  "pairs_with": "fb505861",
+  "shape": {
+    "steps": 12,
+    "prompts": 2,
+    "markers": 0
+  },
+  "current": {
+    "episodes": 2
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Some Welcome Book topics in book.py have no eval coverage in cases.json. Work out which ones and tell me."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy/backend -name \"book.py\" -not -path \"*/node_modules/*\" 2>/dev/null",
+        "description": "Locate book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy/backend -name \"cases.json\" -not -path \"*/node_modules/*\" 2>/dev/null",
+        "description": "Locate cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "wc -l ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Line counts"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json, re\nwith open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json') as f:\n    data = json.load(f)\ncases = data['cases']\nprint('total cases:', len(cases))\n# Extract topics referenced explicitly\ntopic_re = re.compile(r'topic[\\s=:\\'\\\"]+([a-z_]+)', re.I)\ntopics_seen = {}\nfor c in cases:\n    text = json.dumps(c).lower()\n    for m in topic_re.findall(text):\n        topics_seen[m] = topics_seen.get(m,0)+1\nprint('topics referenced (any form):')\nfor k,v in sorted(topics_seen.items(), key=lambda x:-x[1]):\n    print(f'  {k}: {v}')\nprint()\nprint('case ids:')\nfor c in cases:\n    print(' ', c.get('id'))\n\"\n",
+        "description": "Extract topics referenced in cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nwith open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json') as f:\n    data = json.load(f)\nfor c in data['cases']:\n    q = c.get('query')\n    print(f\\\"{c.get('id')}: {q!r}\\\")\n\"\n",
+        "description": "List all case queries"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nwith open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json') as f:\n    data = json.load(f)\n# check expect_card variant/title fields for hints\nfor c in data['cases']:\n    hits = []\n    for spec in c.get('expect_card', []):\n        hits.append(spec.get('title_contains') or spec.get('title') or spec.get('variant'))\n    for spec in c.get('expect_card_count', []):\n        s = spec.get('spec', {})\n        hits.append((s.get('title_contains'), s.get('variant')))\n    if hits:\n        print(c['id'], '->', hits)\n\"\n",
+        "description": "Card assertions per case"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"topic:\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md",
+        "description": "Book keyword annotations"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Write that list to backend/concept_buddy_agent/eval/COVERAGE.md, with a line each on why it matters. Don't commit — I want to read it first."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md"
+      },
+      "failed": false
+    }
+  ]
+}
