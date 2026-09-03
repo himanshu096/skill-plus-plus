@@ -1,0 +1,140 @@
+{
+  "tag": "d5fd2e59",
+  "name": "udemy-qa-case",
+  "captured": "2026-09-03",
+  "procedure": "add an eval case asserting a Welcome Book fact, then regenerate and commit",
+  "truth": {
+    "episodes": 1,
+    "markers": 1,
+    "title": "cover Udemy reimbursement fact from Welcome Book",
+    "must_contain": [
+      "udemy",
+      "generate_evalset.py"
+    ]
+  },
+  "why": "One task, and deliberately a *different* procedure from the card cases: the assertion is `expect_any` against the Welcome Book, with no `expect_card` and no frontend involved. Same repo, same file, different method — which is the pair that must not merge with the eval-case entries. Recorded as the first of two runs; the assertion the set is missing is that the two runs merge with each other and with neither card entry.",
+  "history": "Live capture banked exactly one entry, `d8258dde688b`, 9 steps — correct. `score.py` reports 2 episodes because it counts every episode `segment` returns, and the second is a lone trailing `git status` that is flagged and dropped by `fold_session` before anything is banked. So the recorded gap here is in the scorer, not in the segmenter: `score.check` should count what would be folded, not what was cut. Left as-is deliberately, to be looked at with the rest of the code.\n\nAlso the first fixture whose signature opens with `read` — the `Read` at step 3 feeds the `Edit` at step 4, and until today `_KEEP_INPUT` dropped the path so that read could never be kept.",
+  "shape": {
+    "steps": 12,
+    "prompts": 2,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "There's no eval covering what the Welcome Book says about Udemy reimbursement. Find the fact in the book and add a case to cases.json asserting answer returns it — match the format of the other local-reference cases."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy -type f \\( -name \"*.md\" -o -name \"*.json\" \\) | xargs grep -l -i \"udemy\" 2>/dev/null | head -20",
+        "description": "Find files mentioning Udemy"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n -i -B2 -A4 \"udemy\\|reimburs\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md",
+        "description": "Find Udemy/reimbursement context in Welcome Book"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); print('valid')\"",
+        "description": "Validate JSON"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Regenerate the evalset and commit."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "List eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "head -50 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py",
+        "description": "Peek generator"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 backend/concept_buddy_agent/eval/generate_evalset.py 2>&1 | tail -30",
+        "description": "Regenerate evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git status --short backend/concept_buddy_agent/eval/",
+        "description": "Status of eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -15",
+        "description": "Recent commits for style"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): cover Udemy reimbursement fact from Welcome Book\n\nAdds udemy_reimbursement_local case + regenerates evalset. Guards the\n€100/year Udemy course reimbursement fact (benefits.md); no local-reference\ncase previously exercised it.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\"",
+        "description": "Commit eval additions"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git status --short backend/concept_buddy_agent/eval/",
+        "description": "Verify clean"
+      },
+      "failed": false
+    }
+  ],
+  "target": "welcome_book_topics",
+  "pairs_with": "the second run of the same procedure (session 3b)",
+  "expected_fail": "Scores 2 episodes against a ground truth of 1, and the segmenter is right — the extra episode is a flagged trailing `git status` that never reaches the ledger. `score.py` counts pre-fold episodes. Fix the scorer, not the cut.",
+  "current": {
+    "episodes_scored": 2,
+    "episodes_banked": 1,
+    "entry": "d8258dde688b"
+  }
+}
