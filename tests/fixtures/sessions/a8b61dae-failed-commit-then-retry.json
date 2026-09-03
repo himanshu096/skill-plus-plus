@@ -13,7 +13,7 @@
     ]
   },
   "why": "One task with a real failure in the middle. Every step in every earlier fixture succeeded, so two rules had never met a failure on real work: `is_marker` refusing a *failed* commit, and `signals.py` mining red-then-green. The failure here is not staged at the assertion as the runbook first planned — the deliberate `geco_timesheet` typo was caught by reading rather than by a command that exited non-zero — it is the commit itself, which failed on a path and was retried.",
-  "history": "Both rules hold, measured on this capture:\n\n  step 29  git add && git commit   failed=True   is_marker=False   <- refused\n  step 30  the retry               failed=False  is_marker=True    <- the ending\n\nThe episode ends at the successful retry, carries the failed step inside it, and is not cut at the failure. That is the first live evidence for the sentence in `is_marker`'s docstring: 'a commit rejected by a pre-commit hook means the task is still in progress, not finished.'\n\nScores 2 episodes for the same scorer artifact as `d5fd2e59`: the second is a lone trailing `git log && git status`, flagged and dropped before anything is banked. Live capture banked one entry, `c62599a394ab`.",
+  "history": "Both rules hold, measured on this capture:\n\n  step 29  git add && git commit   failed=True   is_marker=False   <- refused\n  step 30  the retry               failed=False  is_marker=True    <- the ending\n\nThe episode ends at the successful retry, carries the failed step inside it, and is not cut at the failure. That is the first live evidence for the sentence in `is_marker`'s docstring: 'a commit rejected by a pre-commit hook means the task is still in progress, not finished.'\n\nScores 2 episodes for the same scorer artifact as `d5fd2e59`: the second is a lone trailing `git log && git status`, flagged and dropped before anything is banked. Live capture banked one entry, `c62599a394ab`.\n\nThe gap this recorded was the scorer's and is closed — see `d5fd2e59`. What the fixture exists for, a failed commit refused as an ending and the retry accepted, held from the day it was recorded. Passes.",
   "shape": {
     "steps": 28,
     "prompts": 4,
@@ -268,7 +268,6 @@
     }
   ],
   "target": "welcome_book_topics",
-  "expected_fail": "Scores 2 episodes against a ground truth of 1, and the segmenter is right — the extra is a flagged trailing verification step that never reaches the ledger. Same `score.py` pre-fold counting as `d5fd2e59`; fix the scorer, not the cut.",
   "current": {
     "episodes_scored": 2,
     "episodes_banked": 1,

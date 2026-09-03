@@ -12,7 +12,7 @@
       "COVERAGE.md"
     ]
   },
-  "expected_fail": "Same markerless gap as fb505861 — no commit, so the prompt rule cuts at 'Write that list' and strands the deliverable.",
+  "expected_fail": "Banks one candidate, which is now the right count, and `COVERAGE.md` is still missing from it. The deliverable is written in a fragment the prompt rule cuts off at 'Write that list', and the fragment is dropped. The count was also wrong until the scorer was corrected; the stranding is the real defect and it remains.",
   "why": "A second run of the same commitless procedure, recorded because the pair is the evidence, not either run alone.",
   "history": "The pair exposes a second defect beyond fragmentation. The two investigation episodes score cosine 0.966 — the embedding is certain they are one procedure — but lexical 0.331 falls under the 0.40 near-miss floor, so they are never handed to the embedding: `pairs_considered=0`. Meanwhile the two meaningless 2-step 'Write that list' fragments DID merge lexically. The wrong halves recurred. This is the shape `config.py` already documents ('one procedure done three times scored 0.46-0.50 against itself'), still under the floor after it was lowered from 0.70 to 0.40.",
   "pairs_with": "fb505861",

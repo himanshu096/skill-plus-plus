@@ -13,7 +13,7 @@
     ]
   },
   "why": "One task, and deliberately a *different* procedure from the card cases: the assertion is `expect_any` against the Welcome Book, with no `expect_card` and no frontend involved. Same repo, same file, different method — which is the pair that must not merge with the eval-case entries. Recorded as the first of two runs; the assertion the set is missing is that the two runs merge with each other and with neither card entry.",
-  "history": "Live capture banked exactly one entry, `d8258dde688b`, 9 steps — correct. `score.py` reports 2 episodes because it counts every episode `segment` returns, and the second is a lone trailing `git status` that is flagged and dropped by `fold_session` before anything is banked. So the recorded gap here is in the scorer, not in the segmenter: `score.check` should count what would be folded, not what was cut. Left as-is deliberately, to be looked at with the rest of the code.\n\nAlso the first fixture whose signature opens with `read` — the `Read` at step 3 feeds the `Edit` at step 4, and until today `_KEEP_INPUT` dropped the path so that read could never be kept.",
+  "history": "Live capture banked exactly one entry, `d8258dde688b`, 9 steps — correct. `score.py` reports 2 episodes because it counts every episode `segment` returns, and the second is a lone trailing `git status` that is flagged and dropped by `fold_session` before anything is banked. So the recorded gap here is in the scorer, not in the segmenter: `score.check` should count what would be folded, not what was cut. Left as-is deliberately, to be looked at with the rest of the code.\n\nAlso the first fixture whose signature opens with `read` — the `Read` at step 3 feeds the `Edit` at step 4, and until today `_KEEP_INPUT` dropped the path so that read could never be kept.\n\nThe gap this recorded was the scorer's, not the segmenter's, and it is closed: `score.py` now runs the real fold and counts what is banked, so the trailing `git status` no longer reads as a second candidate. Passes.",
   "shape": {
     "steps": 12,
     "prompts": 2,
@@ -131,7 +131,6 @@
   ],
   "target": "welcome_book_topics",
   "pairs_with": "the second run of the same procedure (session 3b)",
-  "expected_fail": "Scores 2 episodes against a ground truth of 1, and the segmenter is right — the extra episode is a flagged trailing `git status` that never reaches the ledger. `score.py` counts pre-fold episodes. Fix the scorer, not the cut.",
   "current": {
     "episodes_scored": 2,
     "episodes_banked": 1,

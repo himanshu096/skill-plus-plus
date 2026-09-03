@@ -156,7 +156,7 @@
     }
   ],
   "target": "welcome_book_topics",
-  "expected_fail": "Segments into 2 episodes against a ground truth of 1, and drops the MCP half. `must_contain` names an `mcp__adk-docs` step precisely so the loss is an assertion rather than a note. The exemption in `trim_leading_exploration` is not enough while the all-read-only flagging rule can discard the episode first.",
+  "expected_fail": "Banks one candidate, the right count, containing none of the MCP retrieval that the procedure exists for. The count was also wrong until the scorer was corrected; the discarded retrieval is the real defect and it remains. `must_contain` names an `mcp__adk-docs` step so the loss is an assertion rather than a remark.",
   "current": {
     "episodes": 2,
     "banked": 1,
