@@ -1,0 +1,188 @@
+{
+  "tag": "a7be1ef5",
+  "name": "holidays-qa-case",
+  "captured": "2026-09-03",
+  "procedure": "add an eval case asserting a Welcome Book fact, then regenerate and commit",
+  "truth": {
+    "episodes": 1,
+    "markers": 1,
+    "title": "cover mandatory-holiday fact from the Welcome Book",
+    "must_contain": [
+      "mandatory",
+      "cases.json"
+    ]
+  },
+  "why": "The second run of the procedure in `d5fd2e59`, on a different fact. The pair is the evidence, not either run alone: the assertion this corpus was missing is a *negative* — that two runs of one method merge with each other and with neither card-case entry, which asserts `expect_card` and touches the frontend.",
+  "history": "The pair answers the question and the answer is bad. Lexical similarity over the banked signatures:\n\n  same procedure, same fact   (udemy 08-31 vs udemy 3a)   0.365  under the 0.40 queued\n                                                                 floor, never compared\n  same procedure, diff fact   (udemy 3a vs holidays 3b)   0.480\n  DIFFERENT procedure         (udemy 3a vs tamtamy card)  0.660  highest of the three\n\nSo the ranking is inverted: the cross-procedure pair scores above the same-procedure pair, and two runs of the identical procedure on the identical fact fall under the floor entirely. Nothing reaches the 0.85 live threshold, so all three sit as separate x1 entries — a procedure performed three times, filed as three one-offs, which is the shape the recurrence threshold exists to catch.\n\nThis says the lexical stage cannot rank these, not that the embedding cannot. Whether the queued pass separates them is the next thing to measure; `must_not_merge_with` has no support in `score.py` yet.",
+  "shape": {
+    "steps": 18,
+    "prompts": 2,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "There's no eval covering what the Welcome Book says about mandatory holidays. Find the fact and add a case to cases.json asserting answer returns it, matching the other local-reference cases."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rni \"mandatory\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent 2>/dev/null | head -30",
+        "description": "Find mandatory holiday facts in backend"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy -name \"book*.py\" -o -name \"welcome*\" 2>/dev/null | head -20",
+        "description": "Locate welcome book source"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval -name \"cases.json\" -o -name \"cases*\"",
+        "description": "Locate cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"mandatory_holidays_local\\|mandatory\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json | head -20",
+        "description": "Check evalset.json for mandatory case"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"mandatory_holidays\\|24.12\\|31.12\\|Non-Chargeable\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills 2>/dev/null | head -30",
+        "description": "Grep for mandatory holidays refs"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/",
+        "description": "List qa references"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"time_off\\|mandatory\\|Non-Chargeable\\|24.12\\|answer\\|TOPICS\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -40",
+        "description": "Check book.py time_off routing"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; d=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); ids=[c['id'] for c in d['cases']]; print('OK', len(ids), 'cases'); print('mandatory idx:', ids.index('mandatory_holidays_local'), 'between', ids[ids.index('mandatory_holidays_local')-1], 'and', ids[ids.index('mandatory_holidays_local')+1])\"",
+        "description": "Validate JSON + placement"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Regenerate the evalset and commit."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ && grep -rn \"evalset\\|concept_buddy.evalset\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ 2>/dev/null | head -30",
+        "description": "Find evalset regen script"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy/backend && .venv/bin/python concept_buddy_agent/eval/generate_evalset.py 2>&1 | tail -20",
+        "description": "Regen evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy && git status --short 2>&1 | head -20 && echo --- && git diff --stat backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+        "description": "Check staged deltas"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy && git log --oneline -6",
+        "description": "Show recent commit style"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git diff backend/concept_buddy_agent/eval/cases.json | head -60",
+        "description": "Inspect cases.json diff head"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): cover mandatory-holiday fact from the Welcome Book\n\nAdds mandatory_holidays_local to the Time Off cluster in cases.json\nand regenerates concept_buddy.evalset.json (39 cases). Asserts the\nanswer tool returns 24.12 / 31.12 / 4 hours / Non-Chargeable Work\nper welcome-book.md, matching the light local-reference pattern\n(no card assertion) used by its neighbors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\" 2>&1 | tail -15 && git status --short backend/concept_buddy_agent/eval/",
+        "description": "Stage + commit + verify"
+      },
+      "failed": false
+    }
+  ],
+  "target": "welcome_book_topics",
+  "pairs_with": "d5fd2e59",
+  "must_not_merge_with": "1c3c9422",
+  "current": {
+    "episodes": 1,
+    "entry": "ea8b925de0b1",
+    "merged_with_pair": false,
+    "lexical_vs_pair": 0.48,
+    "lexical_vs_card_entry": 0.66
+  }
+}
