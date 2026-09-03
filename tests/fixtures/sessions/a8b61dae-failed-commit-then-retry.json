@@ -1,0 +1,279 @@
+{
+  "tag": "a8b61dae",
+  "name": "failed-commit-then-retry",
+  "captured": "2026-09-03",
+  "procedure": "add a parity eval case, verify the assertion against the real key, commit",
+  "truth": {
+    "episodes": 1,
+    "markers": 1,
+    "title": "add geco_timesheet_card_staged parity case",
+    "must_contain": [
+      "geco_timesheet_card_staged",
+      "generate_evalset.py"
+    ]
+  },
+  "why": "One task with a real failure in the middle. Every step in every earlier fixture succeeded, so two rules had never met a failure on real work: `is_marker` refusing a *failed* commit, and `signals.py` mining red-then-green. The failure here is not staged at the assertion as the runbook first planned — the deliberate `geco_timesheet` typo was caught by reading rather than by a command that exited non-zero — it is the commit itself, which failed on a path and was retried.",
+  "history": "Both rules hold, measured on this capture:\n\n  step 29  git add && git commit   failed=True   is_marker=False   <- refused\n  step 30  the retry               failed=False  is_marker=True    <- the ending\n\nThe episode ends at the successful retry, carries the failed step inside it, and is not cut at the failure. That is the first live evidence for the sentence in `is_marker`'s docstring: 'a commit rejected by a pre-commit hook means the task is still in progress, not finished.'\n\nScores 2 episodes for the same scorer artifact as `d5fd2e59`: the second is a lone trailing `git log && git status`, flagged and dropped before anything is banked. Live capture banked one entry, `c62599a394ab`.",
+  "shape": {
+    "steps": 28,
+    "prompts": 4,
+    "failed": 1
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Add an eval case for the GECO timesheet walkthrough card to cases.json, asserting a staged card with body_contains: \"geco_timesheet\" — match the format of desk_booking_card_staged."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy/backend -name \"cases.json\" -o -name \"*.json\" -path \"*/cases/*\" | head -20",
+        "description": "Find cases.json files"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"desk_booking_card_staged\\|desk_booking\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Locate desk_booking case"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"geco_timesheet\\|geco-timesheet\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ | head -30",
+        "description": "Find geco_timesheet references"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); print('ok')\"",
+        "description": "Validate JSON"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Regenerate the evalset, then check that assertion against the walkthrough key TOPICS actually stages in book.py. Don't run the full eval — it calls the real agent."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "List eval dir"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval && python3 generate_evalset.py 2>&1 | tail -20",
+        "description": "Regenerate evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"_TOPIC_CARDS\\|_stage_topic_card\\|_TOPIC_KEYWORDS\\|TOPIC_TRIGGERS\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" | head -20",
+        "description": "Find topic-card staging logic"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"stage_topic\\|topic_card\\|geco.*keyword\\|timesheet\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" | head -30",
+        "description": "Find topic routing"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"stage_card\\|topic.*card\\|before_model\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" | grep -v eval/ | head -30",
+        "description": "Find card staging in agent"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"def answer\\|TOPIC\\|topics\\|route_topic\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -30",
+        "description": "Find answer/routing in book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/test_book_routing.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"geco_timesheet_card_staged\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json | head -5",
+        "description": "Confirm case in regenerated evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Fix the assertion to the real key and re-run the same check."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"geco\\|GECO\" ${HOME}/ai_projects/concept_buddy/frontend/ --include=\"*.ts\" --include=\"*.tsx\" 2>/dev/null | grep -i \"walkthrough\\|timesheet\" | head -20",
+        "description": "Find geco walkthrough key in frontend"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -n \"geco\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "description": "Check current geco assertion in cases.json"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -rn \"body_contains\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ --include=\"*.py\" | head -10",
+        "description": "Find body_contains evaluator"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 generate_evalset.py 2>&1 | tail -3 && grep -A2 \"geco_timesheet_card_staged\" concept_buddy.evalset.json | head -20",
+        "description": "Regenerate + confirm assertion in evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -B1 -A3 \"body_contains\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json | grep -A1 -B1 geco",
+        "description": "Confirm body_contains value in evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nd = json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))\nfor c in d.get('eval_cases', []):\n    if c.get('eval_id') == 'geco_timesheet_card_staged':\n        print(json.dumps(c, indent=2))\n        break\n\"",
+        "description": "Dump geco case from evalset"
+      },
+      "failed": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Commit."
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git status --short && echo \"---\" && git diff --stat",
+        "description": "Status + diff stat"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -5",
+        "description": "Recent commit style"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add geco_timesheet_card_staged parity case\n\nSibling of desk_booking_card_staged. Guards the auto-card-on-mention\npath for the GECO topic: query mentions timesheet, book.answer routes\nto topic geco (test_book_routing.py covers this), card stages with\nbody=geco-timesheet (book.py:108).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\" && git status --short backend/concept_buddy_agent/eval/",
+        "description": "Commit eval case + verify"
+      },
+      "failed": true
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git add ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add geco_timesheet_card_staged parity case\n\nSibling of desk_booking_card_staged. Guards the auto-card-on-mention\npath for the GECO topic: query mentions timesheet, book.answer routes\nto topic geco (test_book_routing.py covers this), card stages with\nbody=geco-timesheet (book.py:108).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\"",
+        "description": "Commit with abs paths"
+      },
+      "failed": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -1 && git status --short ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "Verify commit + clean"
+      },
+      "failed": false
+    }
+  ],
+  "target": "welcome_book_topics",
+  "expected_fail": "Scores 2 episodes against a ground truth of 1, and the segmenter is right — the extra is a flagged trailing verification step that never reaches the ledger. Same `score.py` pre-fold counting as `d5fd2e59`; fix the scorer, not the cut.",
+  "current": {
+    "episodes_scored": 2,
+    "episodes_banked": 1,
+    "entry": "c62599a394ab",
+    "failed_steps": 1,
+    "marker_at": "the retry, not the failure"
+  }
+}
