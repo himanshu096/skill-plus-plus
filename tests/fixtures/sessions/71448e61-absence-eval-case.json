@@ -33,27 +33,43 @@
     {
       "tool": "ToolSearch",
       "input": {},
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__list_doc_sources'} {'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__fetch_docs'}"
     },
     {
       "tool": "mcp__adk-docs__list_doc_sources",
       "input": {},
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{\"result\":\"AgentDevelopmentKit\\nURL: https://adk.dev/llms.txt\\n\\n\"}"
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
-      "input": {},
-      "failed": false
+      "input": {
+        "url": "https://adk.dev/llms.txt"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{\"result\":\"# Agent Development Kit (ADK)\\n> Build powerful multi-agent systems with Agent Development Kit (ADK)\\nAn open-source, code-first toolkit for building, evaluating, and deploying sophisticated AI agents with flexibility and control.\\n## Build Agents\\n- [Get started](https://adk.dev/get-started/index.md)\\n- [Technical Overview](https://adk.dev/get-started/about/index.md)\\n- [Agents CLI](ht"
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
-      "input": {},
-      "failed": false
+      "input": {
+        "url": "https://adk.dev/evaluate/index.md"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{\"result\":\"# Why evaluate agents\\nSupported in ADKPython\\nIn traditional software development, unit tests and integration tests provide confidence that code functions as expected and remains stable through changes. These tests provide a clear \\\"pass/fail\\\" signal, guiding further development. However, LLM agents introduce a level of variability that makes traditional testing approaches insufficien"
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
-      "input": {},
-      "failed": false
+      "input": {
+        "url": "https://adk.dev/evaluate/criteria/index.md"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{\"result\":\"# Evaluation Criteria\\nSupported in ADKPython\\nThis page outlines the evaluation criteria provided by ADK to assess agent performance, including tool use trajectory, response quality, and safety.\\n| Criterion | Description | Reference-Based | Requires Rubrics | LLM-as-a-Judge | Supports [User Simulation](https://adk.dev/evaluate/user-sim/index.md) |\\n| ----------------------------------"
     },
     {
       "tool": "UserPrompt",
@@ -68,7 +84,10 @@
         "command": "find ${HOME}/ai_projects/concept_buddy -name \"cases.json\" -not -path \"*/node_modules/*\" 2>/dev/null",
         "description": "Locate cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "assistant_note": "Docs fetched. Structure summary: ## Eval file types **`*.test.json`** — one session, unit-test scope. **`*.evalset.json`** — multi-session, integration-test scope. Both share the same Pydantic schema (`EvalSet` + `EvalCase` in `google.adk.evaluation`). ## EvalSet top level ```json { \"eval_set_id\": \"...\", \"name\": \"...\", \"description\": \"...\", \"eval_cases\": [ EvalCase, ... ] } ``` ## EvalCase ```json"
     },
     {
       "tool": "Bash",
@@ -76,7 +95,9 @@
         "command": "grep -rn \"geco_timesheet_card_staged\\|TOPICS\\[.absence.\\]\\|absence\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 2>/dev/null | head -40",
         "description": "Find absence topic in book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:91: # absence = the tool question (\"how do I request leave / report sick?\") -> the ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:92: # absence.io click-through. ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:104: \"absence\": {\"section\": \"Time Off\", \"card\": { /"
     },
     {
       "tool": "Bash",
@@ -84,21 +105,29 @@
         "command": "grep -n \"geco_timesheet_card_staged\\|geco_timesheet\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "Locate geco case in cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "406: \"id\": \"geco_timesheet_card_staged\","
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "395 \"expect_any\": [ 396 \"8 hours\", 397 \"eight hours\", 398 \"8h\" 399 ], 400 \"forbid\": [ 401 \"reach out to your Onboarding Responsible\", 402 \"don't have an answer\" 403 ] 404 }, 405 { 406 \"id\": \"geco_timesheet_card_staged\", 407 \"note\": \"Guards the walkthrough card variant for the GECO topic: keyword hit on 'geco'/'timesheet' routes `answer` to book.TOPICS['geco'], which stages a walkthrough card with "
     },
     {
       "tool": "Edit",
       "input": {
-        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "old_string": "   \"id\": \"geco_timesheet_card_staged\",\n   \"note\": \"Guards the walkthrough card variant for the GECO topic: keyword hit on 'geco'/'timesheet' routes `answer` to book.TOPICS['geco'], which stages a walkthrough card with body='geco-timesheet'. Backend-only — asserts the card is STAGED with the right variant+body; the frontend renders it against toolWalkthroughs.ts.\",\n   \"query\": \"How do I fill in my GECO timesheet?\",\n   \"expect_any\": [\n    \"geco\",\n    \"timesheet\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"geco-timesheet\"\n    }\n   ]\n  },",
+        "new_string": "   \"id\": \"geco_timesheet_card_staged\",\n   \"note\": \"Guards the walkthrough card variant for the GECO topic: keyword hit on 'geco'/'timesheet' routes `answer` to book.TOPICS['geco'], which stages a walkthrough card with body='geco-timesheet'. Backend-only — asserts the card is STAGED with the right variant+body; the frontend renders it against toolWalkthroughs.ts.\",\n   \"query\": \"How do I fill in my GECO timesheet?\",\n   \"expect_any\": [\n    \"geco\",\n    \"timesheet\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"geco-timesheet\"\n    }\n   ]\n  },\n  {\n   \"id\": \"absence_card_staged\",\n   \"note\": \"Guards the walkthrough card variant for the absence topic: keyword hit on absence/leave/sick routes `answer` to book.TOPICS['absence'], which stages a walkthrough card with body='absence'. Backend-only — asserts the card is STAGED with the right variant+body; the frontend renders it against toolWalkthroughs.ts.\",\n   \"query\": \"How do I request leave in absence.io?\",\n   \"expect_any\": [\n    \"absence\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"absence\"\n    }\n   ]\n  },"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "The file ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json has been updated successfully. (file state is current in your context — no need to Read it back)"
     },
     {
       "tool": "UserPrompt",
@@ -113,7 +142,10 @@
         "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ && grep -rn \"concept_buddy.evalset\\|evalset.json\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ 2>/dev/null | head -20",
         "description": "List eval dir + find generator"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py ${HOME}/ai_projects/concept_buddy/backend/concept_bu",
+      "assistant_note": "Case `absence_card_staged` added after `geco_timesheet_card_staged`. Same shape: `variant: walkthrough`, `body_contains: \"absence\"`, matching `TOPICS[\"absence\"]` card body in `book.py:105`."
     },
     {
       "tool": "Bash",
@@ -121,7 +153,9 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy/backend && python concept_buddy_agent/eval/generate_evalset.py",
         "description": "Regenerate evalset from cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "wrote concept_buddy.evalset.json — 42 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5"
     },
     {
       "tool": "UserPrompt",
@@ -135,7 +169,10 @@
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "1 \"\"\"Welcome Book retrieval — the deterministic Q&A knowledge path. 2 3 `answer()` does the two things a Q&A fact turn must never do separately: it returns the 4 Welcome Book section for a topic AND stages that topic's canonical dashboard card. Binding 5 the card to the retrieval is the whole point — a card was previously a *second* decision the 6 model had to remember after reading the book, and ",
+      "assistant_note": "Regenerated. 42 cases (was 41), new case `absence_card_staged` included."
     },
     {
       "tool": "Bash",
@@ -143,7 +180,9 @@
         "command": "grep -rn \"cards.stage\\|cards\\.stage\\|stage_card\\|stage(\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" 2>/dev/null | grep -v __pycache__ | grep -v /eval/",
         "description": "Find all card staging callsites"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/cards.py:13:All go through `build_card` + `stage_card` here, so a card has one shape and `stage_cards` ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/cards.py:148:def stage_card(state: Dict[str, Any], card: Dict[str, Any]) -> None: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/cards"
     },
     {
       "tool": "Bash",
@@ -151,21 +190,27 @@
         "command": "grep -rniE \"absence\\.io|absence \" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/ --include=\"*.py\" --include=\"*.md\" 2>/dev/null | grep -v __pycache__ | grep -v /eval/",
         "description": "Find all absence mentions in agent"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:47: bench_time · it_support · hr_contacts · time_off · absence · geco · ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:52: rules?\"), \"absence\" for USING the absence.io tool (\"how do I request leave?\", ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:91: # abse"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-onboarding/references/tools.md"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "60 61 - GECO (detail) → in chat, give a PROPER intro, not one line (3-4 sentences): GECO is Concept Reply's 62 central tool for **timesheets**, **expenses**, and **payslips**, at 63 [geco.reply.com](https://geco.reply.com/) (needs the Reply network/VPN). Explain that you book 64 **8 hours per full project day** (non-project time as Non-Chargeable Work, with a comment), submit 65 **expenses** by sc"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "40 or \"double-check\" a topic that came back `in_book: true`. 41 42 Args: 43 query: The user's question, in natural language. 44 topic: The single best-matching topic. One of: 45 first_day · company_overview · mission_vision · values · customers · 46 bu_managers · benefits · collaboration_rules · events · desk_booking · 47 bench_time · it_support · hr_contacts · time_off · absence · geco · 48 tamta"
     },
     {
       "tool": "UserPrompt",
@@ -180,7 +225,10 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy && git status --short backend/concept_buddy_agent/eval/",
         "description": "Check eval dir status"
       },
-      "failed": false
+      "failed": false,
+      "serves": 5,
+      "tool_returned": "M backend/concept_buddy_agent/eval/cases.json M backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+      "assistant_note": "Checked. Invariant holds. One caveat worth naming. **1. TOPICS single source for KB cards — HOLDS.** `absence` defined once at `book.py:104-105`. No other TOPICS-style card table anywhere. **2. `cards.stage` sole writer — HOLDS.** `cards.py:148` docstring: \"THE single writer for `stage_cards`\". All callsites route through `cards.stage`/`cards.stage_card`: - `book.py:309` (KB path) - `tools.py:129,"
     },
     {
       "tool": "Bash",
@@ -188,7 +236,9 @@
         "command": "git diff --stat backend/concept_buddy_agent/eval/",
         "description": "Diff stat eval dir"
       },
-      "failed": false
+      "failed": false,
+      "serves": 5,
+      "tool_returned": "backend/concept_buddy_agent/eval/cases.json | 18 ++++++++++++++++ .../eval/concept_buddy.evalset.json | 24 ++++++++++++++++++++++ 2 files changed, 42 insertions(+)"
     },
     {
       "tool": "Bash",
@@ -196,15 +246,19 @@
         "command": "git log --oneline -6",
         "description": "Recent commit style"
       },
-      "failed": false
+      "failed": false,
+      "serves": 5,
+      "tool_returned": "da15272 test(eval): add walkthrough-card case for GECO Timesheet 40e52a2 test(eval): add walkthrough-card case for Desk Booking 5852959 fix(journey): scope the stale-snapshot gate to the journey, not the whole snapshot 709c2d2 test(eval): seed the revision clock so a case sends what a browser sends ade448c fix(journey): give the journey a revision so a stale snapshot cannot win d0b78c0 fix(journey"
     },
     {
       "tool": "Bash",
       "input": {
-        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add walkthrough-card case for absence.io\n\nGuards book.TOPICS[\"absence\"] staging a walkthrough card with body=\"absence\"\n(the absence.io click-through). Sibling to geco_timesheet_card_staged and\nwk_desk_booking_card; the KB-path card was previously uncovered.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git status --short",
+        "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): add walkthrough-card case for absence.io\n\nGuards book.TOPICS[\"absence\"] staging a walkthrough card with body=\"absence\"\n(the absence.io click-through). Sibling to geco_timesheet_card_staged and\nwk_desk_booking_card; the KB-path card was previously uncovered.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\" && git status --short",
         "description": "Commit absence eval case"
       },
-      "failed": false
+      "failed": false,
+      "serves": 5,
+      "tool_returned": "[main e5d47e5] test(eval): add walkthrough-card case for absence.io 2 files changed, 42 insertions(+) D presentation/LEARNINGS-SLIDES.md D presentation/PART1-SLIDES.md D presentation/PART2-SLIDES.md ?? .claude/commands/ ?? .claude/settings.json ?? HANDOFF.md ?? article/ ?? cb_backend.log ?? cb_eval_action.log ?? cb_eval_ae_full.log ?? cb_eval_ae_rest.log ?? cb_eval_anythingelse.log ?? cb_eval_bran"
     }
   ]
 }

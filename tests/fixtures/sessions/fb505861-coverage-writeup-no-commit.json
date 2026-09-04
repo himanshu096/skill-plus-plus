@@ -37,7 +37,9 @@
         "command": "find ${HOME}/ai_projects/concept_buddy/backend -name \"book.py\" -not -path \"*/node_modules/*\" 2>/dev/null",
         "description": "Locate book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/nltk/book.py"
     },
     {
       "tool": "Bash",
@@ -45,7 +47,9 @@
         "command": "find ${HOME}/ai_projects/concept_buddy/backend -name \"cases.json\" -not -path \"*/node_modules/*\" 2>/dev/null",
         "description": "Locate cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
     },
     {
       "tool": "Bash",
@@ -53,7 +57,9 @@
         "command": "grep -nE \"^(TOPICS|[A-Z_]+ =|\\s+\\\"[a-z_]+\\\":)\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -100",
         "description": "Peek book.py topic structure"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "26:_BOOK = ( 39:TOPICS: Dict[str, Dict[str, Any]] = { 41: \"first_day\": {\"section\": \"First Day\", \"card\": None}, 43: \"company_overview\": {\"section\": \"Company Overview\", \"card\": { 44: \"variant\": \"doc\", \"title\": \"Welcome to Concept Reply\", \"image\": \"/onboarding/concept-team.jpg\"}}, 45: \"mission_vision\": {\"section\": \"Company Overview\", \"card\": { 46: \"variant\": \"doc\", \"title\": \"Mission & Vision\", \"image"
     },
     {
       "tool": "Bash",
@@ -61,7 +67,9 @@
         "command": "wc -l ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "File sizes"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "346 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 1193 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json 1539 total"
     },
     {
       "tool": "Bash",
@@ -69,14 +77,18 @@
         "command": "for t in first_day company_overview mission_vision values customers bu_managers benefits collaboration_rules events desk_booking bench_time it_support hr_contacts time_off absence geco tamtamy sharepoint teams confluence_tool slack gitlab servus_concept tool_access first_weeks; do\n  c=$(grep -c \"\\\"$t\\\"\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json)\n  printf \"%-22s %s\\n\" \"$t\" \"$c\"\ndone",
         "description": "Count occurrences per topic in cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "first_day 0 company_overview 0 mission_vision 0 values 0 customers 0 bu_managers 0 benefits 0 collaboration_rules 0 events 0 desk_booking 0 bench_time 0 it_support 0 hr_contacts 0 time_off 0 absence 0 geco 0 tamtamy 0 sharepoint 0 teams 0 confluence_tool 0 slack 0 gitlab 0 servus_concept 0 tool_access 0 first_weeks 3"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc"
     },
     {
       "tool": "Bash",
@@ -84,7 +96,9 @@
         "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
         "description": "List eval dir"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py"
     },
     {
       "tool": "Bash",
@@ -92,7 +106,9 @@
         "command": "grep -n '\"id\"' ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "List all case ids"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "9: \"id\": \"popcorn_recall\", 77: \"id\": \"aiot_page_card\", 140: \"id\": \"aiot_page_card_onboarding\", 202: \"id\": \"dorian_role_anchor\", 220: \"id\": \"pineapple_no_confab\", 250: \"id\": \"local_reference_vacation\", 280: \"id\": \"company_mission_local\", 305: \"id\": \"out_of_scope_decline\", 319: \"id\": \"managing_director_who\", 338: \"id\": \"udemy_reimbursement_local\", 354: \"id\": \"vacation_carryover_local\", 373: \"id\": \"g"
     },
     {
       "tool": "Bash",
@@ -100,7 +116,9 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval && python3 -c \"\nimport json, re\ncases = json.load(open('cases.json'))['cases']\nblob = json.dumps(cases).lower()\ntopics = {\n  'first_day': ['first day', 'first_day', 'first-day', 'day one', 'first day agenda'],\n  'company_overview': ['welcome to concept reply', 'company overview', 'ov_intro'],\n  'mission_vision': ['mission', 'mission_vision', 'ov_mission_vision'],\n  'values': ['predict', 'our values', 'ov_values'],\n  'customers': ['our customers', 'customers', 'ov_customers'],\n  'bu_managers': ['business unit manager', 'bu_managers', 'ov_bu', 'managing director'],\n  'benefits': ['benefit', 'udemy', 'wk_benefits'],\n  'collaboration_rules': ['collaboration rule', 'collaboration_rules', 'wk_collaboration'],\n  'events': ['events', 'wk_events', 'team events'],\n  'desk_booking': ['desk booking', 'desk_booking', 'wk_desk_booking'],\n  'bench_time': ['bench time', 'bench_time', 'wk_bench_time'],\n  'it_support': ['it support', 'it_support', 'wk_it_support'],\n  'hr_contacts': ['hr_contacts', 'hr contact', 'wk_assistance'],\n  'time_off': ['time_off', 'time off', 'vacation', 'wk_time_off', 'holiday', 'workation'],\n  'absence': ['absence', 'absence.io', 'access_absence', 'sick'],\n  'geco': ['geco', 'access_geco', 'timesheet'],\n  'tamtamy': ['tamtamy', 'access_tamtamy'],\n  'sharepoint': ['sharepoint', 'access_sharepoint'],\n  'teams': ['microsoft teams', 'access_teams'],\n  'confluence_tool': ['confluence', 'access_confluence'],\n  'slack': ['slack', 'access_slack'],\n  'gitlab': ['gitlab', 'access_gitlab'],\n  'servus_concept': ['servus', 'servus_concept'],\n  'tool_access': ['tool_access', 'tool access'],\n  'first_weeks': ['first weeks', 'first_weeks', 'aiot tutorial', 'iot_tutorial'],\n}\nfor t, kws in topics.items():\n    hits = {k: blob.count(k) for k in kws}\n    total = sum(hits.values())\n    tag = 'MISS' if total == 0 else ('WEAK' if total < 2 else 'OK  ')\n    print(f'{tag} {t:22s} {total:4d}  {hits}')\n\"\n",
         "description": "Match topic keywords in cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "OK first_day 11 {'first day': 3, 'first_day': 2, 'first-day': 6, 'day one': 0, 'first day agenda': 0} OK company_overview 5 {'welcome to concept reply': 3, 'company overview': 0, 'ov_intro': 2} OK mission_vision 13 {'mission': 9, 'mission_vision': 2, 'ov_mission_vision': 2} OK values 4 {'predict': 2, 'our values': 0, 'ov_values': 2} OK customers 8 {'our customers': 2, 'customers': 4, 'ov_customers"
     },
     {
       "tool": "Bash",
@@ -108,7 +126,9 @@
         "command": "python3 -c \"\nimport json\ncases = json.load(open('cases.json'))['cases']\n# Exclude cases that enumerate the full journey (structural, not behavioral).\nenumerators = {'resume_skips_ticked_checklist', 'tools_status_lists_all', 'section_header_not_empty'}\nbehavioral = [c for c in cases if c.get('id') not in enumerators]\nblob = json.dumps(behavioral).lower()\ntopics = {\n  'first_day': ['first day', 'first_day', 'first-day', 'day one'],\n  'company_overview': ['welcome to concept reply', 'company overview'],\n  'mission_vision': ['mission'],\n  'values': ['predict', 'our values'],\n  'customers': ['our customers', 'customers'],\n  'bu_managers': ['business unit manager', 'managing director', 'bu manager'],\n  'benefits': ['benefit', 'udemy'],\n  'collaboration_rules': ['collaboration rule'],\n  'events': ['team events', 'company events', 'events'],\n  'desk_booking': ['desk booking'],\n  'bench_time': ['bench time'],\n  'it_support': ['it support'],\n  'hr_contacts': ['hr contact', 'people ops', 'hr team'],\n  'time_off': ['time off', 'vacation', 'holiday', 'workation'],\n  'absence': ['absence', 'sick'],\n  'geco': ['geco', 'timesheet'],\n  'tamtamy': ['tamtamy'],\n  'sharepoint': ['sharepoint'],\n  'teams': ['microsoft teams', 'ms teams'],\n  'confluence_tool': ['confluence'],\n  'slack': ['slack'],\n  'gitlab': ['gitlab'],\n  'servus_concept': ['servus'],\n  'tool_access': ['tool access', 'request access'],\n  'first_weeks': ['first weeks', 'aiot tutorial', 'first-week'],\n}\nfor t, kws in topics.items():\n    hits = {k: blob.count(k) for k in kws}\n    total = sum(hits.values())\n    tag = 'MISS' if total == 0 else ('WEAK' if total < 2 else 'OK  ')\n    print(f'{tag} {t:22s} {total:4d}  {hits}')\n\"\n",
         "description": "Recheck excluding structural journey-enumerator cases"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "OK first_day 5 {'first day': 2, 'first_day': 1, 'first-day': 2, 'day one': 0} OK company_overview 3 {'welcome to concept reply': 3, 'company overview': 0} OK mission_vision 7 {'mission': 7} WEAK values 1 {'predict': 1, 'our values': 0} OK customers 3 {'our customers': 1, 'customers': 2} OK bu_managers 7 {'business unit manager': 1, 'managing director': 6, 'bu manager': 0} OK benefits 5 {'benefit':"
     },
     {
       "tool": "Bash",
@@ -116,7 +136,9 @@
         "command": "python3 -c \"\nimport json\ncases = json.load(open('cases.json'))['cases']\nenumerators = {'resume_skips_ticked_checklist','tools_status_lists_all','section_header_not_empty'}\nfor c in cases:\n  if c.get('id') in enumerators: continue\n  blob = json.dumps(c).lower()\n  for kw in ['predict','tamtamy','desk booking','sharepoint','gitlab','collaboration','events','bench','hr contact','servus','tool access','microsoft teams']:\n    if kw in blob:\n      print(f'{c[\\\"id\\\"]:40s}  <- {kw}')\n\"\n",
         "description": "Which cases contain the WEAK/MISS keywords"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "desk_booking_local <- desk booking desk_booking_card_staged <- tamtamy ob_overview_doc_card <- predict"
     },
     {
       "tool": "Bash",
@@ -124,7 +146,9 @@
         "command": "python3 -c \"\nimport json\ncases=json.load(open('cases.json'))['cases']\nfor cid in ['desk_booking_card_staged','ob_overview_doc_card','ob_welcome_timeline_card']:\n  c=next(x for x in cases if x.get('id')==cid)\n  print('===',cid)\n  print('query:',c.get('query'))\n  print('note (first 300):',(c.get('note') or '')[:300])\n\"\n",
         "description": "Inspect suspect cases"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "=== desk_booking_card_staged query: How do I book a desk in the office? note (first 300): Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is S === ob_ov"
     },
     {
       "tool": "UserPrompt",
@@ -139,14 +163,20 @@
         "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md 2>&1 | head -1",
         "description": "Check if COVERAGE.md exists"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "ls: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md: No such file or directory",
+      "assistant_note": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior). **Zero behavioral coverage (no case queries topic):** - `collaboration_rules` — Working at Concept - `events` — Working at Concept - `bench_time` — Working at Concept - `hr_contacts` — Working at Concept - `sharepoint` — Tools & Apps - `teams` (M"
     },
     {
       "tool": "Write",
       "input": {
-        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md"
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md",
+        "content": "# Welcome Book topic coverage gaps\n\nAudit of `book.py` `TOPICS` against `cases.json`. Only counts **behavioral** cases (a query that exercises the topic). Structural journey-enumerator cases (`resume_skips_ticked_checklist`, `tools_status_lists_all`, `section_header_not_empty`) list every checklist id and are excluded — they assert journey shape, not that the agent can answer about the topic.\n\n## No behavioral coverage\n\n| Topic | Section | Why it matters |\n|---|---|---|\n| `collaboration_rules` | Working at Concept | Prescriptive rules (dress code, remote-work norms) — highest-risk topic to confabulate; no test catches a wrong rule. |\n| `events` | Working at Concept | Answer depends on live/current schedule; without a case, we don't know if the agent invents recurring events or defers correctly. |\n| `bench_time` | Working at Concept | Sensitive HR concept (unbilled hours). Wrong policy phrasing has legal/manager-perception cost; currently untested. |\n| `hr_contacts` | Working at Concept | People-lookup topic — the exact failure mode the KB-stale-facts problem is about. No case guards against a hallucinated HR contact. |\n| `sharepoint` | Tools & Apps | Has a `keyvalue` card in `_TOPIC_CARDS`; the deterministic card-staging path for this variant is not exercised end-to-end. |\n| `teams` (MS Teams) | Tools & Apps | Same as sharepoint — `keyvalue` card staging untested for this topic. Also the most-used daily tool, so a wrong access answer is high-blast-radius. |\n| `gitlab` | Tools & Apps | Access instructions vary by BU/office; card-less topic relies on retrieval — no case verifies the agent doesn't invent a URL or SSO step. |\n| `servus_concept` | Tools & Apps | Internal portal name easily confused with generic greetings; untested → risk the agent treats \"servus\" as small talk instead of the tool. |\n| `tool_access` | Tools & Apps | Catch-all \"how do I request access to X\" path. No case checks the agent routes to the right owner instead of guessing. |\n\n## Tangential-only … [truncated 1056 chars]"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)"
     }
   ]
 }

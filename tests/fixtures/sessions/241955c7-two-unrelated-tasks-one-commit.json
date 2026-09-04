@@ -40,7 +40,9 @@
         "command": "find ${HOME}/ai_projects/concept_buddy -type f \\( -name \"book.py\" -o -name \"toolWalkthroughs.ts\" \\) 2>/dev/null | grep -v node_modules | grep -v .venv",
         "description": "Locate book.py and toolWalkthroughs.ts"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts"
     },
     {
       "tool": "Bash",
@@ -48,14 +50,18 @@
         "command": "grep -n \"walkthrough\\|TOPICS\\|stage_card\\|card\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -80",
         "description": "Scan book.py for walkthrough card staging"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "4:Welcome Book section for a topic AND stages that topic's canonical dashboard card. Binding 5:the card to the retrieval is the whole point — a card was previously a *second* decision the 7:card ~1/3 of runs). Here the card is a side-effect of the retrieval the model must do to get 10:The `TOPICS` table is the SINGLE SOURCE OF TRUTH for which card a KB topic gets. It moved out 11:of the concept-re"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "100 {\"label\": \"Notice\", \"value\": \"1 month for more than 2 days\"}, 101 {\"label\": \"Sick note\", \"value\": \"required by day 3\"}, 102 {\"label\": \"24.12 & 31.12\", \"value\": \"4 hours granted each\"}, 103 ]}}, 104 \"absence\": {\"section\": \"Time Off\", \"card\": { 105 \"variant\": \"walkthrough\", \"title\": \"Absence — absence.io\", \"body\": \"absence\"}}, 106 # ── GECO ── 107 \"geco\": {\"section\": \"GECO\", \"card\": { 108 \"varia"
     },
     {
       "tool": "Bash",
@@ -63,21 +69,27 @@
         "command": "grep -n \"variant.*walkthrough\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py",
         "description": "Find all walkthrough variants in TOPICS"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "83: \"variant\": \"walkthrough\", \"title\": \"Desk Booking\", \"body\": \"desk-booking\"}}, 105: \"variant\": \"walkthrough\", \"title\": \"Absence — absence.io\", \"body\": \"absence\"}}, 108: \"variant\": \"walkthrough\", \"title\": \"GECO — Timesheet\", \"body\": \"geco-timesheet\"}}, 111: \"variant\": \"walkthrough\", \"title\": \"TamTamy\", \"body\": \"tamtamy\"}},"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "1 /** 2 * Tool walkthroughs — the single source of truth for the stepped \"walkthrough\" 3 * cards on the dashboard. Each tool/topic maps to an ordered list of steps. 4 * 5 * A step works at three levels of richness, and degrades gracefully: 6 * 1. `caption` only → a clean numbered TEXT step (no asset needed). 7 * 2. `caption` + `image` → the screenshot shown for that step. 8 * 3. `+ markers` → one "
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "295 \"Confluence; the fetched page renders on the panel automatically.\", 296 } 297 entry = TOPICS.get(topic) 298 if entry is None: 299 return { 300 \"in_book\": False, 301 \"unknown_topic\": topic, 302 \"valid_topics\": sorted(TOPICS), 303 \"guidance\": \"Unknown topic. Re-call with one of valid_topics, or 'not_in_book' to \" 304 \"search Confluence.\", 305 } 306 card = entry.get(\"card\") 307 if card: 308 varia"
     },
     {
       "tool": "UserPrompt",
@@ -92,7 +104,10 @@
         "command": "find ${HOME}/ai_projects/concept_buddy -name \"cases.json\" -not -path \"*/node_modules/*\" -not -path \"*/.venv/*\" 2>/dev/null",
         "description": "Locate cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "assistant_note": "Scan done. All 4 walkthrough-variant TOPICS in `book.py` resolve to keys in `TOOL_WALKTHROUGHS`: | book.py `body` | line | TOOL_WALKTHROUGHS key | match | |---|---|---|---| | `desk-booking` | book.py:83 | `desk-booking` (toolWalkthroughs.ts:113) | ✓ | | `absence` | book.py:105 | `absence` (toolWalkthroughs.ts:130) | ✓ | | `geco-timesheet` | book.py:108 | `geco-timesheet` (toolWalkthroughs.ts:40) |"
     },
     {
       "tool": "Bash",
@@ -100,7 +115,9 @@
         "command": "grep -n \"geco_timesheet_card_staged\\|tamtamy\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "Find geco+tamtamy refs"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "519: \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only \\u2014 asserts the card is STAGED with the right variant+body; a blank RENDER (a walkthrough body with no too"
     },
     {
       "tool": "Bash",
@@ -108,7 +125,9 @@
         "command": "grep -n \"geco_timesheet_card_staged\\|card_staged\\|walkthrough\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json | head -40",
         "description": "Locate card_staged assertions"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "263: \"note_cards\": \"Guard path: answered from the Welcome Book, so Confluence is never fetched and NO full-page card is staged. Also intent-scoped: an ENTITLEMENT question must resolve to the `time_off` topic (stats card with the numbers), never the `absence` click-through \\u2014 a walkthrough here means the model picked the tool topic for a policy question.\", 269: \"variant\": \"walkthrough\" 518: \"i"
     },
     {
       "tool": "Bash",
@@ -116,7 +135,9 @@
         "command": "grep -n \"geco_timesheet_card_staged\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "Find geco_timesheet_card_staged line"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "(Bash completed with no output)"
     },
     {
       "tool": "Bash",
@@ -124,7 +145,9 @@
         "command": "grep -n \"card_staged\\|desk_booking_card\\|absence_card\\|geco_card\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
         "description": "Find all *_card_staged cases"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "518: \"id\": \"desk_booking_card_staged\","
     },
     {
       "tool": "Bash",
@@ -132,21 +155,30 @@
         "command": "grep -rn \"geco_timesheet_card_staged\" ${HOME}/ai_projects/concept_buddy --include=\"*.json\" --include=\"*.py\" 2>/dev/null | head -5",
         "description": "Global search for geco_timesheet_card_staged"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "(Bash completed with no output)"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "510 \"4brands\", 511 \"[REDACTED:email]\", 512 \"3070-404\", 513 \"reach out to your Buddy\", 514 \"don't have an answer\" 515 ] 516 }, 517 { 518 \"id\": \"desk_booking_card_staged\", 519 \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/do",
+      "assistant_note": "No `geco_timesheet_card_staged` exists — only `desk_booking_card_staged` (cases.json:518). Using that as template."
     },
     {
       "tool": "Edit",
       "input": {
-        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "old_string": "   \"id\": \"desk_booking_card_staged\",\n   \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is STAGED with the right variant+body; a blank RENDER (a walkthrough body with no toolWalkthroughs.ts manifest key, e.g. tamtamy/absence) is a frontend concern this eval can't see.\",\n   \"query\": \"How do I book a desk in the office?\",\n   \"expect_any\": [\n    \"desk\",\n    \"book\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"desk-booking\"\n    }\n   ]\n  },",
+        "new_string": "   \"id\": \"desk_booking_card_staged\",\n   \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is STAGED with the right variant+body; a blank RENDER (a walkthrough body with no toolWalkthroughs.ts manifest key, e.g. tamtamy/absence) is a frontend concern this eval can't see.\",\n   \"query\": \"How do I book a desk in the office?\",\n   \"expect_any\": [\n    \"desk\",\n    \"book\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"desk-booking\"\n    }\n   ]\n  },\n  {\n   \"id\": \"tamtamy_card_staged\",\n   \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is STAGED with the right variant+body; a blank RENDER (a walkthrough body with no toolWalkthroughs.ts manifest key, e.g. tamtamy/absence) is a frontend concern this eval can't see.\",\n   \"query\": \"How do I use TamTamy?\",\n   \"expect_any\": [\n    \"tamtamy\"\n   ],\n   \"forbid\": [\n    \"reach out to your Buddy\",\n    \"don't have an answer\"\n   ],\n   \"expect_card\": [\n    {\n     \"variant\": \"walkthrough\",\n     \"body_contains\": \"tamtamy\"\n    }\n   ]\n  },"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "The file ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json has been updated successfully. (file state is current in your context — no need to Read it back)"
     },
     {
       "tool": "Bash",
@@ -154,7 +186,9 @@
         "command": "python3 -c \"import json; json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); print('valid json')\"",
         "description": "Validate cases.json parses"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "valid json"
     },
     {
       "tool": "UserPrompt",
@@ -169,7 +203,10 @@
         "command": "find ${HOME}/ai_projects/concept_buddy -name \"concept_buddy.evalset.json\" -not -path \"*/node_modules/*\" 2>/dev/null",
         "description": "Locate evalset.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+      "assistant_note": "Added `tamtamy_card_staged` after `desk_booking_card_staged` (cases.json:536). Asserts walkthrough variant + body_contains \"tamtamy\". Mirrors template exactly. JSON valid. Flag: template you named was `geco_timesheet_card_staged` — doesn't exist. Only `desk_booking_card_staged` present. Used that. Say word if you want geco version added too."
     },
     {
       "tool": "Bash",
@@ -177,7 +214,9 @@
         "command": "grep -rn \"concept_buddy.evalset\\|evalset.json\" ${HOME}/ai_projects/concept_buddy/backend --include=\"*.py\" --include=\"*.sh\" --include=\"*.md\" 2>/dev/null | head -20",
         "description": "Find generator refs to evalset"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py:62:# We drive it directly (not via `adk eval`/evalset.json) so it slots into this ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py:4:Emits `concept_buddy.evalset.json` (google.adk.evaluation.EvalSet schema) + a ${HOME}/ai_projects/concept_buddy/backend/concep"
     },
     {
       "tool": "Bash",
@@ -185,7 +224,9 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent && python3 eval/generate_evalset.py",
         "description": "Regenerate evalset"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "wrote concept_buddy.evalset.json — 40 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5"
     },
     {
       "tool": "Bash",
@@ -193,7 +234,9 @@
         "command": "grep -c \"tamtamy_card_staged\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
         "description": "Confirm new case present in evalset"
       },
-      "failed": false
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "2"
     },
     {
       "tool": "UserPrompt",
@@ -208,7 +251,10 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy && git status --short backend/concept_buddy_agent/eval/",
         "description": "Status of eval dir"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "M backend/concept_buddy_agent/eval/cases.json M backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
+      "assistant_note": "Regenerated. 40 cases (was 39), `tamtamy_card_staged` present (2 occurrences — id + eval_id per schema)."
     },
     {
       "tool": "Bash",
@@ -216,7 +262,9 @@
         "command": "git diff --stat backend/concept_buddy_agent/eval/",
         "description": "Diff stat"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "backend/concept_buddy_agent/eval/cases.json | 18 + .../eval/concept_buddy.evalset.json | 682 ++++++++++++++++++++- 2 files changed, 697 insertions(+), 3 deletions(-)"
     },
     {
       "tool": "Bash",
@@ -224,7 +272,9 @@
         "command": "git log --oneline -5",
         "description": "Recent commit style"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "5852959 fix(journey): scope the stale-snapshot gate to the journey, not the whole snapshot 709c2d2 test(eval): seed the revision clock so a case sends what a browser sends ade448c fix(journey): give the journey a revision so a stale snapshot cannot win d0b78c0 fix(journey): re-derive status after a rebase 33b0eab fix(journey): settle outbox entries by value, not by id"
     },
     {
       "tool": "Bash",
@@ -232,7 +282,9 @@
         "command": "git diff backend/concept_buddy_agent/eval/cases.json | head -40",
         "description": "Inspect cases.json diff"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "diff --git a/backend/concept_buddy_agent/eval/cases.json b/backend/concept_buddy_agent/eval/cases.json index 6533669..27d9dc9 100644 --- a/backend/concept_buddy_agent/eval/cases.json +++ b/backend/concept_buddy_agent/eval/cases.json @@ -533,6 +533,24 @@ } ] }, + { + \"id\": \"tamtamy_card_staged\", + \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) "
     },
     {
       "tool": "Bash",
@@ -240,7 +292,9 @@
         "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): assert TOPICS[\"tamtamy\"] stages its walkthrough card\n\nOnly desk_booking_card_staged guarded the non-page card pipeline; tamtamy\nhad no case, so a regression that dropped the walkthrough card for the\n`tamtamy` topic would go unnoticed by the eval.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\" && git status --short backend/concept_buddy_agent/eval/",
         "description": "Commit both eval files"
       },
-      "failed": false
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "[main 95125ff] test(eval): assert TOPICS[\"tamtamy\"] stages its walkthrough card 2 files changed, 697 insertions(+), 3 deletions(-)"
     }
   ]
 }

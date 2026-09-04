@@ -33,7 +33,9 @@
         "command": "grep -rni \"mandatory\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent 2>/dev/null | head -30",
         "description": "Find mandatory holiday facts in backend"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/callbacks.py:96:# redundant second search path to waffle over and add a mandatory discovery call. ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md:22:- **[Time Off](#time-off)** — vacation, sick days, mandatory holidays, the extra-leave table (absence.io) /U"
     },
     {
       "tool": "Bash",
@@ -41,14 +43,18 @@
         "command": "find ${HOME}/ai_projects/concept_buddy -name \"book*.py\" -o -name \"welcome*\" 2>/dev/null | head -20",
         "description": "Locate welcome book source"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-onboarding/references/welcome.md ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-p"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "270 271 ### Sick Days 272 - Report illness in http://absence.io 273 - Day 1: inform [REDACTED:email], your direct report, and one Partner 274 - By Day 3: doctor's note required — send to the same recipients 275 - Update Slack status and http://absence.io 276 - Illness during vacation: can convert to sick leave with medical certificate 277 - Document illness in GECO at end of month 278 279 "
     },
     {
       "tool": "Bash",
@@ -56,14 +62,18 @@
         "command": "find ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval -name \"cases.json\" -o -name \"cases*\"",
         "description": "Locate cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc"
     },
     {
       "tool": "Bash",
@@ -71,7 +81,9 @@
         "command": "grep -n \"mandatory_holidays_local\\|mandatory\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json | head -20",
         "description": "Check evalset.json for mandatory case"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "383: \"eval_id\": \"mandatory_holidays_local\", 386: \"invocation_id\": \"mandatory_holidays_local-0\","
     },
     {
       "tool": "Bash",
@@ -79,7 +91,9 @@
         "command": "grep -rn \"mandatory_holidays\\|24.12\\|31.12\\|Non-Chargeable\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills 2>/dev/null | head -30",
         "description": "Grep for mandatory holidays refs"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-onboarding/references/tools.md:64: **8 hours per full project day** (non-project time as Non-Chargeable Work, with a comment), submit ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/welcome-book.md:280:- 24.12 and 31.12: Company grants 4 hours on each "
     },
     {
       "tool": "Bash",
@@ -87,7 +101,9 @@
         "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skills/concept-reply-qa/references/",
         "description": "List qa references"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "welcome-book.md"
     },
     {
       "tool": "Bash",
@@ -95,21 +111,30 @@
         "command": "grep -n \"time_off\\|mandatory\\|Non-Chargeable\\|24.12\\|answer\\|TOPICS\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py | head -40",
         "description": "Check book.py time_off routing"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "3:`answer()` does the two things a Q&A fact turn must never do separately: it returns the 10:The `TOPICS` table is the SINGLE SOURCE OF TRUTH for which card a KB topic gets. It moved out 34:# topic -> {\"section\": the \"## \" heading whose body answers it, 39:TOPICS: Dict[str, Dict[str, Any]] = { 89: # time_off = the entitlement/policy question (\"how many vacation days?\") -> the 94: # card is for sho"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "85 \"it_support\": {\"section\": \"Working at Concept\", \"card\": None}, 86 \"hr_contacts\": {\"section\": \"Working at Concept\", \"card\": None}, 87 # ── Time Off ── 88 # Two topics over ONE section, split by INTENT, because the right card differs: 89 # time_off = the entitlement/policy question (\"how many vacation days?\") -> the 90 # numbers, as a plain stats card. 91 # absence = the tool question (\"how do I "
     },
     {
       "tool": "Edit",
       "input": {
-        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+        "old_string": "    {\n      \"id\": \"workation_days_local\",",
+        "new_string": "    {\n      \"id\": \"mandatory_holidays_local\",\n      \"note\": \"Local reference. Mandatory holidays 24.12 and 31.12 grant 4 hours each, booked as 'Non-Chargeable Work' (welcome-book.md 'Mandatory Holidays', routed via topic=time_off; the item also appears on the Time Off stats card).\",\n      \"query\": \"What are the mandatory holidays at Concept Reply?\",\n      \"require_tools_any\": [\n        \"answer\"\n      ],\n      \"expect_any\": [\n        \"24.12\",\n        \"31.12\",\n        \"4 hours\",\n        \"Non-Chargeable Work\"\n      ],\n      \"forbid\": [\n        \"reach out to your Onboarding Responsible\",\n        \"reach out to your Buddy\",\n        \"don't have an answer\"\n      ]\n    },\n    {\n      \"id\": \"workation_days_local\","
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "The file ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "assistant_note": "Fact found: welcome-book.md:280 — \"24.12 and 31.12: Company grants 4 hours on each day — book as 'Non-Chargeable Work'\". Routes via `time_off` topic (keywords include \"mandatory holiday, mandatory holidays\"). Adding case matching light local-reference pattern (vacation_carryover, sick_doctor_note, workation), next to sick_doctor_note_local."
     },
     {
       "tool": "Bash",
@@ -117,7 +142,9 @@
         "command": "python3 -c \"import json; d=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')); ids=[c['id'] for c in d['cases']]; print('OK', len(ids), 'cases'); print('mandatory idx:', ids.index('mandatory_holidays_local'), 'between', ids[ids.index('mandatory_holidays_local')-1], 'and', ids[ids.index('mandatory_holidays_local')+1])\"",
         "description": "Validate JSON + placement"
       },
-      "failed": false
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "OK 39 cases mandatory idx: 15 between sick_doctor_note_local and workation_days_local"
     },
     {
       "tool": "UserPrompt",
@@ -132,7 +159,10 @@
         "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ && grep -rn \"evalset\\|concept_buddy.evalset\" ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/ 2>/dev/null | head -30",
         "description": "Find evalset regen script"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py ${HOME}/ai_projects/concept_buddy/backend/concept_bu",
+      "assistant_note": "JSON valid. Case `mandatory_holidays_local` inserted at index 15, between `sick_doctor_note_local` and `workation_days_local` (Time Off cluster). Asserts `answer` tool + `24.12` / `31.12` / `4 hours` / `Non-Chargeable Work` + standard deflection forbids. Matches light local-reference pattern (no card assertion — same as sick/carryover/workation neighbors)."
     },
     {
       "tool": "Bash",
@@ -140,7 +170,9 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy/backend && .venv/bin/python concept_buddy_agent/eval/generate_evalset.py 2>&1 | tail -20",
         "description": "Regen evalset"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/authlib/_joserfc_helpers.py:8: AuthlibDeprecationWarning: authlib.jose module is deprecated, please use joserfc instead. It will be compatible before version 2.0.0. from authlib.jose import ECKey ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/google/adk/features/_feature_decor"
     },
     {
       "tool": "Bash",
@@ -148,7 +180,10 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy && git status --short 2>&1 | head -20 && echo --- && git diff --stat backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
         "description": "Check staged deltas"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "M backend/concept_buddy_agent/eval/cases.json M backend/concept_buddy_agent/eval/concept_buddy.evalset.json D presentation/LEARNINGS-SLIDES.md D presentation/PART1-SLIDES.md D presentation/PART2-SLIDES.md ?? .claude/commands/ ?? .claude/settings.json ?? BRIEF.md ?? HANDOFF.md ?? cb_backend.log ?? cb_eval_action.log ?? cb_eval_ae_full.log ?? cb_eval_ae_rest.log ?? cb_eval_anythingelse.log ?? cb_eva",
+      "assistant_note": "Regenerated: 39 cases. Now commit."
     },
     {
       "tool": "Bash",
@@ -156,7 +191,9 @@
         "command": "cd ${HOME}/ai_projects/concept_buddy && git log --oneline -6",
         "description": "Show recent commit style"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "5852959 fix(journey): scope the stale-snapshot gate to the journey, not the whole snapshot 709c2d2 test(eval): seed the revision clock so a case sends what a browser sends ade448c fix(journey): give the journey a revision so a stale snapshot cannot win d0b78c0 fix(journey): re-derive status after a rebase 33b0eab fix(journey): settle outbox entries by value, not by id c6fb4ee fix(eval): sick_docto"
     },
     {
       "tool": "Bash",
@@ -164,7 +201,9 @@
         "command": "git diff backend/concept_buddy_agent/eval/cases.json | head -60",
         "description": "Inspect cases.json diff head"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "diff --git a/backend/concept_buddy_agent/eval/cases.json b/backend/concept_buddy_agent/eval/cases.json index 6533669..9498d83 100644 --- a/backend/concept_buddy_agent/eval/cases.json +++ b/backend/concept_buddy_agent/eval/cases.json @@ -1,1210 +1,1213 @@ { - \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test"
     },
     {
       "tool": "Bash",
@@ -172,7 +211,10 @@
         "command": "git add backend/concept_buddy_agent/eval/cases.json backend/concept_buddy_agent/eval/concept_buddy.evalset.json && git commit -m \"$(cat <<'EOF'\ntest(eval): cover mandatory-holiday fact from the Welcome Book\n\nAdds mandatory_holidays_local to the Time Off cluster in cases.json\nand regenerates concept_buddy.evalset.json (39 cases). Asserts the\nanswer tool returns 24.12 / 31.12 / 4 hours / Non-Chargeable Work\nper welcome-book.md, matching the light local-reference pattern\n(no card assertion) used by its neighbors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <[REDACTED:email]>\nEOF\n)\" 2>&1 | tail -15 && git status --short backend/concept_buddy_agent/eval/",
         "description": "Stage + commit + verify"
       },
-      "failed": false
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "[main 21e85d2] test(eval): cover mandatory-holiday fact from the Welcome Book 2 files changed, 1810 insertions(+), 1155 deletions(-)",
+      "assistant_note": "cases.json reformat (1-space→2-space) predates this session — was already in `M` status at start. Adding case + regenerated evalset."
     }
   ],
   "target": "welcome_book_topics",
