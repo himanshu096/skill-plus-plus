@@ -35,7 +35,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -45,7 +46,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "406: \"id\": \"desk_booking_local\", 518: \"id\": \"desk_booking_card_staged\", 846: \"id\": \"wk_desk_booking\","
+      "tool_returned": "406: \"id\": \"desk_booking_local\", 518: \"id\": \"desk_booking_card_staged\", 846: \"id\": \"wk_desk_booking\",",
+      "end": false
     },
     {
       "tool": "Read",
@@ -54,7 +56,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "515 ] 516 }, 517 { 518 \"id\": \"desk_booking_card_staged\", 519 \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only \\u2014 asserts the card is STAGED with the right vari"
+      "tool_returned": "515 ] 516 }, 517 { 518 \"id\": \"desk_booking_card_staged\", 519 \"note\": \"Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only \\u2014 asserts the card is STAGED with the right vari",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -64,7 +67,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:421: one of: \"geco-timesheet\", \"geco-expenses\", \"tamtamy\", \"sharepoint\", \"desk-booking\", ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:108: \"variant\": \"walkthrough\", \"title\": \"GECO — Timesheet\", \"body\": \"geco-timesheet\"}}, ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_ag"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:421: one of: \"geco-timesheet\", \"geco-expenses\", \"tamtamy\", \"sharepoint\", \"desk-booking\", ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:108: \"variant\": \"walkthrough\", \"title\": \"GECO — Timesheet\", \"body\": \"geco-timesheet\"}}, ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_ag",
+      "end": false
     },
     {
       "tool": "Edit",
@@ -76,7 +80,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "The file ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json has been updated successfully. (file state is current in your context — no need to Read it back)",
-      "assistant_note": "Note: actual body value in `book.py:108` is `\"geco-timesheet\"` (hyphen), matching desk_booking format. Using hyphen — underscore would never match."
+      "assistant_note": "Note: actual body value in `book.py:108` is `\"geco-timesheet\"` (hyphen), matching desk_booking format. Using hyphen — underscore would never match.",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -86,7 +91,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "ok"
+      "tool_returned": "ok",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -104,7 +110,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
-      "assistant_note": "Added `geco_timesheet_card_staged` right after `desk_booking_card_staged` in `backend/concept_buddy_agent/eval/cases.json:536`. Same shape: walkthrough variant, `body_contains: \"geco-timesheet\"` (hyphen — matches `book.py:108` topic body; underscore would never match). JSON validates."
+      "assistant_note": "Added `geco_timesheet_card_staged` right after `desk_booking_card_staged` in `backend/concept_buddy_agent/eval/cases.json:536`. Same shape: walkthrough variant, `body_contains: \"geco-timesheet\"` (hyphen — matches `book.py:108` topic body; underscore would never match). JSON validates.",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -114,7 +121,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "wrote concept_buddy.evalset.json — 40 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5"
+      "tool_returned": "wrote concept_buddy.evalset.json — 40 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5",
+      "end": false
     },
     {
       "tool": "Read",
@@ -123,7 +131,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "90 # numbers, as a plain stats card. 91 # absence = the tool question (\"how do I request leave / report sick?\") -> the 92 # absence.io click-through. 93 # Do NOT collapse them by putting policy text into the walkthrough: a click-through 94 # card is for showing where to click, and padding it with rules made it the answer to 95 # a question it was never meant to serve. 96 \"time_off\": {\"section\": \"T"
+      "tool_returned": "90 # numbers, as a plain stats card. 91 # absence = the tool question (\"how do I request leave / report sick?\") -> the 92 # absence.io click-through. 93 # Do NOT collapse them by putting policy text into the walkthrough: a click-through 94 # card is for showing where to click, and padding it with rules made it the answer to 95 # a question it was never meant to serve. 96 \"time_off\": {\"section\": \"T",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -134,7 +143,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "(Bash completed with no output)",
-      "assistant_note": "Assertion matches: `book.py:108` — topic `geco` → `body: \"geco-timesheet\"`. Now verify query \"How do I fill in my GECO timesheet?\" routes to `geco` topic via `_TOPIC_CARDS` / mention-detector."
+      "assistant_note": "Assertion matches: `book.py:108` — topic `geco` → `body: \"geco-timesheet\"`. Now verify query \"How do I fill in my GECO timesheet?\" routes to `geco` topic via `_TOPIC_CARDS` / mention-detector.",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -144,7 +154,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:421: one of: \"geco-timesheet\", \"geco-expenses\", \"tamtamy\", \"sharepoint\", \"desk-booking\", ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:108: \"variant\": \"walkthrough\", \"title\": \"GECO — Timesheet\", \"body\": \"geco-timesheet\"}}, ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_ag"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/tools.py:421: one of: \"geco-timesheet\", \"geco-expenses\", \"tamtamy\", \"sharepoint\", \"desk-booking\", ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py:108: \"variant\": \"walkthrough\", \"title\": \"GECO — Timesheet\", \"body\": \"geco-timesheet\"}}, ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_ag",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -154,7 +165,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skillset.py:13:Dashboard cards are NOT a skill: the Q&A `answer` tool stages a topic's card in code, and the ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/cards.py:5: Q&A (code) `book.answer` (book.py) stages a topic's canonical card deterministically ${HOME}/ai_projects/concept_buddy/backend/conc"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/skillset.py:13:Dashboard cards are NOT a skill: the Q&A `answer` tool stages a topic's card in code, and the ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/cards.py:5: Q&A (code) `book.answer` (book.py) stages a topic's canonical card deterministically ${HOME}/ai_projects/concept_buddy/backend/conc",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -164,7 +176,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "10:The `TOPICS` table is the SINGLE SOURCE OF TRUTH for which card a KB topic gets. It moved out 39:TOPICS: Dict[str, Dict[str, Any]] = { 88: # Two topics over ONE section, split by INTENT, because the right card differs: 138:# The sentinel a caller passes when the question is NOT one of the topics above. 267:def answer(query: str, topic: str, state: Dict[str, Any]) -> Dict[str, Any]: 271: if topi"
+      "tool_returned": "10:The `TOPICS` table is the SINGLE SOURCE OF TRUTH for which card a KB topic gets. It moved out 39:TOPICS: Dict[str, Dict[str, Any]] = { 88: # Two topics over ONE section, split by INTENT, because the right card differs: 138:# The sentinel a caller passes when the question is NOT one of the topics above. 267:def answer(query: str, topic: str, state: Dict[str, Any]) -> Dict[str, Any]: 271: if topi",
+      "end": false
     },
     {
       "tool": "Read",
@@ -173,7 +186,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "260 out.append(ln) 261 continue 262 if capturing: 263 out.append(ln) 264 return \"\\n\".join(out).strip() or None 265 266 267 def answer(query: str, topic: str, state: Dict[str, Any]) -> Dict[str, Any]: 268 \"\"\"Resolve a Q&A topic against the Welcome Book and stage its card. See the module 269 docstring. `state` is the mutable session state (cards are written to `stage_cards`).\"\"\" 270 rerouted_from = "
+      "tool_returned": "260 out.append(ln) 261 continue 262 if capturing: 263 out.append(ln) 264 return \"\\n\".join(out).strip() or None 265 266 267 def answer(query: str, topic: str, state: Dict[str, Any]) -> Dict[str, Any]: 268 \"\"\"Resolve a Q&A topic against the Welcome Book and stage its card. See the module 269 docstring. `state` is the mutable session state (cards are written to `stage_cards`).\"\"\" 270 rerouted_from = ",
+      "end": false
     },
     {
       "tool": "Read",
@@ -182,7 +196,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "60 61 @pytest.mark.parametrize(\"query,expected\", [ 62 (\"How many workation days in the EU can I take per year?\", \"benefits\"), 63 (\"Who do I contact for IT support?\", \"it_support\"), 64 (\"How many vacation days do employees get?\", \"time_off\"), 65 (\"How do I book a desk?\", \"desk_booking\"), 66 (\"how do I report sick?\", \"absence\"), 67 (\"what is bench time?\", \"bench_time\"), 68 (\"how do I fill in my GECO"
+      "tool_returned": "60 61 @pytest.mark.parametrize(\"query,expected\", [ 62 (\"How many workation days in the EU can I take per year?\", \"benefits\"), 63 (\"Who do I contact for IT support?\", \"it_support\"), 64 (\"How many vacation days do employees get?\", \"time_off\"), 65 (\"How do I book a desk?\", \"desk_booking\"), 66 (\"how do I report sick?\", \"absence\"), 67 (\"what is bench time?\", \"bench_time\"), 68 (\"how do I fill in my GECO",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -192,7 +207,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "550: \"eval_id\": \"geco_timesheet_card_staged\", 553: \"invocation_id\": \"geco_timesheet_card_staged-0\","
+      "tool_returned": "550: \"eval_id\": \"geco_timesheet_card_staged\", 553: \"invocation_id\": \"geco_timesheet_card_staged-0\",",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -210,7 +226,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:40: \"geco-timesheet\": [ ${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:42: caption: \"Open **Time Reporting** in GECO to see your monthly timesheet.\", ${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:43: image: `${T}/geco-timesheet-empty.png`, ${HOME}/",
-      "assistant_note": "Verified end-to-end: - Evalset regenerated: 40 cases (was 39), new case at `concept_buddy.evalset.json:550` - `book.py:108` — topic `geco` → walkthrough card body `\"geco-timesheet\"` ✓ matches assertion - `test_book_routing.py:68` — \"how do I fill in my GECO timesheet?\" already routes to `\"geco\"` via `match_topic()` ✓ deterministic - `book.answer` (`book.py:306-316`) stages that card whenever topic"
+      "assistant_note": "Verified end-to-end: - Evalset regenerated: 40 cases (was 39), new case at `concept_buddy.evalset.json:550` - `book.py:108` — topic `geco` → walkthrough card body `\"geco-timesheet\"` ✓ matches assertion - `test_book_routing.py:68` — \"how do I fill in my GECO timesheet?\" already routes to `\"geco\"` via `match_topic()` ✓ deterministic - `book.answer` (`book.py:306-316`) stages that card whenever topic",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -220,7 +237,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "389: \"id\": \"geco_project_hours_local\", 390: \"note\": \"Book 8 hours per full project day (tools-geco.md).\", 537: \"id\": \"geco_timesheet_card_staged\", 538: \"note\": \"Auto-card-on-mention parity for GECO timesheet: _TOPIC_CARDS should stage the walkthrough card with body=geco-timesheet on any timesheet mention, model-independent. Sibling of desk_booking_card_staged.\", 541: \"geco\", 551: \"body_contains\": "
+      "tool_returned": "389: \"id\": \"geco_project_hours_local\", 390: \"note\": \"Book 8 hours per full project day (tools-geco.md).\", 537: \"id\": \"geco_timesheet_card_staged\", 538: \"note\": \"Auto-card-on-mention parity for GECO timesheet: _TOPIC_CARDS should stage the walkthrough card with body=geco-timesheet on any timesheet mention, model-independent. Sibling of desk_booking_card_staged.\", 541: \"geco\", 551: \"body_contains\": ",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -230,7 +248,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py:18:Card specs match on: variant, title_contains, href_contains, body_contains, body_min_len. ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py:194: variant, title_contains, href_contains, body_contains (case-insensitive), ${HOME}/ai_projects/concept_buddy/backend/conc"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py:18:Card specs match on: variant, title_contains, href_contains, body_contains, body_min_len. ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/run_eval.py:194: variant, title_contains, href_contains, body_contains (case-insensitive), ${HOME}/ai_projects/concept_buddy/backend/conc",
+      "end": false
     },
     {
       "tool": "Read",
@@ -239,7 +258,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "190 191 192 def _card_matches(card: dict, spec: dict) -> bool: 193 \"\"\"True if a staged card satisfies every constraint in `spec`. Supported keys: 194 variant, title_contains, href_contains, body_contains (case-insensitive), 195 body_min_len.\"\"\" 196 if \"variant\" in spec and card.get(\"variant\") != spec[\"variant\"]: 197 return False 198 if \"title_contains\" in spec and spec[\"title_contains\"].lower() no"
+      "tool_returned": "190 191 192 def _card_matches(card: dict, spec: dict) -> bool: 193 \"\"\"True if a staged card satisfies every constraint in `spec`. Supported keys: 194 variant, title_contains, href_contains, body_contains (case-insensitive), 195 body_min_len.\"\"\" 196 if \"variant\" in spec and card.get(\"variant\") != spec[\"variant\"]: 197 return False 198 if \"title_contains\" in spec and spec[\"title_contains\"].lower() no",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -250,7 +270,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "wrote concept_buddy.evalset.json — 40 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5 \"eval_id\": \"geco_timesheet_card_staged\", \"conversation\": [ { \"invocation_id\": \"geco_timesheet_card_staged-0\", \"user_content\": { \"parts\": [",
-      "assistant_note": "Checked: assertion is already real key. `body_contains: \"geco-timesheet\"` at `cases.json:551` — hyphen, matches: - `book.py:108` card body: `\"geco-timesheet\"` - `toolWalkthroughs.ts:40` manifest key: `\"geco-timesheet\"` - `run_eval.py:202` matcher = case-insensitive substring on card `body` field No underscore anywhere. Nothing to change. Re-ran the check:"
+      "assistant_note": "Checked: assertion is already real key. `body_contains: \"geco-timesheet\"` at `cases.json:551` — hyphen, matches: - `book.py:108` card body: `\"geco-timesheet\"` - `toolWalkthroughs.ts:40` manifest key: `\"geco-timesheet\"` - `run_eval.py:202` matcher = case-insensitive substring on card `body` field No underscore anywhere. Nothing to change. Re-ran the check:",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -260,7 +281,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "(Bash completed with no output)"
+      "tool_returned": "(Bash completed with no output)",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -270,7 +292,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "{ \"eval_id\": \"geco_timesheet_card_staged\", \"conversation\": [ { \"invocation_id\": \"geco_timesheet_card_staged-0\", \"user_content\": { \"parts\": [ { \"text\": \"How do I fill in my GECO timesheet?\" } ], \"role\": \"user\" }, \"intermediate_data\": { \"tool_uses\": [], \"tool_responses\": [], \"intermediate_responses\": [] }, \"creation_timestamp\": 0.0 } ], \"creation_timestamp\": 0.0, \"final_session_state\": {} }"
+      "tool_returned": "{ \"eval_id\": \"geco_timesheet_card_staged\", \"conversation\": [ { \"invocation_id\": \"geco_timesheet_card_staged-0\", \"user_content\": { \"parts\": [ { \"text\": \"How do I fill in my GECO timesheet?\" } ], \"role\": \"user\" }, \"intermediate_data\": { \"tool_uses\": [], \"tool_responses\": [], \"intermediate_responses\": [] }, \"creation_timestamp\": 0.0 } ], \"creation_timestamp\": 0.0, \"final_session_state\": {} }",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -288,7 +311,8 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "M cases.json M concept_buddy.evalset.json D ../../../presentation/LEARNINGS-SLIDES.md D ../../../presentation/PART1-SLIDES.md D ../../../presentation/PART2-SLIDES.md ?? ../../../.claude/commands/ ?? ../../../.claude/settings.json ?? ../../../BRIEF.md ?? ../../../HANDOFF.md ?? ../../../cb_backend.log ?? ../../../cb_eval_action.log ?? ../../../cb_eval_ae_full.log ?? ../../../cb_eval_ae_rest.log ?? .",
-      "assistant_note": "State: - `cases.json:551` body_contains = `\"geco-timesheet\"` (real key, hyphen) - Evalset regenerated: 40 cases, `geco_timesheet_card_staged` present - Staging path confirmed: `test_book_routing.py:68` routes query → topic `geco` → `book.answer` stages card with `body=\"geco-timesheet\"` (`book.py:306-316`) Assertion already correct. No underscore variant to fix."
+      "assistant_note": "State: - `cases.json:551` body_contains = `\"geco-timesheet\"` (real key, hyphen) - Evalset regenerated: 40 cases, `geco_timesheet_card_staged` present - Staging path confirmed: `test_book_routing.py:68` routes query → topic `geco` → `book.answer` stages card with `body=\"geco-timesheet\"` (`book.py:306-316`) Assertion already correct. No underscore variant to fix.",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -298,7 +322,8 @@
       },
       "failed": false,
       "serves": 4,
-      "tool_returned": "5852959 fix(journey): scope the stale-snapshot gate to the journey, not the whole snapshot 709c2d2 test(eval): seed the revision clock so a case sends what a browser sends ade448c fix(journey): give the journey a revision so a stale snapshot cannot win d0b78c0 fix(journey): re-derive status after a rebase 33b0eab fix(journey): settle outbox entries by value, not by id"
+      "tool_returned": "5852959 fix(journey): scope the stale-snapshot gate to the journey, not the whole snapshot 709c2d2 test(eval): seed the revision clock so a case sends what a browser sends ade448c fix(journey): give the journey a revision so a stale snapshot cannot win d0b78c0 fix(journey): re-derive status after a rebase 33b0eab fix(journey): settle outbox entries by value, not by id",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -308,7 +333,8 @@
       },
       "failed": true,
       "serves": 4,
-      "tool_returned": "Exit code 128 warning: could not open directory 'backend/concept_buddy_agent/eval/backend/concept_buddy_agent/eval/': No such file or directory fatal: pathspec 'backend/concept_buddy_agent/eval/cases.json' did not match any files"
+      "tool_returned": "Exit code 128 warning: could not open directory 'backend/concept_buddy_agent/eval/backend/concept_buddy_agent/eval/': No such file or directory fatal: pathspec 'backend/concept_buddy_agent/eval/cases.json' did not match any files",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -318,7 +344,8 @@
       },
       "failed": false,
       "serves": 4,
-      "tool_returned": "[main 8885712] test(eval): add geco_timesheet_card_staged parity case 2 files changed, 698 insertions(+), 3 deletions(-)"
+      "tool_returned": "[main 8885712] test(eval): add geco_timesheet_card_staged parity case 2 files changed, 698 insertions(+), 3 deletions(-)",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -328,7 +355,8 @@
       },
       "failed": false,
       "serves": 4,
-      "tool_returned": "8885712 test(eval): add geco_timesheet_card_staged parity case"
+      "tool_returned": "8885712 test(eval): add geco_timesheet_card_staged parity case",
+      "end": false
     }
   ],
   "target": "welcome_book_topics",
@@ -338,5 +366,14 @@
     "entry": "c62599a394ab",
     "failed_steps": 1,
     "marker_at": "the retry, not the failure"
+  },
+  "judged": {
+    "model": "gemma3n:e4b",
+    "context_steps": 20,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 28,
+    "replayed": "2026-09-07"
   }
 }

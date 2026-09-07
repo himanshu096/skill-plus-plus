@@ -32,7 +32,8 @@
       "input": {},
       "failed": false,
       "serves": 1,
-      "tool_returned": "{'type': 'tool_reference', 'tool_name': 'WebFetch'}"
+      "tool_returned": "{'type': 'tool_reference', 'tool_name': 'WebFetch'}",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -47,14 +48,16 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "{'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__list_doc_sources'} {'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__fetch_docs'}",
-      "assistant_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s"
+      "assistant_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s",
+      "end": false
     },
     {
       "tool": "mcp__adk-docs__list_doc_sources",
       "input": {},
       "failed": false,
       "serves": 2,
-      "tool_returned": "{\"result\":\"AgentDevelopmentKit\\nURL: https://adk.dev/llms.txt\\n\\n\"}"
+      "tool_returned": "{\"result\":\"AgentDevelopmentKit\\nURL: https://adk.dev/llms.txt\\n\\n\"}",
+      "end": false
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
@@ -63,7 +66,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "{\"result\":\"# Agent Development Kit (ADK)\\n> Build powerful multi-agent systems with Agent Development Kit (ADK)\\nAn open-source, code-first toolkit for building, evaluating, and deploying sophisticated AI agents with flexibility and control.\\n## Build Agents\\n- [Get started](https://adk.dev/get-started/index.md)\\n- [Technical Overview](https://adk.dev/get-started/about/index.md)\\n- [Agents CLI](ht"
+      "tool_returned": "{\"result\":\"# Agent Development Kit (ADK)\\n> Build powerful multi-agent systems with Agent Development Kit (ADK)\\nAn open-source, code-first toolkit for building, evaluating, and deploying sophisticated AI agents with flexibility and control.\\n## Build Agents\\n- [Get started](https://adk.dev/get-started/index.md)\\n- [Technical Overview](https://adk.dev/get-started/about/index.md)\\n- [Agents CLI](ht",
+      "end": false
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
@@ -72,7 +76,8 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "{\"result\":\"# Why evaluate agents\\nSupported in ADKPython\\nIn traditional software development, unit tests and integration tests provide confidence that code functions as expected and remains stable through changes. These tests provide a clear \\\"pass/fail\\\" signal, guiding further development. However, LLM agents introduce a level of variability that makes traditional testing approaches insufficien"
+      "tool_returned": "{\"result\":\"# Why evaluate agents\\nSupported in ADKPython\\nIn traditional software development, unit tests and integration tests provide confidence that code functions as expected and remains stable through changes. These tests provide a clear \\\"pass/fail\\\" signal, guiding further development. However, LLM agents introduce a level of variability that makes traditional testing approaches insufficien",
+      "end": false
     },
     {
       "tool": "mcp__adk-docs__fetch_docs",
@@ -82,7 +87,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "{\"result\":\"# Evaluation Criteria\\nSupported in ADKPython\\nThis page outlines the evaluation criteria provided by ADK to assess agent performance, including tool use trajectory, response quality, and safety.\\n| Criterion | Description | Reference-Based | Requires Rubrics | LLM-as-a-Judge | Supports [User Simulation](https://adk.dev/evaluate/user-sim/index.md) |\\n| ----------------------------------",
-      "assistant_note": "Docs summary. Fetch criteria page too for the eval-metric details."
+      "assistant_note": "Docs summary. Fetch criteria page too for the eval-metric details.",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -100,7 +106,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
-      "assistant_note": "# ADK eval-case & evalset structure — key points ## Two file shapes, one schema Both `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`. ## EvalSet top-level ```json { \"eval_set_id\": \"...\", \"name\": \"..."
+      "assistant_note": "# ADK eval-case & evalset structure — key points ## Two file shapes, one schema Both `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`. ## EvalSet top-level ```json { \"eval_set_id\": \"...\", \"name\": \"...",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -110,7 +117,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py"
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
+      "end": false
     },
     {
       "tool": "Read",
@@ -119,7 +127,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "1 #!/usr/bin/env python3 2 \"\"\"Generate an ADK-native eval set from `cases.json`. 3 4 Emits `concept_buddy.evalset.json` (google.adk.evaluation.EvalSet schema) + a 5 `test_config.json` criteria file, so the suite can also be run through ADK's own 6 evaluator (`AgentEvaluator` / `adk eval`) and the `adk web` Eval UI, using Google's 7 `final_response_match_v2` LLM-judge. 8 9 This is a MIRROR of `case"
+      "tool_returned": "1 #!/usr/bin/env python3 2 \"\"\"Generate an ADK-native eval set from `cases.json`. 3 4 Emits `concept_buddy.evalset.json` (google.adk.evaluation.EvalSet schema) + a 5 `test_config.json` criteria file, so the suite can also be run through ADK's own 6 evaluator (`AgentEvaluator` / `adk eval`) and the `adk web` Eval UI, using Google's 7 `final_response_match_v2` LLM-judge. 8 9 This is a MIRROR of `case",
+      "end": false
     },
     {
       "tool": "Read",
@@ -128,7 +137,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc"
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -138,7 +148,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "['expect_all', 'expect_any', 'expect_card', 'expect_card_count', 'expect_card_top', 'expect_state', 'forbid', 'forbid_card', 'forbid_tools', 'id', 'note', 'note_answer', 'note_cards', 'note_clean', 'query', 'reference', 'require_tools_any', 'state'] n= 39"
+      "tool_returned": "['expect_all', 'expect_any', 'expect_card', 'expect_card_count', 'expect_card_top', 'expect_state', 'forbid', 'forbid_card', 'forbid_tools', 'id', 'note', 'note_answer', 'note_cards', 'note_clean', 'query', 'reference', 'require_tools_any', 'state'] n= 39",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -148,7 +159,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "top keys: ['eval_set_id', 'name', 'description', 'eval_cases', 'creation_timestamp'] n cases: 28 case keys: ['eval_id', 'conversation', 'creation_timestamp', 'final_session_state'] inv keys: ['invocation_id', 'user_content', 'intermediate_data', 'creation_timestamp']"
+      "tool_returned": "top keys: ['eval_set_id', 'name', 'description', 'eval_cases', 'creation_timestamp'] n cases: 28 case keys: ['eval_id', 'conversation', 'creation_timestamp', 'final_session_state'] inv keys: ['invocation_id', 'user_content', 'intermediate_data', 'creation_timestamp']",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -158,7 +170,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "-rw-r--r--@ 1 l.zagaia staff 48102 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json -rw-r--r--@ 1 l.zagaia staff 21536 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json -rw-r--r--@ 1 l.zagaia staff 4558 Jul 22 18:14 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/e"
+      "tool_returned": "-rw-r--r--@ 1 l.zagaia staff 48102 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json -rw-r--r--@ 1 l.zagaia staff 21536 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json -rw-r--r--@ 1 l.zagaia staff 4558 Jul 22 18:14 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/e",
+      "end": false
     },
     {
       "tool": "Read",
@@ -167,7 +180,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "1 { 2 \"criteria\": { 3 \"final_response_match_v2\": 0.5 4 } 5 }"
+      "tool_returned": "1 { 2 \"criteria\": { 3 \"final_response_match_v2\": 0.5 4 } 5 }",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -177,7 +191,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "in cases only: ['correction_no_sycophancy', 'decline_after_greeting_signs_off', 'ob_multiturn_office_continuation', 'ob_overview_doc_card', 'ob_welcome_timeline_card', 'person_authored_pages', 'person_not_on_anchor', 'person_page_opens_on_request', 'person_reask_restages_the_card', 'resume_skips_ticked_checklist', 'section_header_not_empty'] in evalset only: []"
+      "tool_returned": "in cases only: ['correction_no_sycophancy', 'decline_after_greeting_signs_off', 'ob_multiturn_office_continuation', 'ob_overview_doc_card', 'ob_welcome_timeline_card', 'person_authored_pages', 'person_not_on_anchor', 'person_page_opens_on_request', 'person_reask_restages_the_card', 'resume_skips_ticked_checklist', 'section_header_not_empty'] in evalset only: []",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -187,7 +202,8 @@
       },
       "failed": false,
       "serves": 3,
-      "tool_returned": "invocations w/ final_response: 9 cases w/ session_input: 3 sample fss: {}"
+      "tool_returned": "invocations w/ final_response: 9 cases w/ session_input: 3 sample fss: {}",
+      "end": false
     }
   ],
   "target": "welcome_book_topics",
@@ -197,5 +213,14 @@
     "entry": "f786da41639e",
     "mcp_steps_banked": 4,
     "mcp_steps_captured": 4
+  },
+  "judged": {
+    "model": "gemma3n:e4b",
+    "context_steps": 20,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 16,
+    "replayed": "2026-09-07"
   }
 }

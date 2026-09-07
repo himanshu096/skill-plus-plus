@@ -12,9 +12,8 @@
       "COVERAGE.md"
     ]
   },
-  "expected_fail": "Banks one candidate, which is now the right count, and `COVERAGE.md` is still missing from it. The deliverable is written in a fragment the prompt rule cuts off at 'Write that list', and the fragment is dropped. The count was also wrong until the scorer was corrected; the stranding is the real defect and it remains.",
   "why": "A second run of the same commitless procedure, recorded because the pair is the evidence, not either run alone.",
-  "history": "The pair exposes a second defect beyond fragmentation. The two investigation episodes score cosine 0.966 — the embedding is certain they are one procedure — but lexical 0.331 falls under the 0.40 near-miss floor, so they are never handed to the embedding: `pairs_considered=0`. Meanwhile the two meaningless 2-step 'Write that list' fragments DID merge lexically. The wrong halves recurred. This is the shape `config.py` already documents ('one procedure done three times scored 0.46-0.50 against itself'), still under the floor after it was lowered from 0.70 to 0.40.",
+  "history": "Banked one candidate, the right count, with `COVERAGE.md` missing from it.\n\nCLOSED. The prompt rule cut at 'Write that list to COVERAGE.md', severing the deliverable from the investigation that produced it; the write episode was one step, under the too-thin gate, and was dropped. Under verdicts nothing cuts there and the file stays with the work that made it.\n\nThe pair with `fb505861` is the evidence: same procedure, same cut, two different symptoms depending only on how many steps followed the prompt — 1 episode missing the deliverable here, 2 episodes missing it there.",
   "pairs_with": "fb505861",
   "shape": {
     "steps": 12,
@@ -40,7 +39,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/nltk/book.py"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/nltk/book.py",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -50,7 +50,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -60,7 +61,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "346 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 1193 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json 1539 total"
+      "tool_returned": "346 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 1193 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json 1539 total",
+      "end": false
     },
     {
       "tool": "Read",
@@ -69,7 +71,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "1 \"\"\"Welcome Book retrieval — the deterministic Q&A knowledge path. 2 3 `answer()` does the two things a Q&A fact turn must never do separately: it returns the 4 Welcome Book section for a topic AND stages that topic's canonical dashboard card. Binding 5 the card to the retrieval is the whole point — a card was previously a *second* decision the 6 model had to remember after reading the book, and "
+      "tool_returned": "1 \"\"\"Welcome Book retrieval — the deterministic Q&A knowledge path. 2 3 `answer()` does the two things a Q&A fact turn must never do separately: it returns the 4 Welcome Book section for a topic AND stages that topic's canonical dashboard card. Binding 5 the card to the retrieval is the whole point — a card was previously a *second* decision the 6 model had to remember after reading the book, and ",
+      "end": false
     },
     {
       "tool": "Read",
@@ -78,7 +81,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc"
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -88,7 +92,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "total cases: 38 topics referenced (any form): word: 2 for: 1 time_off: 1 bypassed: 1 with: 1 has: 1 s: 1 case ids: popcorn_recall aiot_page_card aiot_page_card_onboarding dorian_role_anchor pineapple_no_confab local_reference_vacation company_mission_local out_of_scope_decline managing_director_who udemy_reimbursement_local vacation_carryover_local geco_project_hours_local desk_booking_local manda"
+      "tool_returned": "total cases: 38 topics referenced (any form): word: 2 for: 1 time_off: 1 bypassed: 1 with: 1 has: 1 s: 1 case ids: popcorn_recall aiot_page_card aiot_page_card_onboarding dorian_role_anchor pineapple_no_confab local_reference_vacation company_mission_local out_of_scope_decline managing_director_who udemy_reimbursement_local vacation_carryover_local geco_project_hours_local desk_booking_local manda",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -98,7 +103,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "popcorn_recall: ['What are some of the recent projects at Concept Reply?', 'Open the Confluence page \"POPCORN Series\"'] aiot_page_card: 'Review the AIoT Tutorial Project' aiot_page_card_onboarding: 'I want to start with the AIoT tutorial where do I find it?' dorian_role_anchor: 'what is the responsibility and role of dorian gast' pineapple_no_confab: 'Can you tell me about the PINEAPPLE knowledge "
+      "tool_returned": "popcorn_recall: ['What are some of the recent projects at Concept Reply?', 'Open the Confluence page \"POPCORN Series\"'] aiot_page_card: 'Review the AIoT Tutorial Project' aiot_page_card_onboarding: 'I want to start with the AIoT tutorial where do I find it?' dorian_role_anchor: 'what is the responsibility and role of dorian gast' pineapple_no_confab: 'Can you tell me about the PINEAPPLE knowledge ",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -108,7 +114,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "popcorn_recall -> ['POPCORN', ('POPCORN', 'page')] aiot_page_card -> ['AIoT Tutorial Project', ('AIoT', 'page')] aiot_page_card_onboarding -> ['AIoT Tutorial Project', ('AIoT', 'page')] local_reference_vacation -> ['Time Off'] desk_booking_card_staged -> ['walkthrough'] ob_welcome_timeline_card -> ['first day'] ob_overview_doc_card -> ['Welcome to Concept Reply'] ob_multiturn_office_continuation -"
+      "tool_returned": "popcorn_recall -> ['POPCORN', ('POPCORN', 'page')] aiot_page_card -> ['AIoT Tutorial Project', ('AIoT', 'page')] aiot_page_card_onboarding -> ['AIoT Tutorial Project', ('AIoT', 'page')] local_reference_vacation -> ['Time Off'] desk_booking_card_staged -> ['walkthrough'] ob_welcome_timeline_card -> ['first day'] ob_overview_doc_card -> ['Welcome to Concept Reply'] ob_multiturn_office_continuation -",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -118,7 +125,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "32:<!-- topic: first_day | keywords: first day, day one, onboarding responsible, first day agenda --> 75:<!-- topic: company_overview | keywords: about concept reply, what does concept reply do, company overview --> 83:<!-- topic: mission_vision | keywords: mission, vision --> 91:<!-- topic: values | keywords: predict, core values, our values, company values --> 108:<!-- topic: customers | keyword"
+      "tool_returned": "32:<!-- topic: first_day | keywords: first day, day one, onboarding responsible, first day agenda --> 75:<!-- topic: company_overview | keywords: about concept reply, what does concept reply do, company overview --> 83:<!-- topic: mission_vision | keywords: mission, vision --> 91:<!-- topic: values | keywords: predict, core values, our values, company values --> 108:<!-- topic: customers | keyword",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -136,7 +144,17 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)",
-      "assistant_note": "Cross-referenced each `TOPICS` key in book.py against every case query in cases.json (routed via keyword table in welcome-book.md). **Covered (7/25):** mission_vision, benefits, desk_booking, it_support, time_off, geco, slack. **Uncovered by any Q&A case (18/25):** | Topic | Section | |---|---| | `first_day` | First Day | | `company_overview` | Company Overview | | `values` | Company Overview | | "
+      "assistant_note": "Cross-referenced each `TOPICS` key in book.py against every case query in cases.json (routed via keyword table in welcome-book.md). **Covered (7/25):** mission_vision, benefits, desk_booking, it_support, time_off, geco, slack. **Uncovered by any Q&A case (18/25):** | Topic | Section | |---|---| | `first_day` | First Day | | `company_overview` | Company Overview | | `values` | Company Overview | | ",
+      "end": false
     }
-  ]
+  ],
+  "judged": {
+    "model": "gemma3n:e4b",
+    "context_steps": 20,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 10,
+    "replayed": "2026-09-07"
+  }
 }

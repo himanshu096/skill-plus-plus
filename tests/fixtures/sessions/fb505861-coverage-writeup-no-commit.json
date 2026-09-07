@@ -12,9 +12,8 @@
       "COVERAGE.md"
     ]
   },
-  "expected_fail": "Markerless boundaries are unsolved. This session has no commit, so `_absorb_before_commit` cannot fire and the prompt rule decides alone — it cuts at 'Write that list', stranding the deliverable in a 3-step fragment. Recorded so the day that is fixed, the suite says so.",
   "why": "One task: work out which Welcome Book topics have no eval coverage, then write the finding down. Investigating and writing up what you found is not two procedures. Nothing is committed, which is the point — 13% of real sessions end this way and `_absorb_before_commit` cannot fire on any of them.",
-  "history": "Recorded deliberately as the first commitless fixture. Segments into 2 episodes against a ground truth of 1: the second prompt arrives after 8 substantive steps, clears the >=2 floor, and reads as a new goal. The `Write` of COVERAGE.md — the deliverable — is stranded in a 3-step fragment, severed from the investigation that produced it. Expected to FAIL until markerless boundaries are solved; the failure is the measurement.",
+  "history": "Markerless boundaries were unsolved. No commit, so `_absorb_before_commit` could not fire and the prompt rule split the session.\n\nCLOSED. Same cut as `5c7b0f81` at the same prompt, and the opposite symptom: the write episode had two steps so it survived, giving 2 episodes against a truth of 1, with `must_contain` reading the larger investigation episode and finding no `COVERAGE.md`. Under verdicts there is no cut and the session banks one candidate holding the whole procedure.",
   "shape": {
     "steps": 16,
     "prompts": 2,
@@ -39,7 +38,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/nltk/book.py"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py ${HOME}/ai_projects/concept_buddy/backend/.venv/lib/python3.14/site-packages/nltk/book.py",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -49,7 +49,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -59,7 +60,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "26:_BOOK = ( 39:TOPICS: Dict[str, Dict[str, Any]] = { 41: \"first_day\": {\"section\": \"First Day\", \"card\": None}, 43: \"company_overview\": {\"section\": \"Company Overview\", \"card\": { 44: \"variant\": \"doc\", \"title\": \"Welcome to Concept Reply\", \"image\": \"/onboarding/concept-team.jpg\"}}, 45: \"mission_vision\": {\"section\": \"Company Overview\", \"card\": { 46: \"variant\": \"doc\", \"title\": \"Mission & Vision\", \"image"
+      "tool_returned": "26:_BOOK = ( 39:TOPICS: Dict[str, Dict[str, Any]] = { 41: \"first_day\": {\"section\": \"First Day\", \"card\": None}, 43: \"company_overview\": {\"section\": \"Company Overview\", \"card\": { 44: \"variant\": \"doc\", \"title\": \"Welcome to Concept Reply\", \"image\": \"/onboarding/concept-team.jpg\"}}, 45: \"mission_vision\": {\"section\": \"Company Overview\", \"card\": { 46: \"variant\": \"doc\", \"title\": \"Mission & Vision\", \"image",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -69,7 +71,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "346 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 1193 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json 1539 total"
+      "tool_returned": "346 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/book.py 1193 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json 1539 total",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -79,7 +82,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "first_day 0 company_overview 0 mission_vision 0 values 0 customers 0 bu_managers 0 benefits 0 collaboration_rules 0 events 0 desk_booking 0 bench_time 0 it_support 0 hr_contacts 0 time_off 0 absence 0 geco 0 tamtamy 0 sharepoint 0 teams 0 confluence_tool 0 slack 0 gitlab 0 servus_concept 0 tool_access 0 first_weeks 3"
+      "tool_returned": "first_day 0 company_overview 0 mission_vision 0 values 0 customers 0 bu_managers 0 benefits 0 collaboration_rules 0 events 0 desk_booking 0 bench_time 0 it_support 0 hr_contacts 0 time_off 0 absence 0 geco 0 tamtamy 0 sharepoint 0 teams 0 confluence_tool 0 slack 0 gitlab 0 servus_concept 0 tool_access 0 first_weeks 3",
+      "end": false
     },
     {
       "tool": "Read",
@@ -88,7 +92,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc"
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -98,7 +103,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py"
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -108,7 +114,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "9: \"id\": \"popcorn_recall\", 77: \"id\": \"aiot_page_card\", 140: \"id\": \"aiot_page_card_onboarding\", 202: \"id\": \"dorian_role_anchor\", 220: \"id\": \"pineapple_no_confab\", 250: \"id\": \"local_reference_vacation\", 280: \"id\": \"company_mission_local\", 305: \"id\": \"out_of_scope_decline\", 319: \"id\": \"managing_director_who\", 338: \"id\": \"udemy_reimbursement_local\", 354: \"id\": \"vacation_carryover_local\", 373: \"id\": \"g"
+      "tool_returned": "9: \"id\": \"popcorn_recall\", 77: \"id\": \"aiot_page_card\", 140: \"id\": \"aiot_page_card_onboarding\", 202: \"id\": \"dorian_role_anchor\", 220: \"id\": \"pineapple_no_confab\", 250: \"id\": \"local_reference_vacation\", 280: \"id\": \"company_mission_local\", 305: \"id\": \"out_of_scope_decline\", 319: \"id\": \"managing_director_who\", 338: \"id\": \"udemy_reimbursement_local\", 354: \"id\": \"vacation_carryover_local\", 373: \"id\": \"g",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -118,7 +125,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "OK first_day 11 {'first day': 3, 'first_day': 2, 'first-day': 6, 'day one': 0, 'first day agenda': 0} OK company_overview 5 {'welcome to concept reply': 3, 'company overview': 0, 'ov_intro': 2} OK mission_vision 13 {'mission': 9, 'mission_vision': 2, 'ov_mission_vision': 2} OK values 4 {'predict': 2, 'our values': 0, 'ov_values': 2} OK customers 8 {'our customers': 2, 'customers': 4, 'ov_customers"
+      "tool_returned": "OK first_day 11 {'first day': 3, 'first_day': 2, 'first-day': 6, 'day one': 0, 'first day agenda': 0} OK company_overview 5 {'welcome to concept reply': 3, 'company overview': 0, 'ov_intro': 2} OK mission_vision 13 {'mission': 9, 'mission_vision': 2, 'ov_mission_vision': 2} OK values 4 {'predict': 2, 'our values': 0, 'ov_values': 2} OK customers 8 {'our customers': 2, 'customers': 4, 'ov_customers",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -128,7 +136,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "OK first_day 5 {'first day': 2, 'first_day': 1, 'first-day': 2, 'day one': 0} OK company_overview 3 {'welcome to concept reply': 3, 'company overview': 0} OK mission_vision 7 {'mission': 7} WEAK values 1 {'predict': 1, 'our values': 0} OK customers 3 {'our customers': 1, 'customers': 2} OK bu_managers 7 {'business unit manager': 1, 'managing director': 6, 'bu manager': 0} OK benefits 5 {'benefit':"
+      "tool_returned": "OK first_day 5 {'first day': 2, 'first_day': 1, 'first-day': 2, 'day one': 0} OK company_overview 3 {'welcome to concept reply': 3, 'company overview': 0} OK mission_vision 7 {'mission': 7} WEAK values 1 {'predict': 1, 'our values': 0} OK customers 3 {'our customers': 1, 'customers': 2} OK bu_managers 7 {'business unit manager': 1, 'managing director': 6, 'bu manager': 0} OK benefits 5 {'benefit':",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -138,7 +147,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "desk_booking_local <- desk booking desk_booking_card_staged <- tamtamy ob_overview_doc_card <- predict"
+      "tool_returned": "desk_booking_local <- desk booking desk_booking_card_staged <- tamtamy ob_overview_doc_card <- predict",
+      "end": false
     },
     {
       "tool": "Bash",
@@ -148,7 +158,8 @@
       },
       "failed": false,
       "serves": 1,
-      "tool_returned": "=== desk_booking_card_staged query: How do I book a desk in the office? note (first 300): Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is S === ob_ov"
+      "tool_returned": "=== desk_booking_card_staged query: How do I book a desk in the office? note (first 300): Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is S === ob_ov",
+      "end": false
     },
     {
       "tool": "UserPrompt",
@@ -166,7 +177,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "ls: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md: No such file or directory",
-      "assistant_note": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior). **Zero behavioral coverage (no case queries topic):** - `collaboration_rules` — Working at Concept - `events` — Working at Concept - `bench_time` — Working at Concept - `hr_contacts` — Working at Concept - `sharepoint` — Tools & Apps - `teams` (M"
+      "assistant_note": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior). **Zero behavioral coverage (no case queries topic):** - `collaboration_rules` — Working at Concept - `events` — Working at Concept - `bench_time` — Working at Concept - `hr_contacts` — Working at Concept - `sharepoint` — Tools & Apps - `teams` (M",
+      "end": false
     },
     {
       "tool": "Write",
@@ -176,7 +188,17 @@
       },
       "failed": false,
       "serves": 2,
-      "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)"
+      "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)",
+      "end": false
     }
-  ]
+  ],
+  "judged": {
+    "model": "gemma3n:e4b",
+    "context_steps": 20,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 14,
+    "replayed": "2026-09-07"
+  }
 }
