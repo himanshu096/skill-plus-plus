@@ -92,7 +92,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "ok",
-      "end": false
+      "end": false,
+      "closing_note": "Added `geco_timesheet_card_staged` right after `desk_booking_card_staged` in `backend/concept_buddy_agent/eval/cases.json:536`. Same shape: walkthrough variant, `body_contains: \"geco-timesheet\"` (hyphen — matches `book.py:108` topic body; underscore would never match). JSON validates."
     },
     {
       "tool": "UserPrompt",
@@ -110,7 +111,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
-      "assistant_note": "Added `geco_timesheet_card_staged` right after `desk_booking_card_staged` in `backend/concept_buddy_agent/eval/cases.json:536`. Same shape: walkthrough variant, `body_contains: \"geco-timesheet\"` (hyphen — matches `book.py:108` topic body; underscore would never match). JSON validates.",
       "end": false
     },
     {
@@ -208,7 +208,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "550: \"eval_id\": \"geco_timesheet_card_staged\", 553: \"invocation_id\": \"geco_timesheet_card_staged-0\",",
-      "end": false
+      "end": false,
+      "closing_note": "Verified end-to-end: - Evalset regenerated: 40 cases (was 39), new case at `concept_buddy.evalset.json:550` - `book.py:108` — topic `geco` → walkthrough card body `\"geco-timesheet\"` ✓ matches assertion - `test_book_routing.py:68` — \"how do I fill in my GECO timesheet?\" already routes to `\"geco\"` via `match_topic()` ✓ deterministic - `book.answer` (`book.py:306-316`) stages that card whenever topic"
     },
     {
       "tool": "UserPrompt",
@@ -226,7 +227,6 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:40: \"geco-timesheet\": [ ${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:42: caption: \"Open **Time Reporting** in GECO to see your monthly timesheet.\", ${HOME}/ai_projects/concept_buddy/frontend/src/lib/toolWalkthroughs.ts:43: image: `${T}/geco-timesheet-empty.png`, ${HOME}/",
-      "assistant_note": "Verified end-to-end: - Evalset regenerated: 40 cases (was 39), new case at `concept_buddy.evalset.json:550` - `book.py:108` — topic `geco` → walkthrough card body `\"geco-timesheet\"` ✓ matches assertion - `test_book_routing.py:68` — \"how do I fill in my GECO timesheet?\" already routes to `\"geco\"` via `match_topic()` ✓ deterministic - `book.answer` (`book.py:306-316`) stages that card whenever topic",
       "end": false
     },
     {
@@ -293,7 +293,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "{ \"eval_id\": \"geco_timesheet_card_staged\", \"conversation\": [ { \"invocation_id\": \"geco_timesheet_card_staged-0\", \"user_content\": { \"parts\": [ { \"text\": \"How do I fill in my GECO timesheet?\" } ], \"role\": \"user\" }, \"intermediate_data\": { \"tool_uses\": [], \"tool_responses\": [], \"intermediate_responses\": [] }, \"creation_timestamp\": 0.0 } ], \"creation_timestamp\": 0.0, \"final_session_state\": {} }",
-      "end": false
+      "end": false,
+      "closing_note": "State: - `cases.json:551` body_contains = `\"geco-timesheet\"` (real key, hyphen) - Evalset regenerated: 40 cases, `geco_timesheet_card_staged` present - Staging path confirmed: `test_book_routing.py:68` routes query → topic `geco` → `book.answer` stages card with `body=\"geco-timesheet\"` (`book.py:306-316`) Assertion already correct. No underscore variant to fix."
     },
     {
       "tool": "UserPrompt",
@@ -311,7 +312,6 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "M cases.json M concept_buddy.evalset.json D ../../../presentation/LEARNINGS-SLIDES.md D ../../../presentation/PART1-SLIDES.md D ../../../presentation/PART2-SLIDES.md ?? ../../../.claude/commands/ ?? ../../../.claude/settings.json ?? ../../../BRIEF.md ?? ../../../HANDOFF.md ?? ../../../cb_backend.log ?? ../../../cb_eval_action.log ?? ../../../cb_eval_ae_full.log ?? ../../../cb_eval_ae_rest.log ?? .",
-      "assistant_note": "State: - `cases.json:551` body_contains = `\"geco-timesheet\"` (real key, hyphen) - Evalset regenerated: 40 cases, `geco_timesheet_card_staged` present - Staging path confirmed: `test_book_routing.py:68` routes query → topic `geco` → `book.answer` stages card with `body=\"geco-timesheet\"` (`book.py:306-316`) Assertion already correct. No underscore variant to fix.",
       "end": false
     },
     {
@@ -356,7 +356,8 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "8885712 test(eval): add geco_timesheet_card_staged parity case",
-      "end": false
+      "end": false,
+      "closing_note": "Committed `8885712`. Eval dir clean."
     }
   ],
   "target": "welcome_book_topics",

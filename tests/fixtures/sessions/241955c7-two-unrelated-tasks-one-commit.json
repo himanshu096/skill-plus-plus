@@ -95,7 +95,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "295 \"Confluence; the fetched page renders on the panel automatically.\", 296 } 297 entry = TOPICS.get(topic) 298 if entry is None: 299 return { 300 \"in_book\": False, 301 \"unknown_topic\": topic, 302 \"valid_topics\": sorted(TOPICS), 303 \"guidance\": \"Unknown topic. Re-call with one of valid_topics, or 'not_in_book' to \" 304 \"search Confluence.\", 305 } 306 card = entry.get(\"card\") 307 if card: 308 varia",
-      "end": false
+      "end": false,
+      "closing_note": "Scan done. All 4 walkthrough-variant TOPICS in `book.py` resolve to keys in `TOOL_WALKTHROUGHS`: | book.py `body` | line | TOOL_WALKTHROUGHS key | match | |---|---|---|---| | `desk-booking` | book.py:83 | `desk-booking` (toolWalkthroughs.ts:113) | ✓ | | `absence` | book.py:105 | `absence` (toolWalkthroughs.ts:130) | ✓ | | `geco-timesheet` | book.py:108 | `geco-timesheet` (toolWalkthroughs.ts:40) |"
     },
     {
       "tool": "UserPrompt",
@@ -113,7 +114,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
-      "assistant_note": "Scan done. All 4 walkthrough-variant TOPICS in `book.py` resolve to keys in `TOOL_WALKTHROUGHS`: | book.py `body` | line | TOOL_WALKTHROUGHS key | match | |---|---|---|---| | `desk-booking` | book.py:83 | `desk-booking` (toolWalkthroughs.ts:113) | ✓ | | `absence` | book.py:105 | `absence` (toolWalkthroughs.ts:130) | ✓ | | `geco-timesheet` | book.py:108 | `geco-timesheet` (toolWalkthroughs.ts:40) |",
       "end": false
     },
     {
@@ -203,7 +203,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "valid json",
-      "end": false
+      "end": false,
+      "closing_note": "Added `tamtamy_card_staged` after `desk_booking_card_staged` (cases.json:536). Asserts walkthrough variant + body_contains \"tamtamy\". Mirrors template exactly. JSON valid. Flag: template you named was `geco_timesheet_card_staged` — doesn't exist. Only `desk_booking_card_staged` present. Used that. Say word if you want geco version added too."
     },
     {
       "tool": "UserPrompt",
@@ -221,7 +222,6 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
-      "assistant_note": "Added `tamtamy_card_staged` after `desk_booking_card_staged` (cases.json:536). Asserts walkthrough variant + body_contains \"tamtamy\". Mirrors template exactly. JSON valid. Flag: template you named was `geco_timesheet_card_staged` — doesn't exist. Only `desk_booking_card_staged` present. Used that. Say word if you want geco version added too.",
       "end": false
     },
     {
@@ -255,7 +255,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "2",
-      "end": false
+      "end": false,
+      "closing_note": "Regenerated. 40 cases (was 39), `tamtamy_card_staged` present (2 occurrences — id + eval_id per schema)."
     },
     {
       "tool": "UserPrompt",
@@ -273,7 +274,6 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "M backend/concept_buddy_agent/eval/cases.json M backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
-      "assistant_note": "Regenerated. 40 cases (was 39), `tamtamy_card_staged` present (2 occurrences — id + eval_id per schema).",
       "end": false
     },
     {
@@ -318,7 +318,8 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "[main 95125ff] test(eval): assert TOPICS[\"tamtamy\"] stages its walkthrough card 2 files changed, 697 insertions(+), 3 deletions(-)",
-      "end": false
+      "end": false,
+      "closing_note": "Committed 95125ff. Both files staged, working tree clean for eval dir."
     }
   ],
   "judged": {

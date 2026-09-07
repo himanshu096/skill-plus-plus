@@ -74,7 +74,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "{\"result\":\"# Evaluation Criteria\\nSupported in ADKPython\\nThis page outlines the evaluation criteria provided by ADK to assess agent performance, including tool use trajectory, response quality, and safety.\\n| Criterion | Description | Reference-Based | Requires Rubrics | LLM-as-a-Judge | Supports [User Simulation](https://adk.dev/evaluate/user-sim/index.md) |\\n| ----------------------------------",
-      "end": false
+      "end": false,
+      "closing_note": "Docs fetched. Structure summary: ## Eval file types **`*.test.json`** — one session, unit-test scope. **`*.evalset.json`** — multi-session, integration-test scope. Both share the same Pydantic schema (`EvalSet` + `EvalCase` in `google.adk.evaluation`). ## EvalSet top level ```json { \"eval_set_id\": \"...\", \"name\": \"...\", \"description\": \"...\", \"eval_cases\": [ EvalCase, ... ] } ``` ## EvalCase ```json"
     },
     {
       "tool": "UserPrompt",
@@ -92,7 +93,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
-      "assistant_note": "Docs fetched. Structure summary: ## Eval file types **`*.test.json`** — one session, unit-test scope. **`*.evalset.json`** — multi-session, integration-test scope. Both share the same Pydantic schema (`EvalSet` + `EvalCase` in `google.adk.evaluation`). ## EvalSet top level ```json { \"eval_set_id\": \"...\", \"name\": \"...\", \"description\": \"...\", \"eval_cases\": [ EvalCase, ... ] } ``` ## EvalCase ```json",
       "end": false
     },
     {
@@ -137,7 +137,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "The file ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json has been updated successfully. (file state is current in your context — no need to Read it back)",
-      "end": false
+      "end": false,
+      "closing_note": "Case `absence_card_staged` added after `geco_timesheet_card_staged`. Same shape: `variant: walkthrough`, `body_contains: \"absence\"`, matching `TOPICS[\"absence\"]` card body in `book.py:105`."
     },
     {
       "tool": "UserPrompt",
@@ -155,7 +156,6 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py ${HOME}/ai_projects/concept_buddy/backend/concept_bu",
-      "assistant_note": "Case `absence_card_staged` added after `geco_timesheet_card_staged`. Same shape: `variant: walkthrough`, `body_contains: \"absence\"`, matching `TOPICS[\"absence\"]` card body in `book.py:105`.",
       "end": false
     },
     {
@@ -167,7 +167,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "wrote concept_buddy.evalset.json — 42 cases, 9 with a golden answer (judged by final_response_match_v2) wrote test_config.json — criteria: final_response_match_v2 >= 0.5",
-      "end": false
+      "end": false,
+      "closing_note": "Regenerated. 42 cases (was 41), new case `absence_card_staged` included."
     },
     {
       "tool": "UserPrompt",
@@ -184,7 +185,6 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "1 \"\"\"Welcome Book retrieval — the deterministic Q&A knowledge path. 2 3 `answer()` does the two things a Q&A fact turn must never do separately: it returns the 4 Welcome Book section for a topic AND stages that topic's canonical dashboard card. Binding 5 the card to the retrieval is the whole point — a card was previously a *second* decision the 6 model had to remember after reading the book, and ",
-      "assistant_note": "Regenerated. 42 cases (was 41), new case `absence_card_staged` included.",
       "end": false
     },
     {
@@ -227,7 +227,8 @@
       "failed": false,
       "serves": 4,
       "tool_returned": "40 or \"double-check\" a topic that came back `in_book: true`. 41 42 Args: 43 query: The user's question, in natural language. 44 topic: The single best-matching topic. One of: 45 first_day · company_overview · mission_vision · values · customers · 46 bu_managers · benefits · collaboration_rules · events · desk_booking · 47 bench_time · it_support · hr_contacts · time_off · absence · geco · 48 tamta",
-      "end": false
+      "end": false,
+      "closing_note": "Checked. Invariant holds. One caveat worth naming. **1. TOPICS single source for KB cards — HOLDS.** `absence` defined once at `book.py:104-105`. No other TOPICS-style card table anywhere. **2. `cards.stage` sole writer — HOLDS.** `cards.py:148` docstring: \"THE single writer for `stage_cards`\". All callsites route through `cards.stage`/`cards.stage_card`: - `book.py:309` (KB path) - `tools.py:129,"
     },
     {
       "tool": "UserPrompt",
@@ -245,7 +246,6 @@
       "failed": false,
       "serves": 5,
       "tool_returned": "M backend/concept_buddy_agent/eval/cases.json M backend/concept_buddy_agent/eval/concept_buddy.evalset.json",
-      "assistant_note": "Checked. Invariant holds. One caveat worth naming. **1. TOPICS single source for KB cards — HOLDS.** `absence` defined once at `book.py:104-105`. No other TOPICS-style card table anywhere. **2. `cards.stage` sole writer — HOLDS.** `cards.py:148` docstring: \"THE single writer for `stage_cards`\". All callsites route through `cards.stage`/`cards.stage_card`: - `book.py:309` (KB path) - `tools.py:129,",
       "end": false
     },
     {
@@ -279,7 +279,8 @@
       "failed": false,
       "serves": 5,
       "tool_returned": "[main e5d47e5] test(eval): add walkthrough-card case for absence.io 2 files changed, 42 insertions(+) D presentation/LEARNINGS-SLIDES.md D presentation/PART1-SLIDES.md D presentation/PART2-SLIDES.md ?? .claude/commands/ ?? .claude/settings.json ?? HANDOFF.md ?? article/ ?? cb_backend.log ?? cb_eval_action.log ?? cb_eval_ae_full.log ?? cb_eval_ae_rest.log ?? cb_eval_anythingelse.log ?? cb_eval_bran",
-      "end": false
+      "end": false,
+      "closing_note": "Committed `e5d47e5`. Only the 2 eval files staged. Unrelated deleted/untracked paths left alone."
     }
   ],
   "judged": {

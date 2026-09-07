@@ -156,7 +156,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "OK 39 cases mandatory idx: 15 between sick_doctor_note_local and workation_days_local",
-      "end": false
+      "end": false,
+      "closing_note": "JSON valid. Case `mandatory_holidays_local` inserted at index 15, between `sick_doctor_note_local` and `workation_days_local` (Time Off cluster). Asserts `answer` tool + `24.12` / `31.12` / `4 hours` / `Non-Chargeable Work` + standard deflection forbids. Matches light local-reference pattern (no card assertion — same as sick/carryover/workation neighbors)."
     },
     {
       "tool": "UserPrompt",
@@ -174,7 +175,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py ${HOME}/ai_projects/concept_buddy/backend/concept_bu",
-      "assistant_note": "JSON valid. Case `mandatory_holidays_local` inserted at index 15, between `sick_doctor_note_local` and `workation_days_local` (Time Off cluster). Asserts `answer` tool + `24.12` / `31.12` / `4 hours` / `Non-Chargeable Work` + standard deflection forbids. Matches light local-reference pattern (no card assertion — same as sick/carryover/workation neighbors).",
       "end": false
     },
     {
@@ -232,7 +232,8 @@
       "serves": 2,
       "tool_returned": "[main 21e85d2] test(eval): cover mandatory-holiday fact from the Welcome Book 2 files changed, 1810 insertions(+), 1155 deletions(-)",
       "assistant_note": "cases.json reformat (1-space→2-space) predates this session — was already in `M` status at start. Adding case + regenerated evalset.",
-      "end": true
+      "end": true,
+      "closing_note": "Committed `21e85d2`. cases.json + evalset.json (39 cases). Working tree clean for eval/."
     }
   ],
   "target": "welcome_book_topics",

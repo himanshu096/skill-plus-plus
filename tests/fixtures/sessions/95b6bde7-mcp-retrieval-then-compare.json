@@ -33,7 +33,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "{'type': 'tool_reference', 'tool_name': 'WebFetch'}",
-      "end": false
+      "end": false,
+      "closing_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s"
     },
     {
       "tool": "UserPrompt",
@@ -48,7 +49,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "{'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__list_doc_sources'} {'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__fetch_docs'}",
-      "assistant_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s",
       "end": false
     },
     {
@@ -88,7 +88,8 @@
       "serves": 2,
       "tool_returned": "{\"result\":\"# Evaluation Criteria\\nSupported in ADKPython\\nThis page outlines the evaluation criteria provided by ADK to assess agent performance, including tool use trajectory, response quality, and safety.\\n| Criterion | Description | Reference-Based | Requires Rubrics | LLM-as-a-Judge | Supports [User Simulation](https://adk.dev/evaluate/user-sim/index.md) |\\n| ----------------------------------",
       "assistant_note": "Docs summary. Fetch criteria page too for the eval-metric details.",
-      "end": false
+      "end": false,
+      "closing_note": "# ADK eval-case & evalset structure — key points ## Two file shapes, one schema Both `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`. ## EvalSet top-level ```json { \"eval_set_id\": \"...\", \"name\": \"..."
     },
     {
       "tool": "UserPrompt",
@@ -106,7 +107,6 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
-      "assistant_note": "# ADK eval-case & evalset structure — key points ## Two file shapes, one schema Both `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`. ## EvalSet top-level ```json { \"eval_set_id\": \"...\", \"name\": \"...",
       "end": false
     },
     {
@@ -203,7 +203,8 @@
       "failed": false,
       "serves": 3,
       "tool_returned": "invocations w/ final_response: 9 cases w/ session_input: 3 sample fss: {}",
-      "end": false
+      "end": false,
+      "closing_note": "# cases.json + generate_evalset.py vs ADK-native shape ## Overall design Repo has **two coexisting eval layers**, deliberate per memory `eval-harness-design`: 1. **`cases.json`** — proprietary; drives `run_eval.py` w/ rich checks (cards, state, tool \"any of\"). NOT ADK-shaped. 2. **`generate_evalset.py`** — mirrors the *judge-gradable slice* of cases.json → `concept_buddy.evalset.json` + `test_conf"
     }
   ],
   "target": "welcome_book_topics",

@@ -126,7 +126,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "32:<!-- topic: first_day | keywords: first day, day one, onboarding responsible, first day agenda --> 75:<!-- topic: company_overview | keywords: about concept reply, what does concept reply do, company overview --> 83:<!-- topic: mission_vision | keywords: mission, vision --> 91:<!-- topic: values | keywords: predict, core values, our values, company values --> 108:<!-- topic: customers | keyword",
-      "end": false
+      "end": false,
+      "closing_note": "Cross-referenced each `TOPICS` key in book.py against every case query in cases.json (routed via keyword table in welcome-book.md). **Covered (7/25):** mission_vision, benefits, desk_booking, it_support, time_off, geco, slack. **Uncovered by any Q&A case (18/25):** | Topic | Section | |---|---| | `first_day` | First Day | | `company_overview` | Company Overview | | `values` | Company Overview | | "
     },
     {
       "tool": "UserPrompt",
@@ -144,8 +145,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)",
-      "assistant_note": "Cross-referenced each `TOPICS` key in book.py against every case query in cases.json (routed via keyword table in welcome-book.md). **Covered (7/25):** mission_vision, benefits, desk_booking, it_support, time_off, geco, slack. **Uncovered by any Q&A case (18/25):** | Topic | Section | |---|---| | `first_day` | First Day | | `company_overview` | Company Overview | | `values` | Company Overview | | ",
-      "end": false
+      "end": false,
+      "closing_note": "Written to `backend/concept_buddy_agent/eval/COVERAGE.md`. Not committed. Priority hint at bottom names 4 highest-signal gaps: `absence`, `hr_contacts`, `collaboration_rules`, one non-slack Tools & Apps case."
     }
   ],
   "judged": {

@@ -81,7 +81,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "valid",
-      "end": false
+      "end": false,
+      "closing_note": "Added `udemy_reimbursement_local` case after `sport_allowance_local`. Asserts `answer` tool used, response contains €100/year fact, no deflection. Fact source: `welcome-book.md:144,160` (\"Udemy Course Reimbursement – up to €100 per year\", benefits.md-backed). JSON valid."
     },
     {
       "tool": "UserPrompt",
@@ -99,7 +100,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
-      "assistant_note": "Added `udemy_reimbursement_local` case after `sport_allowance_local`. Asserts `answer` tool used, response contains €100/year fact, no deflection. Fact source: `welcome-book.md:144,160` (\"Udemy Course Reimbursement – up to €100 per year\", benefits.md-backed). JSON valid.",
       "end": false
     },
     {
@@ -166,7 +166,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "(Bash completed with no output)",
-      "end": false
+      "end": false,
+      "closing_note": "Regenerated evalset (39 cases, +1). Committed as `badea53`."
     }
   ],
   "target": "welcome_book_topics",

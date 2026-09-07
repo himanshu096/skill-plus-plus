@@ -159,7 +159,8 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "=== desk_booking_card_staged query: How do I book a desk in the office? note (first 300): Auto-card-on-mention: the deterministic _TOPIC_CARDS map (before_model -> _stage_topic_card) stages a topic's dashboard card THAT turn, model-independent. Guards the non-page card pipeline (walkthrough/keyvalue/doc variants) the page-card cases don't cover. NOTE: backend-only — asserts the card is S === ob_ov",
-      "end": false
+      "end": false,
+      "closing_note": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior). **Zero behavioral coverage (no case queries topic):** - `collaboration_rules` — Working at Concept - `events` — Working at Concept - `bench_time` — Working at Concept - `hr_contacts` — Working at Concept - `sharepoint` — Tools & Apps - `teams` (M"
     },
     {
       "tool": "UserPrompt",
@@ -177,7 +178,6 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "ls: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md: No such file or directory",
-      "assistant_note": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior). **Zero behavioral coverage (no case queries topic):** - `collaboration_rules` — Working at Concept - `events` — Working at Concept - `bench_time` — Working at Concept - `hr_contacts` — Working at Concept - `sharepoint` — Tools & Apps - `teams` (M",
       "end": false
     },
     {
@@ -189,7 +189,8 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/COVERAGE.md (file state is current in your context — no need to Read it back)",
-      "end": false
+      "end": false,
+      "closing_note": "Wrote `backend/concept_buddy_agent/eval/COVERAGE.md`. 9 zero-coverage topics + 2 tangential, one-liner rationale each, plus concentration note (Tools & Apps + keyvalue variant biggest holes). Uncommitted."
     }
   ],
   "judged": {
