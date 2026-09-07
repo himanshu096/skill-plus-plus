@@ -13,7 +13,7 @@
     ]
   },
   "why": "Sessions 1-4 are all coding sessions that end in a commit. Work done through tools has no marker by nature, and this is the shape the pipeline claims to support: `trim_leading_exploration`'s docstring argues that an MCP retrieval is step one of a method, not the search that found the task, and exempts it from trimming for exactly this reason. One task — pull the docs, compare, report — so the ground truth is one episode and no markers.\n\nRecorded with `adk-docs` rather than Confluence: Confluence MCP is wired into the backend agent, not exposed to Claude Code, which the session established itself. The server does not matter to what is under test — `is_read_only` classifies MCP by verb prefix and the trim exempts any `mcp__` call.",
-  "history": "The MCP exemption does not hold, and it is a second rule that defeats it:\n\n  ep0  4 work steps, all MCP retrieval, ended_by=prompt, flagged=True   DROPPED\n  ep1  6 work steps, no MCP,            ended_by=session-end            banked\n\n`trim_leading_exploration` never gets to apply its exemption, because the flagging rule at segment.py:374 discards an episode whose every substantive step only looked at things — and a pure retrieval is exactly that. The banked entry, `bf8bb31758f7`, is the comparison alone, titled after the second prompt, with nothing recording where the reference material came from. The half the procedure exists for is the half that was thrown away.\n\nThis is the failure the trim's own docstring describes and believes it prevented: 'pull the docs, build the agenda, share it is a procedure whose first two steps are reads'.",
+  "history": "CLOSED. The MCP exemption held all along; a second rule defeated it.\n\n  ep0  4 work steps, all MCP retrieval, ended_by=prompt, flagged=True   DROPPED\n  ep1  6 work steps, no MCP,            ended_by=session-end            banked\n\n`trim_leading_exploration` never got to apply its exemption, because a flagging rule discarded any episode whose every substantive step only looked at things — and a pure retrieval is exactly that. The banked entry was the comparison alone, titled after the second prompt, with nothing recording where the reference material came from. The half the procedure exists for was the half thrown away.\n\nThe count was right throughout, so only `must_contain` could see it. That is the assertion this fixture was recorded to make.\n\nFixed by `_absorb_read_only_preamble`: reading that precedes work is folded into it, and the all-read-only flag is gone. Its only justification was `reading-around` in `tests/benchmarks/cases.py`, hand-authored alongside the detector; this session is what it cost on real work. Absorbing is forward only — reading that ends a session still concludes nothing and is still flagged.\n\nUnder the judge this session was never broken: verdicts stop prompts from cutting, so there was one episode and the retrieval survived. The defect was on the vocabulary path, which is what runs when the local model is unreachable.",
   "shape": {
     "steps": 16,
     "prompts": 3,
@@ -191,12 +191,11 @@
     }
   ],
   "target": "welcome_book_topics",
-  "expected_fail": "Banks one candidate, the right count, containing none of the MCP retrieval that the procedure exists for. The count was also wrong until the scorer was corrected; the discarded retrieval is the real defect and it remains. `must_contain` names an `mcp__adk-docs` step so the loss is an assertion rather than a remark.",
   "current": {
-    "episodes": 2,
+    "episodes": 1,
     "banked": 1,
-    "entry": "bf8bb31758f7",
-    "mcp_steps_banked": 0,
+    "entry": "f786da41639e",
+    "mcp_steps_banked": 4,
     "mcp_steps_captured": 4
   }
 }
