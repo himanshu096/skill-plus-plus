@@ -370,11 +370,12 @@
   },
   "judged": {
     "model": "gemma3n:e4b",
-    "context_steps": 20,
+    "prior_steps": 3,
+    "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
     "endings": 0,
-    "answered": 28,
+    "answered": 3,
     "replayed": "2026-09-07"
   }
 }

@@ -33,7 +33,7 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "{'type': 'tool_reference', 'tool_name': 'WebFetch'}",
-      "end": false,
+      "end": true,
       "closing_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s"
     },
     {
@@ -217,11 +217,12 @@
   },
   "judged": {
     "model": "gemma3n:e4b",
-    "context_steps": 20,
+    "prior_steps": 3,
+    "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
-    "endings": 0,
-    "answered": 16,
+    "endings": 1,
+    "answered": 2,
     "replayed": "2026-09-07"
   }
 }

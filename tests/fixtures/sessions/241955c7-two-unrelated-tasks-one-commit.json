@@ -11,11 +11,13 @@
     "must_contain": [
       "generate_evalset.py",
       "tamtamy_card_staged"
+    ],
+    "boundary_after": [
+      6
     ]
   },
-  "expected_fail": "Segments into 1 episode against a ground truth of 2, and the first task is not merely merged — it is deleted. The cut loop is right: it produces 4 episodes, cutting at every prompt. `_absorb_before_commit` then folds all four into the single commit at the end, and `trim_leading_exploration` removes the 13 leading read-only steps, which is the whole of task 1. Recorded so the day absorb learns to stop at an unrelated task, the suite says so.",
   "why": "Two genuinely different jobs in one sitting. The first asks which walkthrough cards render blank because `TOPICS` stages a body with no key in the frontend's `toolWalkthroughs.ts` — a consistency bug, investigated and reported, nothing written. The second adds the missing eval case for `tamtamy` and commits it. They share a repo and nothing else: different files, different question, different method. One commit at the end covers only the second.",
-  "history": "The first live session recorded to assert a negative — that the pipeline declines to merge things that should stay apart. Every earlier fixture asserts a positive. Traced on capture: cut loop 4 episodes -> `_absorb_before_commit` 1 -> `trim_leading_exploration` 24 work steps down to 11. The banked candidate is titled after the commit and reads as a tidy 11-step procedure, which is what makes this worse than the module docstring assumes: it says an under-cut candidate 'is visibly wrong and dies at review', and the trim is what stops it looking wrong. Re-extracted after `_KEEP_INPUT` learned to keep `Read`'s path: on the first pass the four reads carried an empty input, so `_substantive`'s read-feeds-a-write rule could not fire on a real capture at all.",
+  "history": "Two genuinely different jobs in one sitting, and the pipeline banked one.\n\nCLOSED by asking a different question in a different place. The judge used to be asked, once per tool call, whether the whole request was finished; on this session it answered no 24 times out of 24, including to a completed `git add … && git commit`. `docs/benchmarks.md` records what was ruled out — four rewordings of the definition, the tool output, the completion report, two other phrasings, both polarities, three context sizes. The polarity test settled it: 0/24 endings asking \"is the request done\" against 17/24 asking \"is more work needed\", same steps, temperature 0. It was answering the shape of the question, not reading the step.\n\nIt is now asked once per prompt gap, with the instruction that landed there and the three steps that followed: \"is that a new job?\". Three questions for this session, and it fires on \"Separate job: TOPICS[tamtamy]…\" and not on \"Regenerate concept_buddy.evalset.json.\" or \"Commit both changes together.\" — the right gap, not just the right count.\n\nThe narration bug this session also exposed is fixed separately: task one's deliverable, \"Scan done. All 4 walkthrough-variant TOPICS…\", was stored on the first step of task two. It is now `closing_note` on the step it describes. It does not close this gap — the model was shown that sentence and still said no.",
   "shape": {
     "steps": 24,
     "prompts": 4,
@@ -95,7 +97,7 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "295 \"Confluence; the fetched page renders on the panel automatically.\", 296 } 297 entry = TOPICS.get(topic) 298 if entry is None: 299 return { 300 \"in_book\": False, 301 \"unknown_topic\": topic, 302 \"valid_topics\": sorted(TOPICS), 303 \"guidance\": \"Unknown topic. Re-call with one of valid_topics, or 'not_in_book' to \" 304 \"search Confluence.\", 305 } 306 card = entry.get(\"card\") 307 if card: 308 varia",
-      "end": false,
+      "end": true,
       "closing_note": "Scan done. All 4 walkthrough-variant TOPICS in `book.py` resolve to keys in `TOOL_WALKTHROUGHS`: | book.py `body` | line | TOOL_WALKTHROUGHS key | match | |---|---|---|---| | `desk-booking` | book.py:83 | `desk-booking` (toolWalkthroughs.ts:113) | ✓ | | `absence` | book.py:105 | `absence` (toolWalkthroughs.ts:130) | ✓ | | `geco-timesheet` | book.py:108 | `geco-timesheet` (toolWalkthroughs.ts:40) |"
     },
     {
@@ -324,11 +326,12 @@
   ],
   "judged": {
     "model": "gemma3n:e4b",
-    "context_steps": 20,
+    "prior_steps": 3,
+    "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
-    "endings": 0,
-    "answered": 24,
+    "endings": 1,
+    "answered": 3,
     "replayed": "2026-09-07"
   }
 }

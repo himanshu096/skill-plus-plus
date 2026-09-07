@@ -232,7 +232,7 @@
       "serves": 2,
       "tool_returned": "[main 21e85d2] test(eval): cover mandatory-holiday fact from the Welcome Book 2 files changed, 1810 insertions(+), 1155 deletions(-)",
       "assistant_note": "cases.json reformat (1-space→2-space) predates this session — was already in `M` status at start. Adding case + regenerated evalset.",
-      "end": true,
+      "end": false,
       "closing_note": "Committed `21e85d2`. cases.json + evalset.json (39 cases). Working tree clean for eval/."
     }
   ],
@@ -248,11 +248,12 @@
   },
   "judged": {
     "model": "gemma3n:e4b",
-    "context_steps": 20,
+    "prior_steps": 3,
+    "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
-    "endings": 1,
-    "answered": 18,
+    "endings": 0,
+    "answered": 1,
     "replayed": "2026-09-07"
   }
 }

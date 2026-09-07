@@ -155,7 +155,7 @@
       "failed": false,
       "serves": 2,
       "tool_returned": "[main badea53] test(eval): cover Udemy reimbursement fact from Welcome Book 2 files changed, 1809 insertions(+), 1155 deletions(-)",
-      "end": true
+      "end": false
     },
     {
       "tool": "Bash",
@@ -179,11 +179,12 @@
   },
   "judged": {
     "model": "gemma3n:e4b",
-    "context_steps": 20,
+    "prior_steps": 3,
+    "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
-    "endings": 1,
-    "answered": 12,
+    "endings": 0,
+    "answered": 1,
     "replayed": "2026-09-07"
   }
 }
