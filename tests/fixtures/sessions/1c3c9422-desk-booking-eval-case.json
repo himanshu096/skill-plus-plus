@@ -13,7 +13,7 @@
     ]
   },
   "why": "Six natural turns, one task: fetch the ADK docs, write the case, regenerate the generated evalset, verify the TOPICS decision record in book.py, commit. The doc lookup and the decision check are the two steps a person would follow this again for, so a run that files them separately has not captured the procedure.",
-  "history": "New with the prompt-gated boundary question, and the only wrong verdict in 33 gaps across the corpus. Traded for `241955c7`, which the per-step judge could not close at all.\n\nThe gap:\n\n  GOAL   - We're missing eval coverage for the desk-booking walkthrough card… Can you check how ADK eval cases are structured?\n  NOW    ran `grep -c \"desk|booking|walkthrough\" …evalset.json`\n  SAYS   \"did you call MCP for this?\"\n  NEXT   used ToolSearch / list doc sources / fetch docs llms.txt\n\n`95b6bde7` had the same shape — \"No Confluence then — use the adk-docs MCP tools instead\" — and was fixed by rendering an empty `{PRIOR}` as \"(nothing yet)\" rather than a blank block. This one has three steps of history and is not fixed by that.\n\nBoth are redirections of *method*, not of *goal*: a correction, a retry, a change of tool. The question does not tell the model those are the same job. That is the next thing to try, and it is one line — but it needs its own measurement, because everything here was tuned against these eleven sessions.",
+  "history": "The *before* of the procedure `2095a8af` and `71448e61` record. Asked to check how ADK eval cases are structured, the agent answered from sixteen local `grep`/`Read` calls and never touched MCP; asked directly, it admitted so — \"No. Only Bash grep/head + Read on local files\" — and the developer restated the request as \"don't answer from memory, actually fetch the docs first\". The two later sessions open with that wording, which is why all three share one procedure.\n\nSo the two prompts in the first gap are one correction of method, not a new job, and the ground truth of one episode is right.\n\nThis session was the last gap in the corpus, and it was an implementation bug rather than a model failure. `gaps()` took `next(...)` — the *first* prompt in a gap — so the model was shown \"did you call MCP for this?\" and the restatement immediately after it was discarded. Measured on that one gap: first prompt alone -> new job (wrong); last alone, or both in order -> same job. It is the only gap in the corpus holding two prompts, and it was the only one that failed.\n\n`gaps()` now carries every prompt in the gap. 11/11, both multi-task sessions still cutting in the right place.",
   "shape": {
     "steps": 61,
     "prompts": 7,
@@ -196,7 +196,7 @@
       "failed": false,
       "serves": 1,
       "tool_returned": "3 { \"eval_set_id\": \"concept_buddy\", \"name\": \"Concept Buddy retrieval + behaviour\", \"description\": \"ADK-native mirror of cases.json (text/judge-gradable slice). Card/state and any-of-tools checks stay in run_eval.py.\", \"eval_cases\": [ { \"eval_id\": \"popcorn_recall\", \"conversation\": [ { \"invocation_id\": \"popcorn_recall-0\", \"user_content\": { \"parts\": [ { \"text\": \"What are some of the recent projects a",
-      "end": true,
+      "end": false,
       "closing_note": "No. Only Bash grep/head + Read on local files (`cases.json`, `working.md`, `concept_buddy.evalset.json`). Zero MCP calls, zero WebFetch, zero subagents."
     },
     {
@@ -658,9 +658,8 @@
     "next_steps": 3,
     "value_chars": 80,
     "send_description": false,
-    "endings": 1,
+    "endings": 0,
     "answered": 5,
     "replayed": "2026-09-07"
-  },
-  "expected_fail": "Banks 2 episodes against a truth of 1. The boundary question fires on the first prompt gap, where the developer says \"did you call MCP for this?\" — a four-word correction that sends them back to do the lookup properly. Both `must_contain` steps survive, so the loss is the count, not the content."
+  }
 }
