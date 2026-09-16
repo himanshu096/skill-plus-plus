@@ -12,7 +12,7 @@
       "generate_evalset.py"
     ],
     "families": [
-      "add-eval-case"
+      "add-card-eval-case"
     ]
   },
   "why": "One task with a real failure in the middle. Every step in every earlier fixture succeeded, so two rules had never met a failure on real work: `is_marker` refusing a *failed* commit, and `signals.py` mining red-then-green. The failure here is not staged at the assertion as the runbook first planned — the deliberate `geco_timesheet` typo was caught by reading rather than by a command that exited non-zero — it is the commit itself, which failed on a path and was retried.",

@@ -12,10 +12,10 @@
       "cases.json"
     ],
     "families": [
-      "add-eval-case"
+      "add-fact-eval-case"
     ]
   },
-  "why": "The second run of the procedure in `d5fd2e59`, on a different fact. The pair is the evidence, not either run alone. Both belong to `add-eval-case` together with the walkthrough-card sessions — one procedure, with the kind of case as a variation.\n\nPreviously this fixture asserted the negative: that the two runs merge with each other and with neither card-case entry. Reversed on review of the real ledger, for the reason recorded in `d5fd2e59`.",
+  "why": "The second run of the procedure in `d5fd2e59`, on a different fact. The pair is the evidence, not either run alone: the assertion this corpus was missing is a *negative* — that two runs of one method merge with each other and with neither card-case entry, which asserts `expect_card` and touches the frontend.",
   "history": "The pair answers the question and the answer is bad. Lexical similarity over the banked signatures:\n\n  same procedure, same fact   (udemy 08-31 vs udemy 3a)   0.365  under the 0.40 queued\n                                                                 floor, never compared\n  same procedure, diff fact   (udemy 3a vs holidays 3b)   0.480\n  DIFFERENT procedure         (udemy 3a vs tamtamy card)  0.660  highest of the three\n\nSo the ranking is inverted: the cross-procedure pair scores above the same-procedure pair, and two runs of the identical procedure on the identical fact fall under the floor entirely. Nothing reaches the 0.85 live threshold, so all three sit as separate x1 entries — a procedure performed three times, filed as three one-offs, which is the shape the recurrence threshold exists to catch.\n\nThis says the lexical stage cannot rank these, not that the embedding cannot. Whether the queued pass separates them is the next thing to measure; `must_not_merge_with` has no support in `score.py` yet.",
   "shape": {
     "steps": 18,
