@@ -10,6 +10,9 @@
     "must_contain": [
       "mcp__adk-docs",
       "book.py"
+    ],
+    "families": [
+      "add-eval-case"
     ]
   },
   "why": "The third run of this procedure and the first captured entirely by a fixed pipeline — no replay, no tuning. One episode straight from the live hooks, titled from its own commit. The two before it banked six and five fragments respectively.",
@@ -292,5 +295,6 @@
     "endings": 0,
     "answered": 4,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-08-27T15:38:20.505Z"
 }

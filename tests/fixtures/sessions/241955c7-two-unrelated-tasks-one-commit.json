@@ -14,6 +14,10 @@
     ],
     "boundary_after": [
       6
+    ],
+    "families": [
+      "investigate-card-mismatch",
+      "add-eval-case"
     ]
   },
   "why": "Two genuinely different jobs in one sitting. The first asks which walkthrough cards render blank because `TOPICS` stages a body with no key in the frontend's `toolWalkthroughs.ts` — a consistency bug, investigated and reported, nothing written. The second adds the missing eval case for `tamtamy` and commits it. They share a repo and nothing else: different files, different question, different method. One commit at the end covers only the second.",
@@ -333,5 +337,6 @@
     "endings": 1,
     "answered": 3,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-09-03T08:00:52.342Z"
 }

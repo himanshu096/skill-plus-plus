@@ -10,6 +10,9 @@
     "must_contain": [
       "mcp__adk-docs",
       "book.py"
+    ],
+    "families": [
+      "add-eval-case"
     ]
   },
   "why": "The same procedure as desk-booking against a different topic, run after the boundary fix and never seen while writing it. One candidate: a lone `git log -1 --stat` follows the commit and work after the last commit keeps its own boundary, but it is one step, so it is dropped as too thin and never banked.\n\nThis said 2 until the scorer was corrected. It was counting cut episodes, which is the first of three stages, while stating in this very sentence that only one is banked — and the scorer made the matching mistake, so the two errors cancelled and it passed.",
@@ -604,5 +607,6 @@
     "endings": 0,
     "answered": 4,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-08-27T15:01:26.737Z"
 }

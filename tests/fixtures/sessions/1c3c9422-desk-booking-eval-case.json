@@ -10,6 +10,9 @@
     "must_contain": [
       "mcp__adk-docs",
       "book.py"
+    ],
+    "families": [
+      "add-eval-case"
     ]
   },
   "why": "Six natural turns, one task: fetch the ADK docs, write the case, regenerate the generated evalset, verify the TOPICS decision record in book.py, commit. The doc lookup and the decision check are the two steps a person would follow this again for, so a run that files them separately has not captured the procedure.",
@@ -661,5 +664,6 @@
     "endings": 0,
     "answered": 5,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-08-27T11:57:54.101Z"
 }

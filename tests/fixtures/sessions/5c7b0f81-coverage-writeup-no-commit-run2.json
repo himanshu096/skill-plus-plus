@@ -10,6 +10,9 @@
     "title": null,
     "must_contain": [
       "COVERAGE.md"
+    ],
+    "families": [
+      "coverage-writeup"
     ]
   },
   "why": "A second run of the same commitless procedure, recorded because the pair is the evidence, not either run alone.",
@@ -158,5 +161,6 @@
     "endings": 0,
     "answered": 1,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-08-31T15:10:06.296Z"
 }

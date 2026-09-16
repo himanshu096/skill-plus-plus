@@ -10,6 +10,9 @@
     "title": null,
     "must_contain": [
       "COVERAGE.md"
+    ],
+    "families": [
+      "coverage-writeup"
     ]
   },
   "why": "One task: work out which Welcome Book topics have no eval coverage, then write the finding down. Investigating and writing up what you found is not two procedures. Nothing is committed, which is the point — 13% of real sessions end this way and `_absorb_before_commit` cannot fire on any of them.",
@@ -202,5 +205,6 @@
     "endings": 0,
     "answered": 1,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-08-31T15:04:23.767Z"
 }

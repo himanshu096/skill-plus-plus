@@ -10,6 +10,9 @@
     "must_contain": [
       "mcp__adk-docs",
       "generate_evalset"
+    ],
+    "families": [
+      "compare-adk-docs-to-local"
     ]
   },
   "why": "Sessions 1-4 are all coding sessions that end in a commit. Work done through tools has no marker by nature, and this is the shape the pipeline claims to support: `trim_leading_exploration`'s docstring argues that an MCP retrieval is step one of a method, not the search that found the task, and exempts it from trimming for exactly this reason. One task — pull the docs, compare, report — so the ground truth is one episode and no markers.\n\nRecorded with `adk-docs` rather than Confluence: Confluence MCP is wired into the backend agent, not exposed to Claude Code, which the session established itself. The server does not matter to what is under test — `is_read_only` classifies MCP by verb prefix and the trim exempts any `mcp__` call.",
@@ -224,5 +227,6 @@
     "endings": 1,
     "answered": 2,
     "replayed": "2026-09-07"
-  }
+  },
+  "started": "2026-09-03T11:48:14.635Z"
 }
