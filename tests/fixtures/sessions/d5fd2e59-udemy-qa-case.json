@@ -12,10 +12,10 @@
       "generate_evalset.py"
     ],
     "families": [
-      "add-fact-eval-case"
+      "add-eval-case"
     ]
   },
-  "why": "One task, and deliberately a *different* procedure from the card cases: the assertion is `expect_any` against the Welcome Book, with no `expect_card` and no frontend involved. Same repo, same file, different method — which is the pair that must not merge with the eval-case entries. Recorded as the first of two runs; the assertion the set is missing is that the two runs merge with each other and with neither card entry.",
+  "why": "One task: find a fact in the Welcome Book, add an eval case asserting the answer returns it, regenerate the evalset, commit. The assertion is `expect_any` rather than `expect_card`, and no frontend is involved — but that is a variation of the case, not a different procedure. This session and the walkthrough-card sessions are all \"add an eval case, regenerate, commit\", and ground truth puts them in one family, `add-eval-case`.\n\nPreviously recorded as a *different* procedure that must not merge with the card cases, and briefly split again after that. Settled as one on a step-by-step comparison with `241955c7`'s tamtamy case: the same read, edit, JSON check, regenerate and commit, with the only differing steps doing the same job by other commands (`ls` and `head` against `find` and `grep`, both locating `generate_evalset.py`). What separates the two kinds lives in the prompt and in the JSON written, never in the steps, and two fact runs are too few to justify a family that only the prompt can tell apart.",
   "history": "Live capture banked exactly one entry, `d8258dde688b`, 9 steps — correct. `score.py` reports 2 episodes because it counts every episode `segment` returns, and the second is a lone trailing `git status` that is flagged and dropped by `fold_session` before anything is banked. So the recorded gap here is in the scorer, not in the segmenter: `score.check` should count what would be folded, not what was cut. Left as-is deliberately, to be looked at with the rest of the code.\n\nAlso the first fixture whose signature opens with `read` — the `Read` at step 3 feeds the `Edit` at step 4, and until today `_KEEP_INPUT` dropped the path so that read could never be kept.\n\nThe gap this recorded was the scorer's, not the segmenter's, and it is closed: `score.py` now runs the real fold and counts what is banked, so the trailing `git status` no longer reads as a second candidate. Passes.",
   "shape": {
     "steps": 12,
