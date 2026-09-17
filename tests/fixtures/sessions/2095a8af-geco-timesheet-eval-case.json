@@ -31,7 +31,8 @@
       "input": {
         "text": "Use the adk-docs MCP tool to look up how ADK eval cases and evalsets are structured — don't answer from memory, actually fetch the docs first."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Found eval pages. Fetching main + criteria.\n\nDocs pulled. Summary:\n\n**Evalset structure (Pydantic-backed)**\n- File suffix `.evalset.json` (or `.test.json` for single-session tests)\n- Root: `eval_set_id`, `name`, `description`, `eval_cases[]`\n- Each `eval_case`: `eval_id`, `conversation[]`, `session_input{app_name,user_id,state}`, optional `rubrics[]`\n\n**Turn (invocation) fields**\n- `invocation_id` — unique\n- `user_content{parts:[{text}], role:\"user\"}` — the query\n- `final_response{parts:[{text}], role:\"model\"|null}` — expected agent reply\n- `intermediate_data.tool_uses[]` — chronological `{id?, name, args}` (ground truth trajectory)\n- `intermediate_data.intermediate_responses[]` — sub-agent NL responses `[[agent_name, [{text}]]]`\n\n**Per-case `rubrics[]`** — additive over criterion-level rubrics; filtered by `type`: `\"FINAL_RESPONSE_QUALITY\"`, `\"TOOL_USE_QUALITY\"`, `\"TRAJECTORY_QUALITY\"`. Shape: `{rubric_id, rubric_content:{text_property}, type}`.\n\n**Criteria config** (separate `test_config.json` or `EvalConfig`):\n- `tool_trajectory_avg_score` — default 1.0, `match_type` EXACT|IN_ORDER|ANY_ORDER\n- `response_match_score` — default 0.8, ROUGE-1\n- `final_response_match_v2`, `rubric_based_*_v1`, `hallucinations_v1`, `safety_v1`, `multi_turn_*` — LLM judge, need `judge_model_options{judge_model,num_samples}`\n\n**Schema source of truth** — `google/adk-python/src/google/adk/evaluation/eval_set.py` + `eval_case.py`.\n\n**Run**: `adk eval <agent_dir> <evalset.json>[:eval_1,eval_2]` or `pytest` via `AgentEvaluator.evaluate(...)`.\n\nReady for next step. Which slice of `concept_buddy.evalset.json` need work?"
     },
     {
       "tool": "ToolSearch",
@@ -86,7 +87,8 @@
       "input": {
         "text": "We have no coverage for the GECO timesheet walkthrough card. geco_project_hours_local covers the Q&A path only. Add a case to eval/cases.json asserting the walkthrough card gets staged — expect_card with variant walkthrough and body_contains: \"geco-timesheet\", matching the format of desk_booking_card_staged."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Validate JSON.\n\nCase `geco_timesheet_card_staged` added after `geco_project_hours_local`. JSON parses. Mirrors `desk_booking_card_staged`: query hits `geco`/`timesheet` keywords → `answer` routes topic=geco → `book.TOPICS['geco']` stages walkthrough card body=`geco-timesheet`."
     },
     {
       "tool": "Bash",
@@ -384,7 +386,8 @@
       "input": {
         "text": "Regenerate concept_buddy.evalset.json from that"
       },
-      "failed": false
+      "failed": false,
+      "reply": "Regenerated. 41 cases (was 40). New case `geco_timesheet_card_staged` sits after `geco_project_hours_local` at line 375."
     },
     {
       "tool": "Read",
@@ -424,7 +427,8 @@
       "input": {
         "text": "Before you commit — check the docstring in concept_buddy_agent/book.py. It says the TOPICS table is the single source of truth for KB cards, moved out of the skill prompt so staging is deterministic. Confirm that still holds: geco is only in TOPICS, cards.stage is still the only writer, nothing crept back into a skill prompt."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Docstring claim holds. Verification:\n\n**1. `geco` KB card in TOPICS only**\n- `book.py:107` — `TOPICS[\"geco\"]` = walkthrough, body=`geco-timesheet` — deterministic KB path\n- `concept-reply-qa/references/welcome-book.md:307` = book prose only (no staging directive)\n\n**2. `cards.stage` is only writer** — all 7 call sites go through it:\n- `book.py:309` (KB via TOPICS)\n- `tools.py:129` (people-picker `sources` card)\n- `tools.py:436` (`show_overview_card` model tool)\n- `callbacks.py:916` (Confluence section picker)\n- `callbacks.py:1157/1254/1276` (Confluence `page` card + reassert-with-children)\n- `callbacks.py:1348` uses `cards.stage_card` (lower-level page reassert)\n\n**3. Nothing crept back into KB skill prompt**\n- `concept-reply-cards` skill remains deleted (only historical comments in `book.py:11, 36`)\n- Sole `geco-timesheet` mention in a skill prompt: `concept-reply-onboarding/references/tools.md:68` — that's the **onboarding tools-walk** step (model calls `show_overview_card` when the user picks GECO in the walk). Different surface from KB Q&A. Docstring claim scopes to KB cards; onboarding tools-walk is not a KB card.\n\nClaim intact. Safe to commit."
     },
     {
       "tool": "Read",
@@ -528,7 +532,8 @@
       "input": {
         "text": "Commit. If regenerating left indent churn in cases.json, leave it — do not git checkout the file, just commit what's there."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Committed `da15272`. 2 files, +43 lines. Deleted presentation slides + untracked logs left in tree."
     },
     {
       "tool": "Bash",
@@ -606,7 +611,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 4,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-08-27T15:01:26.737Z"
 }

@@ -28,7 +28,8 @@
       "input": {
         "text": "There's no eval covering what the Welcome Book says about mandatory holidays. Find the fact and add a case to cases.json asserting answer returns it, matching the other local-reference cases."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Fact found: welcome-book.md:280 — \"24.12 and 31.12: Company grants 4 hours on each day — book as 'Non-Chargeable Work'\". Routes via `time_off` topic (keywords include \"mandatory holiday, mandatory holidays\"). Adding case matching light local-reference pattern (vacation_carryover, sick_doctor_note, workation), next to sick_doctor_note_local.\n\nJSON valid. Case `mandatory_holidays_local` inserted at index 15, between `sick_doctor_note_local` and `workation_days_local` (Time Off cluster). Asserts `answer` tool + `24.12` / `31.12` / `4 hours` / `Non-Chargeable Work` + standard deflection forbids. Matches light local-reference pattern (no card assertion — same as sick/carryover/workation neighbors)."
     },
     {
       "tool": "Bash",
@@ -167,7 +168,8 @@
       "input": {
         "text": "Regenerate the evalset and commit."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Regenerated: 39 cases. Now commit.\n\ncases.json reformat (1-space→2-space) predates this session — was already in `M` status at start. Adding case + regenerated evalset.\n\nCommitted `21e85d2`. cases.json + evalset.json (39 cases). Working tree clean for eval/."
     },
     {
       "tool": "Bash",
@@ -256,7 +258,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 1,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-09-03T11:28:08.261Z"
 }

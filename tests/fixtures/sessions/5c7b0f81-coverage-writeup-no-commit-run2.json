@@ -32,7 +32,8 @@
       "input": {
         "text": "Some Welcome Book topics in book.py have no eval coverage in cases.json. Work out which ones and tell me."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Cross-referenced each `TOPICS` key in book.py against every case query in cases.json (routed via keyword table in welcome-book.md).\n\n**Covered (7/25):** mission_vision, benefits, desk_booking, it_support, time_off, geco, slack.\n\n**Uncovered by any Q&A case (18/25):**\n\n| Topic | Section |\n|---|---|\n| `first_day` | First Day |\n| `company_overview` | Company Overview |\n| `values` | Company Overview |\n| `customers` | Company Overview |\n| `bu_managers` | Company Overview |\n| `collaboration_rules` | Working at Concept |\n| `events` | Working at Concept |\n| `bench_time` | Working at Concept |\n| `hr_contacts` | Working at Concept |\n| `absence` | Time Off |\n| `tamtamy` | Tools & Apps |\n| `sharepoint` | Tools & Apps |\n| `teams` | Tools & Apps |\n| `confluence_tool` | Tools & Apps |\n| `gitlab` | Tools & Apps |\n| `servus_concept` | Tools & Apps |\n| `tool_access` | Tools & Apps |\n| `first_weeks` | First Weeks |\n\nNotes:\n- `first_day` + `company_overview` cards ARE touched by onboarding cases (`ob_welcome_timeline_card`, `ob_overview_doc_card`), but via onboarding flow — no Q&A case hits `answer()` for them.\n- `absence` gap is meaningful: `sick_doctor_note_local` routes to `time_off` (sick-note policy), so the absence.io walkthrough card never gets asserted.\n- Whole `Tools & Apps` section is nearly bare — only `slack` has a case. TamTamy/SharePoint/Teams walkthroughs + keyvalue cards untested.\n- `managing_director_who` has no book keyword match → falls to Confluence, not `bu_managers`."
     },
     {
       "tool": "Bash",
@@ -137,7 +138,8 @@
       "input": {
         "text": "Write that list to backend/concept_buddy_agent/eval/COVERAGE.md, with a line each on why it matters. Don't commit — I want to read it first."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Written to `backend/concept_buddy_agent/eval/COVERAGE.md`. Not committed. Priority hint at bottom names 4 highest-signal gaps: `absence`, `hr_contacts`, `collaboration_rules`, one non-slack Tools & Apps case."
     },
     {
       "tool": "Write",
@@ -160,7 +162,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 1,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-08-31T15:10:06.296Z"
 }

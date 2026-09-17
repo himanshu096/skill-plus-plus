@@ -28,7 +28,8 @@
       "input": {
         "text": "Add an eval case for the GECO timesheet walkthrough card to cases.json, asserting a staged card with body_contains: \"geco_timesheet\" — match the format of desk_booking_card_staged."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Note: actual body value in `book.py:108` is `\"geco-timesheet\"` (hyphen), matching desk_booking format. Using hyphen — underscore would never match.\n\nAdded `geco_timesheet_card_staged` right after `desk_booking_card_staged` in `backend/concept_buddy_agent/eval/cases.json:536`. Same shape: walkthrough variant, `body_contains: \"geco-timesheet\"` (hyphen — matches `book.py:108` topic body; underscore would never match). JSON validates."
     },
     {
       "tool": "Bash",
@@ -103,7 +104,8 @@
       "input": {
         "text": "Regenerate the evalset, then check that assertion against the walkthrough key TOPICS actually stages in book.py. Don't run the full eval — it calls the real agent."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Assertion matches: `book.py:108` — topic `geco` → `body: \"geco-timesheet\"`. Now verify query \"How do I fill in my GECO timesheet?\" routes to `geco` topic via `_TOPIC_CARDS` / mention-detector.\n\nVerified end-to-end:\n\n- Evalset regenerated: 40 cases (was 39), new case at `concept_buddy.evalset.json:550`\n- `book.py:108` — topic `geco` → walkthrough card body `\"geco-timesheet\"` ✓ matches assertion\n- `test_book_routing.py:68` — \"how do I fill in my GECO timesheet?\" already routes to `\"geco\"` via `match_topic()` ✓ deterministic\n- `book.answer` (`book.py:306-316`) stages that card whenever topic resolves to `geco`\n\nAssertion sound. No full-eval run needed."
     },
     {
       "tool": "Bash",
@@ -219,7 +221,8 @@
       "input": {
         "text": "Fix the assertion to the real key and re-run the same check."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Checked: assertion is already real key. `body_contains: \"geco-timesheet\"` at `cases.json:551` — hyphen, matches:\n\n- `book.py:108` card body: `\"geco-timesheet\"`\n- `toolWalkthroughs.ts:40` manifest key: `\"geco-timesheet\"`\n- `run_eval.py:202` matcher = case-insensitive substring on card `body` field\n\nNo underscore anywhere. Nothing to change.\n\nRe-ran the check:\n\nState:\n\n- `cases.json:551` body_contains = `\"geco-timesheet\"` (real key, hyphen)\n- Evalset regenerated: 40 cases, `geco_timesheet_card_staged` present\n- Staging path confirmed: `test_book_routing.py:68` routes query → topic `geco` → `book.answer` stages card with `body=\"geco-timesheet\"` (`book.py:306-316`)\n\nAssertion already correct. No underscore variant to fix."
     },
     {
       "tool": "Bash",
@@ -304,7 +307,8 @@
       "input": {
         "text": "Commit."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Committed `8885712`. Eval dir clean."
     },
     {
       "tool": "Bash",
@@ -379,7 +383,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 3,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-09-03T11:35:59.916Z"
 }

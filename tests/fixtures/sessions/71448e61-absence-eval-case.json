@@ -31,7 +31,8 @@
       "input": {
         "text": "Use the adk-docs MCP tool to look up how ADK eval cases and evalsets are structured — don't answer from memory, actually fetch the docs first."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Docs fetched. Structure summary:\n\n## Eval file types\n\n**`*.test.json`** — one session, unit-test scope.\n**`*.evalset.json`** — multi-session, integration-test scope. Both share the same Pydantic schema (`EvalSet` + `EvalCase` in `google.adk.evaluation`).\n\n## EvalSet top level\n\n```json\n{\n  \"eval_set_id\": \"...\",\n  \"name\": \"...\",\n  \"description\": \"...\",\n  \"eval_cases\": [ EvalCase, ... ]\n}\n```\n\n## EvalCase\n\n```json\n{\n  \"eval_id\": \"unique_name\",\n  \"conversation\": [ Invocation, ... ],\n  \"session_input\": {\n    \"app_name\": \"...\",\n    \"user_id\": \"...\",\n    \"state\": {}\n  },\n  \"rubrics\": [ ... ]   // optional, filtered per-criterion by \"type\"\n}\n```\n\n## Invocation (one turn)\n\n```json\n{\n  \"invocation_id\": \"uuid\",\n  \"user_content\": { \"parts\": [{\"text\": \"...\"}], \"role\": \"user\" },\n  \"final_response\": { \"parts\": [{\"text\": \"...\"}], \"role\": \"model\" },\n  \"intermediate_data\": {\n    \"tool_uses\": [ { \"id\": \"...\", \"name\": \"tool_name\", \"args\": {...} } ],\n    \"intermediate_responses\": [ [\"sub_agent_name\", [{\"text\": \"...\"}]] ]\n  }\n}\n```\n\n## Config (`test_config.json` next to cases, or `--config_file_path`)\n\n```json\n{ \"criteria\": { \"tool_trajectory_avg_score\": 1.0, \"response_match_score\": 0.8 } }\n```\n\nDefault criteria if none: `tool_trajectory_avg_score=1.0`, `response_match_score=0.8`. Advanced criteria (`final_response_match_v2`, `rubric_based_*_v1`, `hallucinations_v1`, `safety_v1`, `multi_turn_*_v1`) take object form w/ `threshold`, `judge_model_options`, `rubrics`.\n\n## Rubrics dual-scope\n\n- Criterion-level: not filtered by `type`, applies to all cases.\n- `EvalCase.rubrics`: additive, filtered by `type` (`FINAL_RESPONSE_QUALITY`, `TOOL_USE_QUALITY`, `TRAJECTORY_QUALITY`).\n- Effective list = union. Must be non-empty for rubric-based criteria.\n\n## Runners\n\n- `adk eval AGENT_DIR EVALSET_FILE[:eval_1,eval_2] [--config_file_path=...] [--print_detailed_results]`\n- `pytest` via `AgentEvaluator.evaluate(agent_module=..., eval_dataset_file_path_or_dir=...)`\n- Web UI: `adk web` → **Eval** tab (record sessions → save as cases).\n- Migration helper: `AgentEvaluator.migrate_eval_data_to_new_schema` for legacy files.\n\nSchema source of truth: `src/google/adk/evaluation/eval_set.py` + `eval_case.py` in `google/adk-python`. Want me to diff your `concept_buddy.evalset.json` against this?"
     },
     {
       "tool": "ToolSearch",
@@ -85,7 +86,8 @@
       "input": {
         "text": "We have no coverage for the absence.io walkthrough card. TOPICS[\"absence\"] in book.py stages a walkthrough card with body absence, and no case asserts it. Add one to eval/cases.json — expect_card with variant walkthrough and body_contains: \"absence\" — matching the format of geco_timesheet_card_staged."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Case `absence_card_staged` added after `geco_timesheet_card_staged`. Same shape: `variant: walkthrough`, `body_contains: \"absence\"`, matching `TOPICS[\"absence\"]` card body in `book.py:105`."
     },
     {
       "tool": "Bash",
@@ -148,7 +150,8 @@
       "input": {
         "text": "Regenerate concept_buddy.evalset.json from that."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Regenerated. 42 cases (was 41), new case `absence_card_staged` included."
     },
     {
       "tool": "Bash",
@@ -178,7 +181,8 @@
       "input": {
         "text": "Before you commit — check the docstring in concept_buddy_agent/book.py. It says the TOPICS table is the single source of truth for KB cards, moved out of the skill prompt so staging is deterministic. Confirm that still holds: absence is only in TOPICS, cards.stage is still the only writer, nothing crept back into a skill prompt"
       },
-      "failed": false
+      "failed": false,
+      "reply": "Checked. Invariant holds. One caveat worth naming.\n\n**1. TOPICS single source for KB cards — HOLDS.**\n`absence` defined once at `book.py:104-105`. No other TOPICS-style card table anywhere.\n\n**2. `cards.stage` sole writer — HOLDS.**\n`cards.py:148` docstring: \"THE single writer for `stage_cards`\". All callsites route through `cards.stage`/`cards.stage_card`:\n- `book.py:309` (KB path)\n- `tools.py:129, 436` (show_overview_card + one other)\n- `callbacks.py:916, 1157, 1254, 1276, 1348` (Confluence auto-stage + reconcile)\n\n**3. Cards skill prompt — HOLDS.**\n`concept-reply-cards` skill removed (76d86ba per memory). No `references/` file names the absence card spec via KB-path staging.\n\n**Caveat (pre-existing, not a regression):**\n`skills/concept-reply-onboarding/references/tools.md:79` redundantly spells the absence card spec:\n```\nshow_overview_card(variant=\"walkthrough\", title=\"Absence — absence.io\", body=\"absence\")\n```\nSame duplication for GECO (68-69), TamTamy (74), SharePoint (76-78), keyvalue tools (80). Different code path (model-authored during onboarding tools-walk, not KB `answer()`), so not a TOPICS-invariant violation, but drift risk: change `TOPICS[\"absence\"][\"card\"][\"body\"]` and tools.md silently diverges. Not blocking this commit — flag for a later dedup pass if you care.\n\nSafe to commit."
     },
     {
       "tool": "Read",
@@ -238,7 +242,8 @@
       "input": {
         "text": "Commit. If regenerating left indent churn in cases.json, leave it — do not git checkout the file, just commit what's there."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Committed `e5d47e5`. Only the 2 eval files staged. Unrelated deleted/untracked paths left alone."
     },
     {
       "tool": "Bash",
@@ -294,7 +299,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 4,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-08-27T15:38:20.505Z"
 }

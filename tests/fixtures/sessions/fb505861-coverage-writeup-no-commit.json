@@ -31,7 +31,8 @@
       "input": {
         "text": "Some Welcome Book topics in book.py have no eval coverage in cases.json. Work out which ones and tell me."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Book topic vs cases.json coverage (25 topics total, structural journey-enumerator cases excluded — those only check checklist shape, not topic behavior).\n\n**Zero behavioral coverage (no case queries topic):**\n- `collaboration_rules` — Working at Concept\n- `events` — Working at Concept\n- `bench_time` — Working at Concept\n- `hr_contacts` — Working at Concept\n- `sharepoint` — Tools & Apps\n- `teams` (MS Teams) — Tools & Apps\n- `gitlab` — Tools & Apps\n- `servus_concept` — Tools & Apps\n- `tool_access` — Tools & Apps\n\n**Tangential-only (1 incidental mention, not a topic query — treat as gap):**\n- `values` — only surfaces inside `ob_overview_doc_card` (overview part-1 card check, not a \"what are the values\" query)\n- `tamtamy` — only appears in `desk_booking_card_staged` note text, no case queries TamTamy\n\n**Note:** `resume_skips_ticked_checklist` + `tools_status_lists_all` DO name gitlab/teams/sharepoint/servus/etc. as checklist item ids — so journey structure asserts they exist, but no behavior case asks about them. Q&A / card-staging paths for those 9 topics are untested.\n\nBiggest hole = whole `Tools & Apps` section: 5 of 9 topics untested (sharepoint, teams, gitlab, servus_concept, tool_access). Second hole = `Working at Concept` non-tool items (collaboration_rules, events, bench_time, hr_contacts)."
     },
     {
       "tool": "Bash",
@@ -170,7 +171,8 @@
       "input": {
         "text": "Write that list to backend/concept_buddy_agent/eval/COVERAGE.md, with a line each on why it matters. Don't commit — I want to read it first"
       },
-      "failed": false
+      "failed": false,
+      "reply": "Wrote `backend/concept_buddy_agent/eval/COVERAGE.md`. 9 zero-coverage topics + 2 tangential, one-liner rationale each, plus concentration note (Tools & Apps + keyvalue variant biggest holes). Uncommitted."
     },
     {
       "tool": "Bash",
@@ -204,7 +206,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 1,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-08-31T15:04:23.767Z"
 }

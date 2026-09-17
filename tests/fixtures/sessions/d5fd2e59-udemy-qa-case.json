@@ -28,7 +28,8 @@
       "input": {
         "text": "There's no eval covering what the Welcome Book says about Udemy reimbursement. Find the fact in the book and add a case to cases.json asserting answer returns it — match the format of the other local-reference cases."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Found fact: \"Udemy Course Reimbursement – up to €100 per year\" in `welcome-book.md`. No existing case covers it. Add one after `sport_allowance_local` (benefits neighbor).\n\nAdded `udemy_reimbursement_local` case after `sport_allowance_local`. Asserts `answer` tool used, response contains €100/year fact, no deflection. Fact source: `welcome-book.md:144,160` (\"Udemy Course Reimbursement – up to €100 per year\", benefits.md-backed). JSON valid."
     },
     {
       "tool": "Bash",
@@ -92,7 +93,8 @@
       "input": {
         "text": "Regenerate the evalset and commit."
       },
-      "failed": false
+      "failed": false,
+      "reply": "Regenerated evalset (39 cases, +1). Committed as `badea53`."
     },
     {
       "tool": "Bash",
@@ -188,7 +190,7 @@
     "send_description": false,
     "endings": 0,
     "answered": 1,
-    "replayed": "2026-09-07"
+    "replayed": "2026-09-17"
   },
   "started": "2026-09-03T11:22:05.995Z"
 }

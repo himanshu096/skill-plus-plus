@@ -1,0 +1,440 @@
+{
+  "tag": "883b20f8",
+  "name": "talk-deck-learnings-part2",
+  "captured": "2026-09-17",
+  "procedure": "propose presentation content from a source document, review and fact-check it, then build the deck",
+  "truth": {
+    "episodes": 1,
+    "markers": 1,
+    "title": null,
+    "must_contain": [
+      "LEARNINGS-Part2-talk.pptx"
+    ],
+    "families": [
+      "create-presentation",
+      "create-presentation"
+    ]
+  },
+  "why": "One procedure: propose the slide content from a named source, have it fact-checked against that source and cut to a slide limit, confirm the format, build the deck. The review prompt (\"Two things. Check every …\") is a checkpoint on the proposal it refers to — \"the slides\" — not a new job; proposing, checking and building are one request driven through conversation. Ground truth stated by the person who ran it before any pipeline output was scored: one session, one process. Source: LEARNINGS.md, Part 2; agent claude-opus-5. Recorded without clearing concept_buddy between runs, so later runs saw earlier decks and Claude's project memory — realistic, and a confound for similarity.",
+  "history": "Live capture: run 1 banked one candidate only because the judge timed out at the review gap; run 2 split at \"Two things\"; run 3 stayed whole. Replayed warm at temperature 0 the judge answers \"new job\" at the review prompt in all three — the whole runs were timeouts, not verdicts. It sees the request (\"Don't build anything yet\") and the review prompt, never the slides the prompt refers to.",
+  "shape": {
+    "steps": 34,
+    "prompts": 4,
+    "failed": 2
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "I need to give a 10-minute talk to the team about what we learned building the Concept Buddy agent itself. The material is in LEARNINGS.md, Part 2. Propose the content for the slides — titles and key points per slide. Don't build anything yet."
+      },
+      "failed": false,
+      "reply": "Here's a proposed deck for Part 2 of LEARNINGS.md. It's 7 slides running about 9:50, laid out like the Part 1 deck: a title slide, numbered lesson slides that each lead with one big number or quote, then a one-slide recap. The whole talk keeps coming back to \"give the AI less room to guess\".\n\n---\n\n### Slide 0: Title (0:20)\n**Building an agent that works: lessons from Concept Buddy, Part 2**\n- Part 1 was how we used the coding assistant. This part is about the agent itself.\n- Theme: *\"give the AI less room to guess\"*\n\n### Slide 1: Guarantees in code, not prompts (2:00)\n**Main visual:** a 3-row table comparing a fix in the instruction with a fix in code.\n| Problem | Instruction fix | Code fix |\n|---|---|---|\n| Sidebar card missing or wrong | right 1 in 3 | 3 of 3 |\n| Re-walked a finished step | slipped 1 in 5 | never |\n| Display name used instead of an id | failed silently, at random | fixed |\n- When the agent misbehaved, the tempting fixes were a better prompt or a bigger model. What worked was a rule in the software, so the agent can't get it wrong.\n- The model does only what a model can do: understand the question and summarise. Tracking progress is ordinary code.\n- **The limit:** code can block a wrong action, but it can't take back a sentence the user has already seen.\n- Quote: *\"The weaker the model, the more of the work has to be code.\"* That's also what makes a cheaper or local model realistic later.\n- Note: this is the biggest lesson, so give it the most time.\n\n### Slide 2: Test automatically, or guess (1:45)\n**Main visual:** **3/3 → 1/3**, the same cases one week apart.\n- Ask the same question 5 times and you get 5 different answers, so \"it works\" is a rate, not something you see once.\n- Run each case several times and require a majority.\n- Split the suite in two:\n  - checks with no AI in them, which are fast and never flaky\n  - tests that run the real agent\n- Keep known failures, with their pass rate. A deleted test is a blind spot.\n- Write down *why* a case passes. That's what showed the 4/5 → 2/5 drop from Part 1 was a regression, not bad luck.\n- The same goes for the app's code:\n  - Typechecking had been off and there was no linter. Turning both on found real bugs: nav links reloaded the page and killed the chat.\n  - The test runner doesn't typecheck, so an invalid id passed the tests and failed the compiler. You need all three checks.\n\n### Slide 3: Suspect the plumbing first (1:30)\n**Main visual:** the quote *\"I don't know, ask your onboarding responsible\"*, which the agent gave to every question. The cause was one setting in the wrong place that cut off Confluence, with no error.\n- Four \"the agent got worse\" reports that weren't the agent:\n  - The old backend was still running, with the fix already committed twice.\n  - Old saved progress came back, and every test user shared one identity.\n  - Confluence was disconnected without any error.\n  - One wrongly declared action broke every action.\n- The agent covers for broken plumbing with answers that sound right, so it looks like the model got worse.\n- Checklist before trusting a bug report, including your own: **restart, reset the saved state, confirm the connections are live.**\n- This is why Slack and Teams waited. An agent connected to many systems but unreliable fails in more places, and you can't tell which connection broke.\n\n### Slide 4: One state, two writers (2:30)\n**Main visual:** a timeline of three fixes.\n1. A tick was lost on reload → we added a direct write from the interface to the backend.\n2. The browser's stale copy overwrote real progress → a freshly reset backend showed an old percentage.\n3. The browser copy became something to merge from, never the starting point. The merge became a per-item union that can only add → we **deleted** the direct write.\n- **The trap:** the instinct is to make the interface's write immediate and authoritative. What held up was fewer writers and a merge that can't lose anything.\n- Three more rules, one line each:\n  - **Check where the paths meet.** Ticking the last item by hand skipped the \"journey finished?\" check, so nothing happened.\n  - **Derive, don't make the model remember.** A \"where the user is\" pointer the model had to keep updated led to the right content under the wrong step.\n  - **Reset long-lived memory on purpose.** \"Shown but not ticked\" stuck forever, so the tour opened in the wrong place.\n\n### Slide 5: Confident, and wrong (1:30)\n**Main visual:** *\"It sounds identical whether it's right or wrong.\"* Two columns:\n- **Out of scope:** asked who the US president is, it answered. Asked to run code, it invented a tool.\n  - Fix: a list of out-of-scope topics with examples, and one fixed sentence to decline with.\n  - Add the line \"decline even if you know the answer\", and tell it honestly which tools it has.\n  - Then test for the opposite problem: refusing too much.\n- **Out of date:** the welcome material named people. When someone changes role, the agent points to the wrong person.\n  - Software can tell someone left, but not who took over.\n  - Fix: name roles, not people, with one table mapping role → person → contact, kept by the team that owns it.\n- Always offer a human to ask.\n\n### Slide 6: The one-slide version (0:15, then Q&A)\nThe five titles, one line each (from LEARNINGS.md), plus the theme quote.\n\n---\n\n**Recommendations:**\n- **Slide 4 is the densest.** If rehearsal runs long, split it into 4a (the timeline) and 4b (the three rules), and take 30 seconds off slide 3.\n- **Leave the \"architecture features\" slide out.** Items 3–5 repeat lessons 1, 2 and 4, and items 1–2 are Part 1 material. Keep it as a backup in case someone asks what to reuse.\n- **Keep Part 3 (local models, the 95 GB freeze) for Q&A.** It isn't part of Part 2.\n- **Don't reuse the old `presentation/PART2-SLIDES.md` draft** (deleted but not yet committed). Its \"Agent Orchestration\" and \"Small Commits\" slides are now Part 1 lessons."
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls LEARNINGS* 2>/dev/null; wc -l LEARNINGS.md; grep -n '^#' LEARNINGS.md",
+        "description": "Locate LEARNINGS.md and list its headings"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "LEARNINGS-Part1-talk.pptx LEARNINGS.md 338 LEARNINGS.md 1:# Concept Buddy V1 — Mistakes & Learnings 30:## Part 1 — Working with an AI coding assistant 32:### 1. Give it docs, not memory 49:### 2. Scope, purpose, stopping point 65:### 3. Small changes aren't small 82:### 4. One agent, many skills 104:### 5. Question the plan, verify the result 120:## Part 2 — Building an agent that works 122:### 1.",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "sed -n 1,30p LEARNINGS.md && echo ---- && sed -n 120,338p LEARNINGS.md",
+        "description": "Read intro and Part 2 onward of LEARNINGS.md"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "# Concept Buddy V1 — Mistakes & Learnings Notes from building Concept Buddy: an internal onboarding assistant that new colleagues can chat with, which also walks them through their first-week checklist and pulls answers out of our Confluence. Two kinds of lesson are mixed together here on purpose: - **How to work with an AI coding assistant** — Claude Code wrote most of this app. - **How to build ",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git show HEAD:presentation/PART2-SLIDES.md 2>/dev/null | head -150; echo ----PART1; git show HEAD:presentation/PART1-SLIDES.md 2>/dev/null | grep -nE '^#|^---' | head -40; echo ----PPTX; unzip -l LEARNINGS-Part1-talk.pptx | grep -c 'slides/slide[0-9]*.xml$'",
+        "description": "Check deleted earlier slide drafts and Part 1 deck size"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "# Part 2 — Building an agent that works **Handoff note for the deck-building agent.** Seven slides, in this order, with these exact titles. Slides 1–6 have three blocks: **Initial situation** (what we set up), **Consequence** (what it cost), **Take away** (what the audience should leave with). Slides 1 and 5 split the last block in two — **Learnings** (the principle, then the solution) and **Rules",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad && rm -rf p1 && mkdir p1 && cd p1 && unzip -q ${HOME}/ai_projects/concept_buddy/LEARNINGS-Part1-talk.pptx && for i in 1 2 3 4 5 6; do echo \"== slide $i\"; sed -e 's/<\\/a:p>/\\n/g' -e 's/<[^>]*>//g' ppt/slides/slide$i.xml | grep -v '^\\s*$' | head -30; done; ls ppt/notesSlides 2>/dev/null",
+        "description": "Extract text from Part 1 talk deck for format reference"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "== slide 1 WORKING WITH AN AI CODING ASSISTANT Lessons from Concept Buddy Claude Code wrote most of this app. This talk covers the assistant-use lessons only. “give the AI less room to guess” == slide 2 1 Question the plan, verify the result Explore → Plan → Question → Implement → Verify VERIFY SKIPPED — COST Structural change built from memory, no framework docs wired in Code ran fine but against",
+      "closing_note": "Here's a proposed deck for Part 2 of LEARNINGS.md. It's 7 slides running about 9:50, laid out like the Part 1 deck: a title slide, numbered lesson slides that each lead with one big number or quote, then a one-slide recap. The whole talk keeps coming back to \"give the AI less room to guess\". --- ### Slide 0: Title (0:20) **Building an agent that works: lessons from Concept Buddy, Part 2** - Part 1",
+      "end": true
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Two things. Check every claim and number on the slides against LEARNINGS.md and tell me which ones aren't backed by it. And cut it to at most 6 slides — merge whatever overlaps."
+      },
+      "failed": false,
+      "reply": "Almost everything on the slides matches LEARNINGS.md. One claim isn't in it at all, three drift from its wording, and the cut to 6 slides is below.\n\n## What LEARNINGS.md doesn't support\n\n**Not in the document:**\n| Slide | Claim | Problem |\n|---|---|---|\n| 3 | \"This is why Slack and Teams waited\" | LEARNINGS.md never names Slack or Teams. It only says we \"didn't connect more systems until the agent was genuinely good with the one it had\". I took the names from my project notes. Removed. |\n\n**Worded differently from the document:**\n| Slide | My wording | What LEARNINGS.md says |\n|---|---|---|\n| 3 | \"fix already committed twice\" | \"already been fixed by two earlier commits\". Mine sounds like the same fix went in twice. |\n| 1 | \"Tracking progress is ordinary code\" | \"the bookkeeping around it should be ordinary software\". Mine is narrower than the source. |\n| 5 | \"tell it honestly which tools it has\" | The honesty line is about what it *can't* do: \"no ability to run code, browse or use a terminal\". |\n\n**Also mine, not the document's:**\n- **Timings:** these are my estimates.\n- **\"Give it the most time\":** my speaking advice. LEARNINGS.md only says lesson 1 is \"the biggest lesson of the whole project\".\n- **Timeline arrows on slide 4:** they could suggest each fix caused the next bug. The source only says the ownership problem \"bit us twice, a week apart\", so the slide shouldn't show a cause.\n\n**Checked and backed:**\n- All numbers: 1 in 3 → 3/3, 1 in 5 → never, 3/3 → 1/3, 4/5 → 2/5, five different answers.\n- The US president answer, the invented code tool, the Confluence line, the nav-link reload, the invalid id that passed tests but failed the compiler, the reset backend showing an old percentage.\n- The 4/5 → 2/5 callback, from Part 1 item 3.\n\n## Cut to 6 slides\n\nThe only real overlap was the title slide and the recap: both carried the theme quote, and the recap just repeated the five titles. I merged them into one opening slide that also serves as the agenda. The five lesson slides don't repeat each other, and merging any two (slides 3 and 4 were the closest) would have put about 4 minutes on one slide.\n\n### 1. Building an agent that works: lessons from Concept Buddy, Part 2 (0:45)\n- Part 1 was how we used the coding assistant. This part is about the agent itself.\n- The five lessons, one line each:\n  1. Guarantees in code, not prompts: leave the model only what a model can do.\n  2. Test automatically, or guess: answers vary, so run the cases repeatedly, and check the code too.\n  3. Suspect the plumbing first: stale process, stale state, integration silently disconnected.\n  4. One state, two writers: pick an owner, check where the paths meet, derive what you can.\n  5. Confident, and wrong: fence off what it may not answer, and write content that can't go stale.\n- *\"give the AI less room to guess\"*\n- Come back to this slide for Q&A.\n\n### 2. Guarantees in code, not prompts (2:00)\n**Main visual:** comparison table.\n| Problem | Instruction fix | Code fix |\n|---|---|---|\n| Sidebar card missing or wrong | right 1 in 3 | 3 of 3 |\n| Re-walked a finished step | slipped through 1 in 5 | never |\n| Display name used instead of an id | failed silently, at random | fixed: accepts either |\n- When the agent misbehaved, the tempting fixes were a better instruction or a bigger model. What worked was writing the rule into the software.\n- The model does what only a model can do: understand the question and summarise the material. The bookkeeping around it is ordinary software.\n- **The limit:** code can stop a wrong action, but it can't take back a sentence the user has already seen.\n- Quote: *\"The weaker the model, the more of the work has to be code.\"* That's also what makes a smaller, cheaper or local model realistic.\n\n### 3. Test automatically, or guess (1:45)\n**Main visual:** **3/3 → 1/3**, the same two cases one week apart.\n- Same question five times, five slightly different answers. \"It works\" is a measurement.\n- Run each case several times and require a majority.\n- Split the suite in two:\n  - checks with no AI in them, which are fast and never flaky\n  - tests that run the real agent\n- Keep known failures, with their pass rate. A deleted test is a blind spot.\n- Write down *why* a case passes. That note is what proved the Part 1 drop from 4/5 to 2/5 was a regression.\n- The app's code needs checks too:\n  - Typechecking was off and there was no linter. Turning both on found real bugs, e.g. nav links reloaded the page and tore down the chat.\n  - The test runner doesn't typecheck, so an invalid id passed the tests and failed the compiler. Run all three checks.\n\n### 4. Suspect the plumbing first (1:30)\n**Main visual:** *\"I don't know, ask your onboarding responsible\"*, given to everything. One setting in the wrong place had disconnected Confluence, with no error.\n- More \"the agent got worse\" reports that weren't the agent:\n  - The old process was still running, and two earlier commits had already fixed the bug.\n  - Old saved progress came back, and every test user shared one identity.\n  - One wrongly declared action broke every action.\n- The agent covers for all of these with answers that sound plausible.\n- Before believing any bug report, including your own: **restart, reset the saved state, confirm the connections are really there.**\n- We didn't connect more systems until the agent was good with the one it had. A widely connected but unreliable agent fails in more places, and nobody can tell which connection failed.\n\n### 5. One state, two writers (2:30)\n**Main visual:** three fixes, in order, with no arrows implying one caused the next.\n1. A dashboard tick was lost on reload → we added a direct write to the backend.\n2. The browser's stale copy, pushed in before each agent run, replaced real progress → a reset backend showed an old percentage.\n3. The browser copy became display-only and a merge source. The merge became a per-item union that can only add → we **deleted** the direct write.\n- **The trap:** the instinct is to make the interface's write immediate and authoritative. What held up was fewer writers and a merge that can't lose anything.\n- Three more rules:\n  - **Enforce the rule where the paths meet.** Ticking the last item by hand skipped the \"journey finished?\" check, so nothing happened.\n  - **Derive, don't recall.** A \"where the user is\" pointer the model had to keep updated led to the right content under the wrong step.\n  - **Reset long-lived memory deliberately.** \"Shown but not ticked\" stuck forever, so the tour opened in the wrong place.\n\n### 6. Confident, and wrong (1:30)\n**Main visual:** *\"It sounds identical whether it's right or wrong.\"* Two columns:\n- **Out of scope:** it answered who the US president is, and it invented a tool to \"run code\".\n  - Fix: a list of out-of-scope categories with examples, and one fixed sentence to decline with.\n  - Add \"decline even if you know the answer\", and state plainly that it can't run code, browse or use a terminal.\n  - Then test for the opposite problem: refusing too much.\n- **Out of date:** the welcome material named people, so after a role change the agent cites the wrong person.\n  - Software can tell that someone left, but not who took over.\n  - Fix: name roles, not people, in one table of role → person → contact. Move the table to where the responsible team already maintains it, then connect the directory.\n- Always offer a human to ask.\n\nThat's about 10:00 in total. If it runs long, trim slide 4 first."
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "sed -n 65,82p LEARNINGS.md; grep -niE 'slack|teams|4 ?out|4/5|week' LEARNINGS.md",
+        "description": "Verify Part 1 item 3 and specific terms in LEARNINGS.md"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "### 3. Small changes aren't small **What happened.** We moved one rule out of the main procedure and into a reference file, to save tokens on the common path. **The wording didn't change at all** — only its position. A test case that had been passing 4 times out of 5 dropped to 2 out of 5. Moving it back fixed it, and the rule is now marked in both files as non-movable, with the measurement next t",
+      "closing_note": "The outline is settled. I'd suggest this order: 1. **Save the outline.** Write it to `presentation/PART2-SLIDES.md` so the agreed content and timings live in the repo. The old draft at that path is deleted but not committed, so this replaces it. Keep the note that slide 5's fixes are shown in order without implying one caused the next. 2. **Build the deck as `LEARNINGS-Part2-talk.pptx`, reusing th",
+      "end": true
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Looks good. What's next?"
+      },
+      "failed": false,
+      "reply": "The outline is settled. I'd suggest this order:\n\n1. **Save the outline.** Write it to `presentation/PART2-SLIDES.md` so the agreed content and timings live in the repo. The old draft at that path is deleted but not committed, so this replaces it. Keep the note that slide 5's fixes are shown in order without implying one caused the next.\n2. **Build the deck as `LEARNINGS-Part2-talk.pptx`, reusing the Part 1 file as the template.** The team saw Part 1 recently, so the same look makes Part 2 read as its sequel. That means:\n   - a big number or quote on each slide\n   - numbered lesson titles\n   - a pull quote at the bottom\n   - speaker notes on every slide, like Part 1 has\n3. **Check the deck.** Render each slide to an image and look for overflow. Slide 5 and the Out of scope column on slide 6 are the likeliest to be too crowded. If they are, cut words rather than shrinking the font.\n4. **Rehearse against the timings.** If you run over 10 minutes, trim slide 4 first, then the three extra rules on slide 5.\n\nBefore I build anything, two questions:\n- **Format:** should it be a `.pptx` like Part 1, or a deck you can share by link?\n- **Numbering:** should the lessons run 1–5, or 6–10 to continue from Part 1 as LEARNINGS.md's one-slide version does? I'd use 1–5, since Part 1's slides numbered their lessons 1–4 and didn't follow LEARNINGS.md's order.\n\nTell me which format and I'll start on step 1."
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": ".pptx, lessons numbered 1–5. Go ahead."
+      },
+      "failed": false,
+      "reply": "Viewing Part 1 renders directly.\n\nStep 1: save outline.\n\nNow deck script, matching Part 1 style (navy/ice, Cambria + Calibri, numbered circle headers, stat cards, quote cards).\n\nFixes needed: slide 2 row 3 text collides with instruction column; slide 3 label off-center + gap in right column; slide 6 cards half-empty.\n\nClean. Copy deck next to Part 1.\n\nThe deck is done: [LEARNINGS-Part2-talk.pptx](LEARNINGS-Part2-talk.pptx), 6 slides with lessons numbered 1–5, in the same look as the Part 1 deck. The outline it follows, with the timings, is saved in [presentation/PART2-SLIDES.md](presentation/PART2-SLIDES.md).\n\n1. **Title and agenda:** the five lessons, one line each, plus the theme quote. Come back to it for Q&A.\n2. **Guarantees in code, not prompts:** the three bugs side by side, instruction fix against code fix. Below that, what held and the limit, plus the quote about weaker models.\n3. **Test automatically, or guess:** the big **3/3 → 1/3** number, then the rules for agent cases and for the code checks.\n4. **Suspect the plumbing first:** the Confluence \"ask your onboarding responsible\" line up top, the other quiet failures, and the restart / reset / confirm checklist.\n5. **One state, two writers:** the three fixes as cards in order, with no arrow implying one caused the next. Then the trap, and the three extra rules in columns.\n6. **Confident, and wrong:** two columns, out of scope and out of date, each with its fix, and \"always offer a human fallback\" at the bottom.\n\nThe file passes the format validator. I rendered every slide to images and fixed the text that collided or wrapped badly. The renders use LibreOffice, and the fonts are ones it reproduces at the same widths as PowerPoint, so the fit should hold in PowerPoint.\n\n- **Speaker notes:** I said earlier that Part 1 has notes on every slide. It doesn't; its notes are empty. I added short notes to each Part 2 slide anyway, taken from LEARNINGS.md. Delete them if you'd rather match Part 1.\n- **Uncommitted:** the new deck, the outline, and the deletion of the old slide drafts are all still uncommitted.\n\nWhat's left is a rehearsal against the 10-minute target. If you run long, trim slide 5 first."
+    },
+    {
+      "tool": "Skill",
+      "input": {
+        "skill": "anthropic-skills:pptx"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "Launching skill: anthropic-skills:pptx",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "SK=\"${HOME}/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/4ec3037e-b10d-45cd-b973-1ab361322cbf/9fc7f661-0444-4e2f-a125-4de78ca00d5c/skills/pptx\"; S=/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad; mkdir -p $S/p1r && cd $S/p1r && cp ${HOME}/ai_projects/concept_buddy/LEARNINGS-Part1-talk.pptx p1.pptx && python3 \"$SK/scripts/office/soffice.py\" --headless --convert-to pdf p1.pptx >/dev/null 2>&1; rm -f slide-*.jpg; pdftoppm -jpeg -r 60 p1.pdf slide; ls; cat $S/p1/docProps/app.xml | head -5; grep -o 'sz=\"[0-9]*\"' $S/p1/ppt/slides/slide4.xml | sort | uniq -c; grep -oE 'typeface=\"[^\"]*\"|srgbClr val=\"[0-9A-F]*\"' $S/p1/ppt/slides/slide*.xml | sed 's/.*://' | sort | uniq -c | sort -rn | head -20; grep -o 'sldSz[^/]*' $S/p1/ppt/presentation.xml",
+        "description": "Render Part 1 deck and inspect fonts, colors, size"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "(eval):1: no matches found: slide-*.jpg p1.pdf p1.pptx slide-1.jpg slide-2.jpg slide-3.jpg slide-4.jpg slide-5.jpg slide-6.jpg <?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?> <Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\"> <TotalTime>0</TotalTime> <Words>0</Words> ",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "S=/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r; cd $S && python3 -c \"\nfrom PIL import Image\nims=[Image.open(f'slide-{i}.jpg') for i in range(1,7)]\nw,h=ims[0].size\ng=Image.new('RGB',(w*2,h*3),'white')\nfor i,im in enumerate(ims): g.paste(im,((i%2)*w,(i//2)*h))\ng.save('grid.jpg')\"; echo $S/grid.jpg",
+        "description": "Combine Part 1 slide renders into one grid image"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "Traceback (most recent call last): File \"<string>\", line 2, in <module> from PIL import Image ModuleNotFoundError: No module named 'PIL' /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r/grid.jpg Shell cwd was reset to ${HOME}/ai_projects/concept_buddy",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r/slide-1.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "assistant_note": "Viewing Part 1 renders directly.",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r/slide-4.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r/slide-5.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/p1r/slide-2.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "S=/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad; for i in 1 4; do sed -e 's/<\\/a:p>/\\n/g' -e 's/<[^>]*>//g' $S/p1/ppt/notesSlides/notesSlide$i.xml | grep -v '^\\s*$'; echo ==; done; node -e \"require('pptxgenjs');console.log('ok')\"; which markitdown",
+        "description": "Read Part 1 speaker notes and check tooling"
+      },
+      "failed": true,
+      "serves": 4,
+      "tool_returned": "Exit code 1 1 (eval):1: = not found",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "S=/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad; for i in 1 4; do sed -e 's/<\\/a:p>/\\n/g' -e 's/<[^>]*>//g' \"$S/p1/ppt/notesSlides/notesSlide$i.xml\" | grep -v '^[[:space:]]*$'; echo \"--\"; done; cd $S && node -e \"require('pptxgenjs');console.log('pptxgenjs ok')\"; which markitdown; python3 -c \"import defusedxml, lxml; print('py ok')\"",
+        "description": "Read Part 1 notes and check tools installed"
+      },
+      "failed": true,
+      "serves": 4,
+      "tool_returned": "Exit code 1 1 -- 4 -- node:internal/modules/cjs/loader:1479 throw err; ^ Error: Cannot find module 'pptxgenjs' Require stack: - /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/[eval] at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15) at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27) at defaultResol",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "S=/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad; mkdir -p $S/deck && cd $S/deck && npm init -y >/dev/null && npm install pptxgenjs 2>&1 | tail -2; which uv pdftoppm",
+        "description": "Install pptxgenjs in scratchpad and check uv"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "Run `npm audit` for details. /opt/homebrew/bin/uv /opt/homebrew/bin/pdftoppm Shell cwd was reset to ${HOME}/ai_projects/concept_buddy",
+      "end": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/presentation/PART2-SLIDES.md",
+        "content": "# Part 2 — Building an agent that works\n\nOutline for the 10-minute talk. Every claim and number below is backed by `LEARNINGS.md`, Part 2\n(the 4/5 → 2/5 callback is Part 1, item 3). Timings are estimates. Deck: `LEARNINGS-Part2-talk.pptx`,\nsame visual style as `LEARNINGS-Part1-talk.pptx`. Lessons numbered 1–5.\n\nTheme carried over from Part 1: **\"give the AI less room to guess\"**.\n\n---\n\n## Slide 1 — Building an agent that works (0:45)\n\nTitle + agenda; return to it for Q&A.\n\n- Lessons from Concept Buddy, Part 2. Part 1 was how we used the coding assistant — this is the agent itself.\n- The five lessons:\n  1. Guarantees in code, not prompts — leave the model only what a model can do.\n  2. Test automatically, or guess — answers vary; run the cases repeatedly, and the code checks too.\n  3. Suspect the plumbing first — stale process, stale state, silently detached integration.\n  4. One state, two writers — pick an owner, check where they meet, derive what you can.\n  5. Confident, and wrong — fence off what it may not answer, and write content that can't go stale.\n- *\"give the AI less room to guess\"*\n\n## Slide 2 — 1. Guarantees in code, not prompts (2:00)\n\n**Hero:** comparison table.\n\n| Problem | Fixed by instruction | Fixed in code |\n|---|---|---|\n| Sidebar card missing or wrong | right 1 in 3 | 3 of 3 |\n| Re-walked a finished step | slipped through 1 in 5 | never |\n| Display name used where an id was expected | failed silently, at random | fixed — accepts either |\n\n- Tempting fixes: a better instruction, or a bigger model. What held: write the rule into the software.\n- The model does what only a model can do — understand the question, summarise the material. The bookkeeping around it is ordinary software.\n- **Limit:** code can stop a wrong action, but it can't un-say a sentence already shown to the user.\n- *\"The weaker the model, the more of the work has to be code.\"* That's also what makes a smaller, cheaper, or local model realistic.\n\n## Slide 3 — 2. Test automatically,… [truncated 3379 chars]"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/presentation/PART2-SLIDES.md (file state is current in your context — no need to Read it back)",
+      "assistant_note": "Step 1: save outline.",
+      "end": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/build.js",
+        "content": "const pptxgen = require(\"pptxgenjs\");\nconst pres = new pptxgen();\npres.layout = \"LAYOUT_WIDE\"; // 13.333 x 7.5, same as Part 1\npres.title = \"Building an agent that works\";\n\nconst NAVY = \"1E2761\", ICE = \"CADCFC\", LIGHT = \"F4F6FB\", INK = \"1A1A2E\", MUTED = \"6B7280\";\nconst ORANGE = \"F2A65A\", ORANGE_DK = \"B4532A\", GREEN = \"2E9E6D\", GREEN_LT = \"8FD9B4\", WHITE = \"FFFFFF\";\nconst HEAD = \"Cambria\", BODY = \"Calibri\";\nconst L = 0.6, R = 12.733, W = R - L;\n\nconst shadow = () => ({ type: \"outer\", color: \"000000\", blur: 8, offset: 2, angle: 90, opacity: 0.12 });\n\nfunction text(slide, t, o) {\n  slide.addText(t, Object.assign({ isTextBox: true, fontFace: BODY, color: INK, margin: 0, valign: \"top\" }, o));\n}\nfunction label(slide, t, x, y, w, color = NAVY) {\n  text(slide, t.toUpperCase(), { x, y, w, h: 0.28, fontSize: 10.5, bold: true, color, charSpacing: 0.5 });\n}\nfunction header(slide, n, title) {\n  slide.background = { color: WHITE };\n  slide.addShape(pres.shapes.OVAL, { x: L, y: 0.58, w: 0.55, h: 0.55, fill: { color: NAVY }, line: { color: NAVY } });\n  text(slide, String(n), { x: L, y: 0.58, w: 0.55, h: 0.55, fontFace: HEAD, fontSize: 17, bold: true, color: WHITE, align: \"center\", valign: \"middle\" });\n  text(slide, title, { x: 1.35, y: 0.5, w: 11.2, h: 0.72, fontFace: HEAD, fontSize: 30, bold: true, color: NAVY, valign: \"middle\" });\n}\nfunction card(slide, x, y, w, h, fill, withShadow = false) {\n  const o = { x, y, w, h, fill: { color: fill }, line: { color: fill }, rectRadius: 0.06 };\n  if (withShadow) o.shadow = shadow();\n  slide.addShape(pres.shapes.ROUNDED_RECTANGLE, o);\n}\nfunction quote(slide, main, sub, y, x = L, w = W) {\n  card(slide, x, y, w, 0.7, LIGHT, true);\n  const runs = [{ text: main, options: { fontFace: HEAD, italic: true, color: NAVY, fontSize: 16 } }];\n  if (sub) runs.push({ text: \"   \" + sub, options: { fontFace: BODY, color: MUTED, fontSize: 13 } });\n  text(slide, runs, { x: x + 0.3, y, w: w - 0.6, h: 0.7, valign: \"middle\" });\n}\n// bullets: array of strings or ar… [truncated 15619 chars]"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "File created successfully at: /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/build.js (file state is current in your context — no need to Read it back)",
+      "assistant_note": "Now deck script, matching Part 1 style (navy/ice, Cambria + Calibri, numbered circle headers, stat cards, quote cards).",
+      "end": false
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/build.js",
+        "old_string": "  s.addText(\"SAME TWO CASES\", { x: 0, y: 0, w: 0, h: 0 }); // placeholder removed below\n",
+        "new_string": ""
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "The file /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/build.js has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "SK=\"${HOME}/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/4ec3037e-b10d-45cd-b973-1ab361322cbf/9fc7f661-0444-4e2f-a125-4de78ca00d5c/skills/pptx\"; cd /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck && node build.js && uv run -q --with lxml --with defusedxml python \"$SK/scripts/office/validate.py\" LEARNINGS-Part2-talk.pptx 2>&1 | tail -5 && python3 \"$SK/scripts/office/soffice.py\" --headless --convert-to pdf LEARNINGS-Part2-talk.pptx >/dev/null 2>&1; rm -f slide-*.jpg; pdftoppm -jpeg -r 110 LEARNINGS-Part2-talk.pdf slide && ls slide-*",
+        "description": "Build deck, validate, render slides to images"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "wrote LEARNINGS-Part2-talk.pptx All validations PASSED! (eval):1: no matches found: slide-*.jpg slide-1.jpg slide-2.jpg slide-3.jpg slide-4.jpg slide-5.jpg slide-6.jpg Shell cwd was reset to ${HOME}/ai_projects/concept_buddy",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-1.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-2.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-3.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-4.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-5.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-6.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck && python3 - <<'EOF'\np='build.js'; s=open(p).read()\nreps=[\n('const cx = [L + 0.3, 6.35, 9.55];','const cx = [L + 0.3, 6.6, 9.55];'),\n('\"A display name was used where the system expected an internal id\"','\"A display name was used where an internal id was expected\"'),\n('text(s, p, { x: cx[0], y, w: 5.5,','text(s, p, { x: cx[0], y, w: 5.45,'),\n('{ x: cx[1], y, w: 2.9, h: 0.7','{ x: cx[1], y, w: 2.65, h: 0.7'),\n# slide 3\n('function label(slide, t, x, y, w, color = NAVY) {\\n  text(slide, t.toUpperCase(), { x, y, w, h: 0.28,','function label(slide, t, x, y, w, color = NAVY, align = \"left\") {\\n  text(slide, t.toUpperCase(), { x, y, w, h: 0.28, align,'),\n('label(s, \"Same two cases\", L, 2.05, 4.3, ICE);','label(s, \"Same two cases\", L, 2.05, 4.3, ICE, \"center\");'),\n('label(s, \"The code, too\", X, 4.3, CW);','label(s, \"The code, too\", X, 3.95, CW);'),\n('], { x: X, y: 4.63, w: CW, h: 1.4 });','], { x: X, y: 4.28, w: CW, h: 1.4 });'),\n('], { x: X, y: 1.98, w: CW, h: 2.2 });','], { x: X, y: 1.98, w: CW, h: 1.8, fontSize: 15 });'),\n# slide 6\n('const cw = (W - 0.35) / 2, y0 = 2.15, h = 3.95;','const cw = (W - 0.35) / 2, y0 = 2.1, h = 4.0;'),\n]\nfor a,b in reps:\n    assert a in s, a\n    s=s.replace(a,b)\ns=s.replace('h: 2.1, fontSize: 13.5, paraSpaceAfter: 4','h: 2.2, fontSize: 15, paraSpaceAfter: 8')\ns=s.replace(\"{ x: L + 0.35, y: y0 + 0.58, w: cw - 0.7, h: 0.75, fontSize: 14.5,\",\"{ x: L + 0.35, y: y0 + 0.58, w: cw - 0.7, h: 0.75, fontSize: 16,\")\ns=s.replace(\"{ x: X + 0.35, y: y0 + 0.58, w: cw - 0.7, h: 0.75, fontSize: 14.5,\",\"{ x: X + 0.35, y: y0 + 0.58, w: cw - 0.7, h: 0.75, fontSize: 16,\")\nopen(p,'w').write(s)\nEOF\ngrep -c 'fontSize: 15, paraSpaceAfter: 8' build.js\nSK=\"${HOME}/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/4ec3037e-b10d-45cd-b973-1ab361322cbf/9fc7f661-0444-4e2f-a125-4de78ca00d5c/skills/pptx\"; node build.js && u… [truncated 305 chars]",
+        "description": "Apply layout fixes, rebuild, validate, re-render"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "2 wrote LEARNINGS-Part2-talk.pptx All validations PASSED! Shell cwd was reset to ${HOME}/ai_projects/concept_buddy",
+      "assistant_note": "Fixes needed: slide 2 row 3 text collides with instruction column; slide 3 label off-center + gap in right column; slide 6 cards half-empty.",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-2.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-3.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-6.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cd /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck && sed -i '' -e 's/\"Move it to where the responsible team already maintains it\"/\"Move it where the responsible team maintains it\"/' -e 's/card(s, L, 1.65, 4.3, 4.35, NAVY);/card(s, L, 1.65, 4.3, 4.0, NAVY);/' build.js && grep -c 'responsible team maintains it\"\\|4.3, 4.0, NAVY' build.js && SK=\"${HOME}/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/4ec3037e-b10d-45cd-b973-1ab361322cbf/9fc7f661-0444-4e2f-a125-4de78ca00d5c/skills/pptx\"; node build.js && uv run -q --with lxml --with defusedxml python \"$SK/scripts/office/validate.py\" LEARNINGS-Part2-talk.pptx 2>&1 | tail -1 && python3 \"$SK/scripts/office/soffice.py\" --headless --convert-to pdf LEARNINGS-Part2-talk.pptx >/dev/null 2>&1; rm -f slide-*.jpg; pdftoppm -jpeg -r 110 LEARNINGS-Part2-talk.pdf slide",
+        "description": "Fix wrap and card height, rebuild and re-render"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "2 wrote LEARNINGS-Part2-talk.pptx All validations PASSED! Shell cwd was reset to ${HOME}/ai_projects/concept_buddy",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-3.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/slide-6.jpg"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "{'type': 'image', 'source': {'type': 'base64', 'data': '[REDACTED:high-entropy]",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "test ! -e LEARNINGS-Part2-talk.pptx && cp /private/tmp/claude-501/-Users-${USER}-ai-projects-concept-buddy/883b20f8-10c5-4fd9-b8a1-558d20d60cfb/scratchpad/deck/LEARNINGS-Part2-talk.pptx . && ls -la LEARNINGS-Part2-talk.pptx",
+        "description": "Copy finished deck into project root"
+      },
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "-rw-r--r--@ 1 ${USER} staff 180603 Sep 17 15:32 LEARNINGS-Part2-talk.pptx",
+      "assistant_note": "Clean. Copy deck next to Part 1.",
+      "end": false
+    },
+    {
+      "tool": "SendUserFile",
+      "input": {},
+      "failed": false,
+      "serves": 4,
+      "tool_returned": "1 file delivered to user.",
+      "closing_note": "The deck is done: [LEARNINGS-Part2-talk.pptx](LEARNINGS-Part2-talk.pptx), 6 slides with lessons numbered 1–5, in the same look as the Part 1 deck. The outline it follows, with the timings, is saved in [presentation/PART2-SLIDES.md](presentation/PART2-SLIDES.md). 1. **Title and agenda:** the five lessons, one line each, plus the theme quote. Come back to it for Q&A. 2. **Guarantees in code, not pro",
+      "end": false
+    }
+  ],
+  "target": "create_presentation",
+  "started": "2026-09-17T13:21:03.588Z",
+  "pairs_with": [
+    "f32d548f",
+    "698c7529"
+  ],
+  "judged": {
+    "model": "gemma3n:e4b",
+    "prior_steps": 3,
+    "next_steps": 3,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 2,
+    "answered": 2,
+    "replayed": "2026-09-17"
+  },
+  "expected_fail": "Banks 2 candidates against a truth of 1: the judge answers \"new job\" at the review prompt (\"Two things. Check every …\"). Five cutting rules were measured on all 14 live sessions; none kept every presentation run whole without breaking a coding session, so the judge was left as is and this run recorded as a known gap. Run 1 (f32d548f), the cleanest run, stays whole."
+}
