@@ -296,7 +296,7 @@ class TestSanitize(unittest.TestCase):
 
     def test_a_real_address_is_still_redacted(self):
         self.assertIn("[REDACTED:email]", scrub("contact me at dev@example.com"))
-        self.assertNotIn("h.yadav", scrub("email: h.yadav@acme.co, cc ops@acme.co"))
+        self.assertNotIn("jane.doe", scrub("email: jane.doe@acme.co, cc ops@acme.co"))
 
     def test_a_long_path_is_not_mistaken_for_a_secret(self):
         """`/` is in the token alphabet for base64's sake, so any path past 40
@@ -1668,7 +1668,7 @@ class TestStripScaffolding(unittest.TestCase):
 
     def test_leading_cd_and_ampersands(self):
         self.assertEqual(
-            self._strip("cd /Users/l/ai_projects/skill-plus-plus && sed -n '1,40p' skillpp/cli.py"),
+            self._strip("cd /Users/dev/ai_projects/skill-plus-plus && sed -n '1,40p' skillpp/cli.py"),
             "sed -n '1,40p' skillpp/cli.py")
 
     def test_bare_cd_on_its_own_line(self):
@@ -1876,7 +1876,7 @@ class TestNarrationIsAttributedToTheRightStep(TempRoot):
         rows += [self._assistant(self._call())]
         handle_tool(self.config, {"session_id": "s", "cwd": "/r",
                                   "tool_name": "Bash",
-                                  "tool_input": {"command": "grep -n tamtamy"},
+                                  "tool_input": {"command": "grep -n atlas"},
                                   **self._transcript(rows)})
 
         from skillpp.capture import _load_session
@@ -4701,6 +4701,34 @@ class TestFoldPending(TempRoot):
         popen.return_value.wait.assert_not_called()
 
 
+class TestNothingPrivateIsTracked(unittest.TestCase):
+    """Everything tracked here is published. Real sessions once carried a
+    colleague's name, an internal hostname and an account id into the repo;
+    `scripts/leak_guard.py` checks the generic shapes of those on every run.
+    The terms specific to one person's work are checked by the same script
+    with a denylist kept outside the repo."""
+
+    def test_no_home_path_address_id_or_credential_is_tracked(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        import leak_guard
+        self.assertEqual(leak_guard.scan_tree([]), [])
+
+    def test_the_guard_sees_what_it_is_for(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        import re
+        import leak_guard
+        # Assembled here, so this file does not trip the scan it tests.
+        hits = leak_guard.scan_text("x", "\n".join([
+            "cd /" + "Users/jane/work", "mail j.doe" + "@employer.de",
+            "id " + "-".join(["12345678", "90ab", "cdef", "1234", "567890abcdef"]),
+            "sk-" + "ant-api03-abcdefghijklmnopqrstuvwxyz",
+            "the Mergecommand ran", "see Internal_Project docs"]),
+            [re.compile(r"(?<![A-Za-z0-9])internal(?![A-Za-z0-9])", re.I),
+             re.compile(r"(?<![A-Za-z0-9])command(?![A-Za-z0-9])", re.I)])
+        kinds = [hit.split(": ")[1] for hit in hits]
+        self.assertEqual(kinds, ["home path", "email", "uuid", "secret", "denylist"])
+
+
 class TestShippedCommands(unittest.TestCase):
     """The slash commands ship inside the package, so an installed copy has
     them. `install` used to copy `/skillpp-review` only, and `--remove` left
@@ -4734,7 +4762,7 @@ class TestShippedCommands(unittest.TestCase):
                                      script="/home/dev/.local/bin/skillpp")
             self.assertEqual(installed, "/home/dev/.local/bin/skillpp hook")
             spaced = hook_command(package_root=Path(site),
-                                  script="/Users/A Dev/.local/bin/skillpp")
+                                  script="/Users/dev/My Tools/skillpp")
             self.assertIn("-m skillpp hook", spaced)
             self.assertTrue(all(MARKER in c for c in (installed, spaced)))
 
@@ -5042,7 +5070,7 @@ class TestJudgeInput(unittest.TestCase):
             {"tool": "Bash", "input": {"command": "grep -n card book.py"},
              "tool_returned": "12: card walkthrough"},
             {"tool": "UserPrompt", "input": {"text": "Separate job: add a case"},
-             "reply": "Added tamtamy_card_staged to cases.json."},
+             "reply": "Added atlas_card_staged to cases.json."},
             {"tool": "Bash", "input": {"command": "npm test"}},
         ]
         (index, said, follow), = b.gaps(steps)
@@ -5058,7 +5086,7 @@ class TestJudgeInput(unittest.TestCase):
             "Now they ran", "It returned:", "12: card walkthrough",
             "After that, the assistant told them:", "Where do you suspect",
             "Then they say:", "Separate job", "The assistant answered:",
-            "Added tamtamy_card_staged", "What they do next:")]
+            "Added atlas_card_staged", "What they do next:")]
         self.assertEqual(order, sorted(order))
 
     def test_an_off_slot_adds_nothing(self):
@@ -5076,7 +5104,7 @@ class TestJudgeInput(unittest.TestCase):
         self.assertEqual(before, "… you suspect the blanks are?")
         self.assertNotIn("Looked through", text)
         # The start of the answer, cut the same way.
-        self.assertEqual(after, "Added tamtamy_card_staged to …")
+        self.assertEqual(after, "Added atlas_card_staged to …")
 
     def test_the_next_steps_section_can_be_removed_or_relabelled(self):
         """With thinking on, the model judged the steps under "What they do

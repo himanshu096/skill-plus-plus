@@ -180,7 +180,7 @@ def _narration(payload: dict) -> tuple[str, str]:
 
     Merging them put every completion report on the wrong task. Measured on
     `241955c7`, three times in one 24-step session — "Scan done. All 4
-    walkthrough-variant TOPICS...", "Added `tamtamy_card_staged`...",
+    walkthrough-variant TOPICS...", "Added `atlas_card_staged`...",
     "Regenerated. 40 cases (was 39)..." — each filed on the first step *after*
     the next prompt, describing work that had not happened when it was written.
     The first of those is an investigation's entire deliverable, stored inside

@@ -862,7 +862,7 @@ at `_VALUE_CHARS=80`, ten sessions, `263d65ce` skipped:
 | session | work steps | rule ON | rule OFF |
 | --- | --- | --- | --- |
 | `1c3c9422` desk-booking | 54 | **BROKE** 0/1 | ok 1/1 |
-| `2095a8af` geco-timesheet | 50 | **BROKE** 0/1 | ok 1/1 |
+| `2095a8af` timesheet | 50 | **BROKE** 0/1 | ok 1/1 |
 | `a8b61dae` failed-commit-then-retry | 28 | **BROKE** 0/1 | ok 1/1 |
 | `5c7b0f81` coverage-writeup-run2 | | FIXED | FIXED |
 | `95b6bde7` mcp-retrieval-then-compare | | FIXED | FIXED |
@@ -1088,7 +1088,7 @@ because everything here was measured and none of it should be retried.
 
 The last remaining gap at the time. Two unrelated jobs in one sitting — investigate why some
 walkthrough cards render blank (read-only, nothing written), then separately add
-the missing `tamtamy` eval case and commit. Truth is 2 episodes; the pipeline
+the missing `atlas` eval case and commit. Truth is 2 episodes; the pipeline
 banks 1, because the judge marks no ending anywhere.
 
 Every step was replayed through `gemma3n:e4b` at `_VALUE_CHARS=80`,
@@ -1137,8 +1137,8 @@ Four definitions, tested on the steps that discriminate — 6 must be an ending,
 The reason no wording can work is visible in the rendered steps:
 
 ```
-step 3: read the file `…/backend/concept_buddy_agent/book.py`
-step 6: read the file `…/backend/concept_buddy_agent/book.py`
+step 3: read the file `…/backend/acme_agent/book.py`
+step 6: read the file `…/backend/acme_agent/book.py`
 ```
 
 Byte-identical. Step 3 is mid-investigation, step 6 finishes it. The only
@@ -1477,7 +1477,7 @@ pass that let only pairs above 0.40 reach an embedding. On the real ledger:
 - Six entries a person tagged good, all adding eval cases, scored 0.12–0.66
   against each other. Incidental steps — `ls`, `cd`, `source`, `git log` —
   outweighed the procedure.
-- `similarity()` was asymmetric. The two "cover Udemy reimbursement fact" entries
+- `similarity()` was asymmetric. The two "cover course reimbursement fact" entries
   scored 0.365 in ledger order against the 0.40 filter, 0.410 the other way, so an
   embedding that rates them 0.98 never saw them.
 - The background pass had not run since the day Ollama went down.
@@ -1499,11 +1499,11 @@ against a hand-written family label:
 
 | family | runs |
 | --- | --- |
-| add-eval-case | 7 — the three walkthrough-card sessions, `a8b61dae`, `241955c7` task 2, and the two Welcome Book fact sessions `d5fd2e59`, `a7be1ef5` |
+| add-eval-case | 7 — the three walkthrough-card sessions, `a8b61dae`, `241955c7` task 2, and the two handbook fact sessions `d5fd2e59`, `a7be1ef5` |
 | coverage-writeup | 2 |
 
 Card and fact cases were two families for a while. Compared step by step
-(`d5fd2e59` against `241955c7`'s tamtamy case) they are the same work — read
+(`d5fd2e59` against `241955c7`'s atlas case) they are the same work — read
 `cases.json`, edit it, check the JSON, regenerate, commit — and the steps that
 differ do the same job with other commands (`ls` and `head` against `find` and
 `grep`, both locating `generate_evalset.py`). What tells them apart is only in
@@ -1527,9 +1527,9 @@ opening with the same lookup — to 0.914, six thousandths under the floor.
 Now the steps alone, one numbered line each, cut at 120 characters:
 
 ```
-1. Read ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json
-2. Edit ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json
-3. Bash python3 -c "import json; json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json')
+1. Read ${HOME}/ai_projects/acme/backend/acme_agent/eval/cases.json
+2. Edit ${HOME}/ai_projects/acme/backend/acme_agent/eval/cases.json
+3. Bash python3 -c "import json; json.load(open('${HOME}/ai_projects/acme/backend/acme_agent/eval/cases.json')
 ```
 
 The text is cut on a step boundary at 5,000 characters. That was meant to keep it
@@ -1561,7 +1561,7 @@ Wrong runs / missing merges, eleven live sessions, one eval-case family:
 The wrong run left from 0.86 to 0.92 is `95b6bde7` joining the card cases at
 0.921. At 0.93 the eval cases sit in four entries: the three long card runs that
 open with the doc lookup (0.939–0.969 to each other), `241955c7` task 2 with the
-Udemy case (0.930), and the holidays case and `a8b61dae` alone. The long and short
+course case (0.930), and the holidays case and `a8b61dae` alone. The long and short
 eval-case runs never score above 0.822 against each other: the long ones carry a
 dozen lookups and searches the short ones do not. The two coverage write-ups
 score 0.846 and stay apart.
