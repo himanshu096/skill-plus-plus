@@ -1,0 +1,107 @@
+{
+  "tag": "45a6f1a8",
+  "name": "linkedin-post-article",
+  "captured": "2026-09-17",
+  "procedure": "draft a LinkedIn post from a source document, fact-check it, make it personal, save it",
+  "truth": {
+    "episodes": 1,
+    "markers": 0,
+    "title": null,
+    "must_contain": [
+      "linkedin-post.md"
+    ],
+    "families": [
+      "write-linkedin-post"
+    ]
+  },
+  "why": "One procedure: draft a short LinkedIn post from a named source, fact-check its claims against the source and make it personal, save it. Chosen as the negative control for create-presentation: same review shape, same source files, different procedure. Source: ARTICLE.md. Recorded 2026-09-17 on a cleaned concept_buddy (earlier decks moved out), model claude-sonnet-5, scripted prompts pasted verbatim — so prompt wording is near-identical across runs of one procedure, which flatters any matcher that reads prompts.",
+  "history": "Live capture: conversation matching (prompts + replies, 0.88) grouped these by source file rather than procedure — a presentation and a LinkedIn post on ARTICLE.md scored 0.852, two presentations on different files 0.831. Recorded to measure what to embed.",
+  "shape": {
+    "steps": 4,
+    "prompts": 3,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Draft a LinkedIn post announcing our article in ARTICLE.md. Keep it under 150 words. Don't save anything yet."
+      },
+      "failed": false,
+      "reply": "Read it. Draft below — normal prose (post text = deliverable, not chat). Not saved anywhere.\n\n---\n\n**We built an AI agent with an AI coding assistant. Here's what broke.**\n\nConcept Buddy is our new onboarding assistant — it answers new joiners' small questions and updates a live dashboard as they go, pulling answers straight from company systems instead of guessing.\n\nWe built it with Claude Code, no upfront design doc — just prompt, build, review, repeat.\n\nWhat surprised us wasn't whether an AI assistant could build working software. It's that \"working\" wasn't the bar. Tests passed, features ran, and it was still often wrong in ways only a human catches: documentation the model never saw, patches instead of fixes, one agent's judgment call standing in for a rule that belonged in code.\n\nThe pattern that helped most: Explore, Plan, **Question** (ask why the alternatives were rejected), then Verify. Question was the cheapest step and the one that caught the most.\n\nFull writeup — two parts, one on working with the assistant, one on what it built: [link]\n\n---\n\nUnder 150 words. Want it more casual, more technical, or shorter?"
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/ARTICLE.md"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "1 --- 2 title: \"Building an AI Agent with AI: Why it still needs a Human\" 3 authors: Luca Zagaia, Himanshu Yadav 4 publication: Concept Reply Tech 5 --- 6 7 <!-- Synced 2026-09-08 from the user's working copy. Text is verbatim; open issues are flagged 8 inline as comments and have NOT been applied. --> 9 10 <!-- OPEN: title capitalization is mixed. \"Building an AI Agent with AI\" and \"Human\" are ca",
+      "assistant_note": "I need to read ARTICLE.md and draft a LinkedIn post without saving it. Caveman mode covers my chat responses, but this post is user-facing deliverable content meant for an external audience, so I should write it in normal, polished English rather than caveman style.",
+      "closing_note": "I'm cross-checking the draft's claims about Concept Buddy against ARTICLE.md, verifying that the onboarding assistant description and the live dashboard claim are both supported by specific lines in the source document. Next, I confirm that the \"no upfront design doc\" and Claude Code claims match the article's description of the prompt-build-review loop. The \"surprised us\" framing is a reasonable ",
+      "end": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Two things. Check every claim in the post against ARTICLE.md and tell me which ones aren't backed by it. And make it more personal — first person, one concrete example."
+      },
+      "failed": false,
+      "reply": "**Claim audit — draft vs ARTICLE.md:**\n\n- \"surprised us\" — not backed. Article says whether it works is \"no longer the interesting question\" — opposite of surprise. Drop or reframe.\n- \"updates a live dashboard as they go\" — \"live\" not in article. Dashboard update backed (line 38), \"live\" is added flavor.\n- \"pulling answers straight from company systems instead of guessing\" — two different sections mashed. \"Pulled straight from company's own systems\" = Part One (line 42). \"Instead of guessing\" implies hallucination fix = Part Two (line 179, invented employee roles). Article never links these two.\n- \"documentation the model never saw\" — backed, ADK docs section (lines 86–96).\n- \"patches instead of fixes\" — backed, \"Passing tests, wrong fix\" section (lines 102–124).\n- \"one agent's judgment call standing in for a rule that belonged in code\" — backed but compressed; article's actual case is the instruction-rule → deterministic-code move (lines 177–185), not phrased around \"one agent.\"\n- Explore/Plan/Question/Verify + \"Question cheapest, caught most\" — fully backed (lines 160–169).\n\nEverything else in first draft holds. Two lines were embellishment, one conflated two sections.\n\n---\n\nRevised, personal, one concrete example:\n\n---\n\n**We built an AI agent with an AI coding assistant. Here's the one mistake that taught me the most.**\n\nWe started simple: one agent, one instruction, for Concept Buddy — our new onboarding assistant at Concept Reply. As steps piled on, the instruction grew until the agent lost track of where the user even was.\n\nSo I did what every team does: split it into specialists. Seven agents — five onboarding steps, one for Q&A, one orchestrator to route between them.\n\nIt made things worse. The orchestrator was just another model making a judgment call, on every message, about who should answer — and that call wasn't reliable either.\n\nWe collapsed it back to one agent, two skills, and explicit state tracking progress. That held.\n\nThe lesson: another agent isn't a structural win by default. Reach for one only when the task needs its own context window, real concurrency, or a different trust boundary. Otherwise you've just added a second thing that has to be right.\n\nFull writeup — building the agent, and working with the assistant that built it: [link]\n\n---\n\n139 words. Swap example if you'd rather use the invented-employee-roles one instead."
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Looks good. What's next?"
+      },
+      "failed": false,
+      "reply": "LinkedIn post done, not saved anywhere (per instructions). Article itself still has open items blocking publish, per [ARTICLE-HANDOFF.md](ARTICLE-HANDOFF.md):\n\n- **Title** unresolved (3 candidates, §3.1)\n- **Timeframe contradiction** — \"few weeks\" vs \"a month\" vs \"bumpy weeks\", 3 spots, needs your call\n- **ADK choice reason** — you said skip it, still skipped (§3.5)\n- **Hero image** — not produced yet, prompt ready in `design/hero-prompt.md`\n- Minor: emoji shortcodes not swapped to chars, ordinary-software vs deterministic-code wording, serial-comma consistency\n\nOptions:\n\nSaved: [linkedin-post.md](linkedin-post.md). `[link]` placeholder stays till article's published."
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/ARTICLE-HANDOFF.md"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "1 # Article handoff — \"Concept Buddy\" blog post 2 3 Written for a fresh agent with repo access and **zero conversation context**. Read this whole file 4 before editing a single sentence. Written 2026-09-04. 5 6 --- 7 8 ## 0. Read-order and what NOT to trust 9 10 | file | status | 11 |---|---| 12 | **this file** | canonical. Draft text + every settled decision + open items. | 13 | `BRIEF.md` | **PA",
+      "assistant_note": "Since this is an open-ended \"what's next\" question, I should check my memory files for context. The article-draft-state notes still need decisions on title, timeframe, and the ADK reasoning, while ARTICLE.md has several flagged issues like title capitalization, a missing benefit line, and comma inconsistencies. Let me pull up the handoff document for the full rules.",
+      "end": false
+    },
+    {
+      "tool": "AskUserQuestion",
+      "input": {},
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "The user answered: \"What next?\"=\"Save it as linkedin-post.md\". Read the answers carefully — they may request clarification, changes, or that you not proceed — and follow what they actually say.",
+      "assistant_note": "I should keep the status blunt: LinkedIn post is done, but the article still has open items blocking publish—title, timeframe contradiction, ADK reasoning, missing hero image. I'll ask whether they want to keep fixing the article or move to publishing the LinkedIn post now, since it's a separate deliverable that doesn't depend on the article being finished. LinkedIn post done, not saved anywhere (",
+      "end": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/linkedin-post.md",
+        "content": "We built an AI agent with an AI coding assistant. Here's the one mistake that taught me the most.\n\nWe started simple: one agent, one instruction, for Concept Buddy — our new onboarding assistant at Concept Reply. As steps piled on, the instruction grew until the agent lost track of where the user even was.\n\nSo I did what every team does: split it into specialists. Seven agents — five onboarding steps, one for Q&A, one orchestrator to route between them.\n\nIt made things worse. The orchestrator was just another model making a judgment call, on every message, about who should answer — and that call wasn't reliable either.\n\nWe collapsed it back to one agent, two skills, and explicit state tracking progress. That held.\n\nThe lesson: another agent isn't a structural win by default. Reach for one only when the task needs its own context window, real concurrency, or a different trust boundary. Otherwise you've just added a second thing that has to be right.\n\nFull writeup — building the agent, and working with the assistant that built it: [link]\n"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "File created successfully at: ${HOME}/ai_projects/concept_buddy/linkedin-post.md (file state is current in your context — no need to Read it back)",
+      "assistant_note": "I'm saving the final version of the LinkedIn post to file.",
+      "closing_note": "Saved: [linkedin-post.md](linkedin-post.md). `[link]` placeholder stays till article's published.",
+      "end": false
+    }
+  ],
+  "target": "write_linkedin_post",
+  "started": "2026-09-17T17:33:34.583Z",
+  "judged": {
+    "model": "gemma3n:e4b",
+    "prior_steps": 3,
+    "next_steps": 3,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 1,
+    "replayed": "2026-09-17"
+  }
+}

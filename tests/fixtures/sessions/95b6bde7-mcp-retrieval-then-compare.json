@@ -1,0 +1,235 @@
+{
+  "tag": "95b6bde7",
+  "name": "mcp-retrieval-then-compare",
+  "captured": "2026-09-03",
+  "procedure": "pull the reference docs through MCP, compare them against the local implementation, report",
+  "truth": {
+    "episodes": 1,
+    "markers": 0,
+    "title": null,
+    "must_contain": [
+      "mcp__adk-docs",
+      "generate_evalset"
+    ],
+    "families": [
+      "compare-adk-docs-to-local"
+    ]
+  },
+  "why": "Sessions 1-4 are all coding sessions that end in a commit. Work done through tools has no marker by nature, and this is the shape the pipeline claims to support: `trim_leading_exploration`'s docstring argues that an MCP retrieval is step one of a method, not the search that found the task, and exempts it from trimming for exactly this reason. One task — pull the docs, compare, report — so the ground truth is one episode and no markers.\n\nRecorded with `adk-docs` rather than Confluence: Confluence MCP is wired into the backend agent, not exposed to Claude Code, which the session established itself. The server does not matter to what is under test — `is_read_only` classifies MCP by verb prefix and the trim exempts any `mcp__` call.",
+  "history": "CLOSED. The MCP exemption held all along; a second rule defeated it.\n\n  ep0  4 work steps, all MCP retrieval, ended_by=prompt, flagged=True   DROPPED\n  ep1  6 work steps, no MCP,            ended_by=session-end            banked\n\n`trim_leading_exploration` never got to apply its exemption, because a flagging rule discarded any episode whose every substantive step only looked at things — and a pure retrieval is exactly that. The banked entry was the comparison alone, titled after the second prompt, with nothing recording where the reference material came from. The half the procedure exists for was the half thrown away.\n\nThe count was right throughout, so only `must_contain` could see it. That is the assertion this fixture was recorded to make.\n\nFixed by `_absorb_read_only_preamble`: reading that precedes work is folded into it, and the all-read-only flag is gone. Its only justification was `reading-around` in `tests/benchmarks/cases.py`, hand-authored alongside the detector; this session is what it cost on real work. Absorbing is forward only — reading that ends a session still concludes nothing and is still flagged.\n\nUnder the judge this session was never broken: verdicts stop prompts from cutting, so there was one episode and the retrieval survived. The defect was on the vocabulary path, which is what runs when the local model is unreachable.",
+  "shape": {
+    "steps": 16,
+    "prompts": 3,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Use the Confluence MCP tools to find what the onboarding pages say about desk booking."
+      },
+      "failed": false,
+      "reply": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence.\n\nPer memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here.\n\nOptions:\n1. Query via backend — start backend, hit agent w/ \"what do onboarding pages say about desk booking\", agent uses its Confluence toolset.\n2. Add Confluence MCP to Claude Code settings (needs base URL + token).\n3. If page URL known → `WebFetch` (fails on auth-gated Confluence).\n\nWhich?"
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "{'type': 'tool_reference', 'tool_name': 'WebFetch'}",
+      "end": true,
+      "closing_note": "No Confluence MCP tool in this session. Deferred list has Google Drive, Notion, ADK docs, CopilotKit, Stitch, IDE — no Atlassian/Confluence. Per memory `backend-launch-confluence-env.md`, Confluence MCP is wired into the **backend agent** (ENABLE_CONFLUENCE_MCP in run-agent.sh), not exposed to Claude Code here. Options: 1. Query via backend — start backend, hit agent w/ \"what do onboarding pages s"
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "No Confluence then — use the adk-docs MCP tools instead, same shape. Look up what the ADK docs say about how eval cases and evalsets are structured."
+      },
+      "failed": false,
+      "reply": "Docs summary. Fetch criteria page too for the eval-metric details.\n\n# ADK eval-case & evalset structure — key points\n\n## Two file shapes, one schema\n\nBoth `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`.\n\n## EvalSet top-level\n\n```json\n{\n  \"eval_set_id\": \"...\",\n  \"name\": \"...\",\n  \"description\": \"...\",\n  \"eval_cases\": [ ... ]\n}\n```\n\n## EvalCase shape\n\n```json\n{\n  \"eval_id\": \"session_01\",\n  \"conversation\": [ /* invocations, one per turn */ ],\n  \"session_input\": {\n    \"app_name\": \"...\",\n    \"user_id\": \"...\",\n    \"state\": {}                // initial session state\n  },\n  \"rubrics\": [ /* optional per-case rubrics, typed */ ]\n}\n```\n\n## Invocation (a turn)\n\n```json\n{\n  \"invocation_id\": \"e-<uuid>\",\n  \"user_content\":   { \"role\": \"user\",  \"parts\": [{\"text\": \"...\"}] },\n  \"final_response\": { \"role\": \"model\", \"parts\": [{\"text\": \"...\"}] },\n  \"intermediate_data\": {\n    \"tool_uses\":              [ {\"name\": \"...\", \"args\": {...}, \"id\": \"...\"} ],\n    \"intermediate_responses\": [ [\"sub_agent_name\", [{\"text\": \"...\"}]] ]\n  }\n}\n```\n\n## Alternative: dynamic user in evalset\n\nEvalset case can swap fixed `conversation` for a **ConversationScenario** (`starting_prompt` + `conversation_plan` + `user_persona`) — user turns generated by LLM sim.\n\n## test_config.json (per folder)\n\nSets criteria + thresholds. Defaults: `tool_trajectory_avg_score=1.0`, `response_match_score=0.8`.\n\n```json\n{ \"criteria\": { \"tool_trajectory_avg_score\": 1.0, \"response_match_score\": 0.8 } }\n```\n\nRubric-style criteria (`rubric_based_*`, `hallucinations_v1`, etc.) take `{threshold, judge_model_options, rubrics[]}`. Per-case `rubrics[]` are **additive** and **filtered by `type`** (`FINAL_RESPONSE_QUALITY`, `TOOL_USE_QUALITY`, `TRAJECTORY_QUALITY`).\n\n## Filename / discovery\n\n- Unit tests: any name ending `.test.json`\n- Evalsets: convention `*.evalset.json` (matches your file)\n- Folder may hold `test_config.json`\n\n## Runners\n\n- `pytest` → `AgentEvaluator.evaluate(agent_module=..., eval_dataset_file_path_or_dir=...)`\n- CLI → `adk eval <agent_dir> <evalset>[:eval_1,eval_2] [--config_file_path=...]`\n- Web UI → adk web → **Eval** tab\n- Legacy pre-Pydantic files → `AgentEvaluator.migrate_eval_data_to_new_schema`\n\nSchema sources for exact field types: `src/google/adk/evaluation/eval_set.py`, `eval_case.py` in adk-python repo."
+    },
+    {
+      "tool": "ToolSearch",
+      "input": {},
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "{'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__list_doc_sources'} {'type': 'tool_reference', 'tool_name': 'mcp__adk-docs__fetch_docs'}",
+      "end": false
+    },
+    {
+      "tool": "mcp__adk-docs__list_doc_sources",
+      "input": {},
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "{\"result\":\"AgentDevelopmentKit\\nURL: https://adk.dev/llms.txt\\n\\n\"}",
+      "end": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/llms.txt"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "{\"result\":\"# Agent Development Kit (ADK)\\n> Build powerful multi-agent systems with Agent Development Kit (ADK)\\nAn open-source, code-first toolkit for building, evaluating, and deploying sophisticated AI agents with flexibility and control.\\n## Build Agents\\n- [Get started](https://adk.dev/get-started/index.md)\\n- [Technical Overview](https://adk.dev/get-started/about/index.md)\\n- [Agents CLI](ht",
+      "end": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/evaluate/index.md"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "{\"result\":\"# Why evaluate agents\\nSupported in ADKPython\\nIn traditional software development, unit tests and integration tests provide confidence that code functions as expected and remains stable through changes. These tests provide a clear \\\"pass/fail\\\" signal, guiding further development. However, LLM agents introduce a level of variability that makes traditional testing approaches insufficien",
+      "end": false
+    },
+    {
+      "tool": "mcp__adk-docs__fetch_docs",
+      "input": {
+        "url": "https://adk.dev/evaluate/criteria/index.md"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "{\"result\":\"# Evaluation Criteria\\nSupported in ADKPython\\nThis page outlines the evaluation criteria provided by ADK to assess agent performance, including tool use trajectory, response quality, and safety.\\n| Criterion | Description | Reference-Based | Requires Rubrics | LLM-as-a-Judge | Supports [User Simulation](https://adk.dev/evaluate/user-sim/index.md) |\\n| ----------------------------------",
+      "assistant_note": "Docs summary. Fetch criteria page too for the eval-metric details.",
+      "end": false,
+      "closing_note": "# ADK eval-case & evalset structure — key points ## Two file shapes, one schema Both `*.test.json` (single session, unit-test style) and `*.evalset.json` (many sessions, integration-test style) share the same Pydantic model: **EvalSet** wraps a list of **EvalCase**. Schema source: `google/adk/evaluation/eval_set.py`, `eval_case.py`. ## EvalSet top-level ```json { \"eval_set_id\": \"...\", \"name\": \"..."
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Compare that against how cases.json and generate_evalset.py actually do it in this repo. Just tell me — don't write or commit anything."
+      },
+      "failed": false,
+      "reply": "# cases.json + generate_evalset.py vs ADK-native shape\n\n## Overall design\n\nRepo has **two coexisting eval layers**, deliberate per memory `eval-harness-design`:\n\n1. **`cases.json`** — proprietary; drives `run_eval.py` w/ rich checks (cards, state, tool \"any of\"). NOT ADK-shaped.\n2. **`generate_evalset.py`** — mirrors the *judge-gradable slice* of cases.json → `concept_buddy.evalset.json` + `test_config.json`. IS ADK-shaped.\n\nNon-mirrored bits (cards, `require_tools_any`, state assertions) stay only in cases.json — docstring calls it out explicitly.\n\n## cases.json field vocabulary (39 cases)\n\n`id`, `query` (str or list = multi-turn), `state` (seed), `reference`, `require_tools_any`, `forbid_tools`, `expect_any/all/state/card/card_count/card_top`, `forbid`, `forbid_card`, plus `note*` prose.\n\nNone of these are ADK schema. Custom shape.\n\n## generate_evalset.py mapping — matches ADK spec\n\n| cases.json | → ADK EvalSet |\n|---|---|\n| `id` | `EvalCase.eval_id` |\n| `query` (str/list) | `conversation` = one Invocation per turn |\n| `state` | `SessionInput.state` (app=`concept_buddy`, user=`eval_user`) |\n| `reference` OR SCOPE_LINE (for `DECLINE_IDS`) | last-turn `final_response` |\n| — | `intermediate_data.tool_uses=[]` (empty; docstring explains: repo uses \"any-of\" not EXACT trajectory) |\n| — | `test_config.json` = `{final_response_match_v2: 0.5}` |\n\nSchema-legit: imports `EvalSet`, `EvalCase`, `Invocation`, `SessionInput`, `IntermediateData` from `google.adk.evaluation.*`. Uses `types.Content/Part` from `google.genai`. Serializes via `model_dump_json(exclude_none=True)`.\n\n## Deliberate divergences from doc defaults\n\n- Doc default `tool_trajectory_avg_score=1.0` + `response_match_score=0.8` → **dropped**. Only `final_response_match_v2` @ **0.5** (memory says gate flaked at 0.66 on terse \"it's on the right →\" answers).\n- No `intermediate_responses`, no per-case `rubrics`. Not using rubric-based criteria.\n- `SessionInput` omitted when `state` empty (`exclude_none=True` drops it).\n- Multi-turn: `final_response` set **only on last turn**; intermediate turns leave it null. Doc example puts final_response on every turn — repo does not. Judge still works (grades last), just non-doc-canonical.\n- Uses stable synthetic `invocation_id=f\"{id}-{i}\"` not `e-<uuid>` from doc examples. ADK doesn't care.\n\n## Drift you should know\n\n- **cases.json = 39 cases, evalset = 28**. 11 ids in cases.json not in evalset: `correction_no_sycophancy`, `decline_after_greeting_signs_off`, `ob_multiturn_office_continuation`, `ob_overview_doc_card`, `ob_welcome_timeline_card`, `person_authored_pages`, `person_not_on_anchor`, `person_page_opens_on_request`, `person_reask_restages_the_card`, `resume_skips_ticked_checklist`, `section_header_not_empty`. `generate_evalset.py` not re-run since those were added → stale mirror.\n- Both files mtime `Sep 3 13:40` — evalset regen would emit all 39, so `cases.json` was edited *after* the last regen (same day, minutes apart).\n- Only **9 invocations across 28 cases carry `final_response`** — most cases either lack `reference` and aren't in `DECLINE_IDS`, so their evalset entry has nothing for the judge. `final_response_match_v2` will grade nothing there → those cases pass vacuously in `adk eval`.\n- Evalset has `final_session_state: {}` on every case — not written by `generate_evalset.py`. Either ADK's Pydantic default filled it, or `adk web` touched the file. Harmless.\n\n## Bottom line\n\nStructure is legit ADK EvalSet/EvalCase/Invocation. Design intentionally uses the ADK layer as a *thin text-judge mirror*, and puts the load-bearing checks in the custom `run_eval.py`. Two live gaps: (1) mirror is stale by 11 cases, (2) most emitted cases have no golden so the judge is a no-op on them."
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find ${HOME}/ai_projects/concept_buddy -type f \\( -name \"cases.json\" -o -name \"generate_evalset.py\" -o -name \"concept_buddy.evalset.json\" -o -name \"_cases.py\" -o -name \"live_eval.py\" \\) -not -path \"*/node_modules/*\" -not -path \"*/.venv/*\" 2>/dev/null",
+        "description": "Find eval-related files"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/",
+        "description": "List eval dir"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "README.md RESULTS.md __pycache__ adk_entry.py adk_native cases.json chat.py concept_buddy.evalset.json generate_evalset.py measure_cost.py pytest.ini run_adk_eval.py run_eval.py test_book.py test_book_routing.py test_cards.py test_client_tool_gate.py test_config.json test_confluence_fetch.py test_onboarding_journey.py test_picker_rows.py",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "1 #!/usr/bin/env python3 2 \"\"\"Generate an ADK-native eval set from `cases.json`. 3 4 Emits `concept_buddy.evalset.json` (google.adk.evaluation.EvalSet schema) + a 5 `test_config.json` criteria file, so the suite can also be run through ADK's own 6 evaluator (`AgentEvaluator` / `adk eval`) and the `adk web` Eval UI, using Google's 7 `final_response_match_v2` LLM-judge. 8 9 This is a MIRROR of `case",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "1 { 2 \"description\": \"Concept Buddy retrieval-accuracy regression set. Each case = one prod failure (or core behavior) turned into a permanent test. Assertions are robust to live Confluence content drift: we check that the agent SEARCHED (recall proxy / no-confab) and that the key fact / forbidden phrasing is (not) present, rather than exact tool order or full-string answers.\", 3 \"confluence_searc",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"import json; c=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json'))['cases']; keys=set(); [keys.update(x.keys()) for x in c]; print(sorted(keys)); print('n=',len(c))\"",
+        "description": "List cases.json field keys + count"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "['expect_all', 'expect_any', 'expect_card', 'expect_card_count', 'expect_card_top', 'expect_state', 'forbid', 'forbid_card', 'forbid_tools', 'id', 'note', 'note_answer', 'note_cards', 'note_clean', 'query', 'reference', 'require_tools_any', 'state'] n= 39",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))\nprint('top keys:', list(ev.keys()))\nprint('n cases:', len(ev['eval_cases']))\nc=ev['eval_cases'][0]\nprint('case keys:', list(c.keys()))\ninv=c['conversation'][0]\nprint('inv keys:', list(inv.keys()))\n\"",
+        "description": "Peek generated evalset shape"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "top keys: ['eval_set_id', 'name', 'description', 'eval_cases', 'creation_timestamp'] n cases: 28 case keys: ['eval_id', 'conversation', 'creation_timestamp', 'final_session_state'] inv keys: ['invocation_id', 'user_content', 'intermediate_data', 'creation_timestamp']",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls -la ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/generate_evalset.py ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/test_config.json",
+        "description": "Check mtimes"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "-rw-r--r--@ 1 ${USER} staff 48102 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json -rw-r--r--@ 1 ${USER} staff 21536 Sep 3 13:40 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json -rw-r--r--@ 1 ${USER} staff 4558 Jul 22 18:14 ${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/e",
+      "end": false
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/test_config.json"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "1 { 2 \"criteria\": { 3 \"final_response_match_v2\": 0.5 4 } 5 }",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\ncj=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/cases.json'))['cases']\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))['eval_cases']\ncids={c['id'] for c in cj}\neids={e['eval_id'] for e in ev}\nprint('in cases only:', sorted(cids-eids))\nprint('in evalset only:', sorted(eids-cids))\n\"",
+        "description": "Diff case ids between the two files"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "in cases only: ['correction_no_sycophancy', 'decline_after_greeting_signs_off', 'ob_multiturn_office_continuation', 'ob_overview_doc_card', 'ob_welcome_timeline_card', 'person_authored_pages', 'person_not_on_anchor', 'person_page_opens_on_request', 'person_reask_restages_the_card', 'resume_skips_ticked_checklist', 'section_header_not_empty'] in evalset only: []",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -c \"\nimport json\nev=json.load(open('${HOME}/ai_projects/concept_buddy/backend/concept_buddy_agent/eval/concept_buddy.evalset.json'))['eval_cases']\nwith_final=sum(1 for e in ev for inv in e['conversation'] if inv.get('final_response'))\nwith_session=sum(1 for e in ev if e.get('session_input'))\nprint('invocations w/ final_response:', with_final)\nprint('cases w/ session_input:', with_session)\nprint('sample fss:', ev[0].get('final_session_state'))\n\"",
+        "description": "Count final_response & session_input"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "invocations w/ final_response: 9 cases w/ session_input: 3 sample fss: {}",
+      "end": false,
+      "closing_note": "# cases.json + generate_evalset.py vs ADK-native shape ## Overall design Repo has **two coexisting eval layers**, deliberate per memory `eval-harness-design`: 1. **`cases.json`** — proprietary; drives `run_eval.py` w/ rich checks (cards, state, tool \"any of\"). NOT ADK-shaped. 2. **`generate_evalset.py`** — mirrors the *judge-gradable slice* of cases.json → `concept_buddy.evalset.json` + `test_conf"
+    }
+  ],
+  "target": "welcome_book_topics",
+  "current": {
+    "episodes": 1,
+    "banked": 1,
+    "entry": "f786da41639e",
+    "mcp_steps_banked": 4,
+    "mcp_steps_captured": 4
+  },
+  "judged": {
+    "model": "gemma3n:e4b",
+    "prior_steps": 3,
+    "next_steps": 3,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 1,
+    "answered": 2,
+    "replayed": "2026-09-17"
+  },
+  "started": "2026-09-03T11:48:14.635Z"
+}
