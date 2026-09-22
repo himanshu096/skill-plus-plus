@@ -5,7 +5,7 @@ bash:python3 | bash:git add` and compared with `SequenceMatcher`. Measured on th
 real ledger it could not see a procedure through its incidental steps: six
 entries a person tagged good, all "add an eval case, regenerate, commit", scored
 0.12-0.66 against each other because one run also ran `ls`, another `source` and
-`cd`. It was also asymmetric: the two "cover Udemy reimbursement fact" entries,
+`cd`. It was also asymmetric: the two "cover course reimbursement fact" entries,
 0.98 alike to an embedding, scored 0.365 one way and 0.410 the other against a
 0.40 floor, and the embedding never saw them.
 
