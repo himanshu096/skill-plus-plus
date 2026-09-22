@@ -1,0 +1,124 @@
+{
+  "tag": "d7e103a5",
+  "name": "slugify-function-with-tests",
+  "captured": "2026-09-22",
+  "started": "2026-09-22T08:16:03.869Z",
+  "procedure": "Create a small Python function in its own file, add unittest tests beside it, run them, then add a docstring with examples.",
+  "truth": {
+    "episodes": 1,
+    "markers": null,
+    "title": null,
+    "must_contain": [
+      "test_slugify.py",
+      "unittest"
+    ],
+    "families": [
+      "add-function-with-tests"
+    ]
+  },
+  "why": "One task from the first prompt to the last: the docstring is a follow-up on the same function. Recorded in the CLI. First of three runs of add-function-with-tests (A1, A2 and the first task of D).",
+  "history": "Recorded 2026-09-22 for the public set.",
+  "shape": {
+    "steps": 6,
+    "prompts": 2,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Create slugify.py with a function slugify(text) that lowercases the text, replaces spaces with hyphens and drops punctuation. Add test_slugify.py with unittest tests, then run them."
+      },
+      "failed": false,
+      "reply": "Empty dir. Writing files.\n\n6/6 pass. Files at `slugify.py:1` + `test_slugify.py:1`."
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "ls ${HOME}/skillpp-recordings/",
+        "description": "List working dir"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "(Bash completed with no output)",
+      "end": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/slugify.py",
+        "content": "import re\n\n\ndef slugify(text):\n    text = text.lower()\n    text = re.sub(r\"[^\\w\\s-]\", \"\", text)\n    text = re.sub(r\"\\s+\", \"-\", text.strip())\n    return text\n"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "File created successfully at: ${HOME}/skillpp-recordings/slugify.py (file state is current in your context — no need to Read it back)",
+      "assistant_note": "Empty dir. Writing files.",
+      "end": false
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/test_slugify.py",
+        "content": "import unittest\n\nfrom slugify import slugify\n\n\nclass TestSlugify(unittest.TestCase):\n    def test_lowercase(self):\n        self.assertEqual(slugify(\"HELLO\"), \"hello\")\n\n    def test_spaces_to_hyphens(self):\n        self.assertEqual(slugify(\"hello world\"), \"hello-world\")\n\n    def test_drops_punctuation(self):\n        self.assertEqual(slugify(\"Hello, World!\"), \"hello-world\")\n\n    def test_multiple_spaces(self):\n        self.assertEqual(slugify(\"foo   bar\"), \"foo-bar\")\n\n    def test_leading_trailing_whitespace(self):\n        self.assertEqual(slugify(\"  hi there  \"), \"hi-there\")\n\n    def test_mixed(self):\n        self.assertEqual(slugify(\"Python 3.12 Rocks!\"), \"python-312-rocks\")\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "File created successfully at: ${HOME}/skillpp-recordings/test_slugify.py (file state is current in your context — no need to Read it back)",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -m unittest test_slugify.py -v",
+        "description": "Run unittest"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "test_drops_punctuation (test_slugify.TestSlugify.test_drops_punctuation) ... ok test_leading_trailing_whitespace (test_slugify.TestSlugify.test_leading_trailing_whitespace) ... ok test_lowercase (test_slugify.TestSlugify.test_lowercase) ... ok test_mixed (test_slugify.TestSlugify.test_mixed) ... ok test_multiple_spaces (test_slugify.TestSlugify.test_multiple_spaces) ... ok test_spaces_to_hyphens (",
+      "closing_note": "6/6 pass. Files at `slugify.py:1` + `test_slugify.py:1`.",
+      "end": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Add a docstring with two examples to slugify."
+      },
+      "failed": false,
+      "reply": "Docstring added. Doctests + unittests pass."
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/slugify.py",
+        "old_string": "def slugify(text):\n    text = text.lower()",
+        "new_string": "def slugify(text):\n    \"\"\"Convert text to a URL-friendly slug.\n\n    Lowercases the input, strips punctuation, and replaces whitespace\n    runs with a single hyphen.\n\n    Examples:\n        >>> slugify(\"Hello, World!\")\n        'hello-world'\n        >>> slugify(\"Python 3.12 Rocks!\")\n        'python-312-rocks'\n    \"\"\"\n    text = text.lower()"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "The file ${HOME}/skillpp-recordings/slugify.py has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "end": false
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "python3 -m doctest slugify.py -v 2>&1 | tail -20 && python3 -m unittest test_slugify.py",
+        "description": "Run doctests + unittests"
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "Trying: slugify(\"Hello, World!\") Expecting: 'hello-world' ok Trying: slugify(\"Python 3.12 Rocks!\") Expecting: 'python-312-rocks' ok 1 item had no tests: slugify 1 item passed all tests: 2 tests in slugify.slugify 2 tests in 2 items. 2 passed. Test passed. ...... ---------------------------------------------------------------------- Ran 6 tests in 0.000s OK",
+      "closing_note": "Docstring added. Doctests + unittests pass.",
+      "end": false
+    }
+  ],
+  "judged": {
+    "model": "gemma4:e4b",
+    "prior_steps": 3,
+    "next_steps": 3,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 1,
+    "replayed": "2026-09-22"
+  }
+}

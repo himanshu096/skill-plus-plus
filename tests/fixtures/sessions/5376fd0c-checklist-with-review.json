@@ -1,0 +1,101 @@
+{
+  "tag": "5376fd0c",
+  "name": "checklist-with-review",
+  "captured": "2026-09-22",
+  "started": "2026-09-22T08:34:51.720Z",
+  "procedure": "Write a checklist, then review and tighten it on request, then add a title.",
+  "truth": {
+    "episodes": 1,
+    "markers": null,
+    "title": null,
+    "must_contain": [
+      "onboarding.md"
+    ],
+    "families": [
+      "write-checklist"
+    ],
+    "boundary_after": []
+  },
+  "why": "One task: prompt 2 is a review request on the same file and prompt 3 a finishing touch. Pinned as no cut at all, not left unset: a wrong cut after step 2 would split off only the final Read, which is then discarded, so the episode count alone could not see it. A cut at prompt 2 is prevented by the two-step floor (one step before it), so what this measures is the judge at prompt 3. Prompt 3 found the title already present and only read the file.",
+  "history": "Recorded 2026-09-22 for the public set.",
+  "shape": {
+    "steps": 3,
+    "prompts": 3,
+    "failed": 0
+  },
+  "steps": [
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Write a six-step checklist for a new developer's first day into onboarding.md."
+      },
+      "failed": false,
+      "reply": "Write onboarding.md now.\n\nDone. [onboarding.md](onboarding.md) — six steps."
+    },
+    {
+      "tool": "Write",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/onboarding.md",
+        "content": "# New Developer — First Day Checklist\n\n1. **Accounts & access** — get email, Slack, GitHub/GitLab, VPN, and cloud/console credentials set up; confirm 2FA enrolled.\n2. **Dev environment** — clone repo, install required runtimes/tools, run project setup script, verify local build passes.\n3. **Codebase orientation** — read README/CONTRIBUTING, skim architecture docs, identify main services/modules.\n4. **Meet the team** — intro to manager and immediate teammates; join relevant Slack channels and recurring meetings.\n5. **First task** — pick up a small starter ticket (good-first-issue) to practice the dev → PR → review → merge workflow.\n6. **Process check-in** — review team norms (code style, PR/review process, on-call, deploy process) with manager or buddy.\n"
+      },
+      "failed": false,
+      "serves": 1,
+      "tool_returned": "File created successfully at: ${HOME}/skillpp-recordings/onboarding.md (file state is current in your context — no need to Read it back)",
+      "assistant_note": "Write onboarding.md now.",
+      "closing_note": "Done. [onboarding.md](onboarding.md) — six steps.",
+      "end": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Two things. Check that every step is something a new developer can do on day one, and cut it to at most four steps — merge whatever overlaps."
+      },
+      "failed": false,
+      "reply": "All four fit day one — no merge, no full ticket close, just setup, intros, reading, draft PR. [onboarding.md](onboarding.md) updated."
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/onboarding.md",
+        "old_string": "1. **Accounts & access** — get email, Slack, GitHub/GitLab, VPN, and cloud/console credentials set up; confirm 2FA enrolled.\n2. **Dev environment** — clone repo, install required runtimes/tools, run project setup script, verify local build passes.\n3. **Codebase orientation** — read README/CONTRIBUTING, skim architecture docs, identify main services/modules.\n4. **Meet the team** — intro to manager and immediate teammates; join relevant Slack channels and recurring meetings.\n5. **First task** — pick up a small starter ticket (good-first-issue) to practice the dev → PR → review → merge workflow.\n6. **Process check-in** — review team norms (code style, PR/review process, on-call, deploy process) with manager or buddy.",
+        "new_string": "1. **Accounts & dev environment** — get email, Slack, GitHub/GitLab, VPN, and cloud/console credentials set up; clone repo, install tools, run setup script, verify local build passes.\n2. **Meet the team** — intro to manager and immediate teammates; join relevant Slack channels.\n3. **Orientation** — read README/CONTRIBUTING, skim architecture docs, review team norms (code style, PR/review process) with manager or buddy.\n4. **Start first task** — pick a small starter ticket (good-first-issue), open a draft PR to practice the workflow (merge/review can land later)."
+      },
+      "failed": false,
+      "serves": 2,
+      "tool_returned": "The file ${HOME}/skillpp-recordings/onboarding.md has been updated successfully. (file state is current in your context — no need to Read it back)",
+      "assistant_note": "I should reconsider realism here - expecting a merged PR on day one is a stretch, so I'll consolidate overlapping steps into four achievable actions: setting up accounts and environment, meeting the team while getting oriented in the codebase, and starting (not necessarily completing) a first task.",
+      "closing_note": "All four fit day one — no merge, no full ticket close, just setup, intros, reading, draft PR. [onboarding.md](onboarding.md) updated.",
+      "end": false
+    },
+    {
+      "tool": "UserPrompt",
+      "input": {
+        "text": "Looks good. Add a one-line title at the top."
+      },
+      "failed": false,
+      "reply": "Title already there, line 1: \"New Developer — First Day Checklist\". Nothing to add."
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "${HOME}/skillpp-recordings/onboarding.md"
+      },
+      "failed": false,
+      "serves": 3,
+      "tool_returned": "1 # New Developer — First Day Checklist 2 3 1. **Accounts & dev environment** — get email, Slack, GitHub/GitLab, VPN, and cloud/console credentials set up; clone repo, install tools, run setup script, verify local build passes. 4 2. **Meet the team** — intro to manager and immediate teammates; join relevant Slack channels. 5 3. **Orientation** — read README/CONTRIBUTING, skim architecture docs, re",
+      "assistant_note": "I see the file already has the \"New Developer — First Day Checklist\" title in place, so let me check the existing content before making changes.",
+      "closing_note": "Title already there, line 1: \"New Developer — First Day Checklist\". Nothing to add.",
+      "end": false
+    }
+  ],
+  "judged": {
+    "model": "gemma4:e4b",
+    "prior_steps": 3,
+    "next_steps": 3,
+    "value_chars": 80,
+    "send_description": false,
+    "endings": 0,
+    "answered": 2,
+    "replayed": "2026-09-22"
+  }
+}
